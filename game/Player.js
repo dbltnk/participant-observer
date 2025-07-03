@@ -148,6 +148,7 @@ class Player {
     }
 
     render(container) {
+        assert(container, 'No container passed to Player.render');
         // Create or update player element
         if (!this.element) {
             this.element = document.createElement('div');
@@ -157,6 +158,9 @@ class Player {
             this.element.style.zIndex = GameConfig.player.zIndex;
             this.element.style.pointerEvents = 'none';
             container.appendChild(this.element);
+            if (window.game && window.game.spammyLog) {
+                window.game.spammyLog('Created DOM element for player at', this.position);
+            }
         }
 
         // Update position

@@ -259,13 +259,19 @@ class World {
     }
 
     render(container) {
-        // Render all entities
+        assert(container, 'No container passed to World.render');
+        // Only log if spammy logs are enabled
+        if (window.game && window.game.spammyLog) {
+            window.game.spammyLog('World.render: rendering', this.entities.length, 'entities');
+        }
         this.entities.forEach(entity => {
             this.renderEntity(entity, container);
         });
     }
 
     renderEntity(entity, container) {
+        assert(entity, 'renderEntity called with null entity');
+        assert(container, 'renderEntity called with null container');
         // Create or update entity element
         if (!entity.element) {
             entity.element = document.createElement('div');
@@ -275,6 +281,9 @@ class World {
             entity.element.style.zIndex = '10';
             entity.element.style.pointerEvents = 'none';
             container.appendChild(entity.element);
+            if (window.game && window.game.spammyLog) {
+                window.game.spammyLog('Created DOM element for entity', entity.type, 'at', entity.position);
+            }
         }
 
         // Update position and appearance

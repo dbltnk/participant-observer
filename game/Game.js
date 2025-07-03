@@ -57,6 +57,20 @@ class Game {
         this.keys = {};
         this.setupInput();
 
+        this.lastSummaryLog = 0;
+        this.fibIntervals = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946]; // seconds
+        this.nextFibIndex = 0;
+
+        this.summaryLoggingEnabled = false; // Toggle for summary logs
+
+        // Attach spammyLog to this instance and window for global use
+        this.spammyLog = (...args) => {
+            if (this.summaryLoggingEnabled) {
+                console.log('[SPAMMY]', ...args);
+            }
+        };
+        window.game = this;
+
         console.log('Game initialized with seed:', seed);
     }
 
@@ -124,6 +138,9 @@ class Game {
 
         // Set player starting position (will be near their camp)
         this.gameState.player.position = this.world.getPlayerStartPosition();
+        if (this.player) {
+            this.player.position = this.gameState.player.position;
+        }
 
         console.log('Systems initialized');
     }
@@ -142,6 +159,7 @@ class Game {
         }
 
         this.render();
+        this.logSummaryIfNeeded();
         requestAnimationFrame(this.gameLoop.bind(this));
     }
 
@@ -179,23 +197,84 @@ class Game {
     render() {
         // Clear the game area
         const gameArea = document.getElementById('game-area');
-        if (!gameArea) return;
-
+        assert(gameArea, 'game-area div not found in DOM');
+        if (!gameArea) {
+            console.error('No #game-area found, cannot render');
+            return;
+        }
         gameArea.innerHTML = '';
 
+        // Reset all entity and player DOM element refs after clearing
+        if (this.world && this.world.entities) {
+            this.world.entities.forEach(entity => { entity.element = null; });
+        }
+        if (this.player) {
+            this.player.element = null;
+        }
+
         // Render world
-        if (this.world) this.world.render(gameArea);
+        if (this.world) {
+            this.world.render(gameArea);
+        }
 
         // Render player
-        if (this.player) this.player.render(gameArea);
+        if (this.player) {
+            this.player.render(gameArea);
+        }
 
         // Render villagers
-        this.gameState.villagers.forEach(villager => {
-            villager.render(gameArea);
-        });
+        if (this.gameState.villagers && this.gameState.villagers.length > 0) {
+            this.gameState.villagers.forEach(villager => {
+                villager.render(gameArea);
+            });
+        }
 
         // Update UI
-        if (this.ui) this.ui.render();
+        if (this.ui) {
+            this.ui.render();
+        }
+        // Render summary log toggle button
+        this.renderSummaryLogToggle();
+    }
+
+    renderSummaryLogToggle() {
+        let btn = document.getElementById('summary-log-toggle');
+        if (!btn) {
+            btn = document.createElement('button');
+            btn.id = 'summary-log-toggle';
+            btn.style.position = 'fixed';
+            btn.style.left = '10px';
+            btn.style.zIndex = '1001';
+            btn.style.border = '1px solid #666';
+            btn.style.borderRadius = '5px';
+            btn.style.padding = '8px 14px';
+            btn.style.fontFamily = 'monospace';
+            btn.style.fontSize = '13px';
+            btn.style.cursor = 'pointer';
+            btn.addEventListener('click', () => {
+                this.summaryLoggingEnabled = !this.summaryLoggingEnabled;
+                this.updateSummaryLogButton(btn);
+            });
+            document.body.appendChild(btn);
+        }
+        this.updateSummaryLogButton(btn);
+    }
+
+    updateSummaryLogButton(btn) {
+        // Move the button up so it doesn't overlap the info/status box
+        btn.style.bottom = '110px'; // 40px above the info box
+        // Visual distinction for ON vs OFF
+        if (this.summaryLoggingEnabled) {
+            btn.textContent = '🟢 Log Spam: ON';
+            btn.style.background = '#228B22'; // green
+            btn.style.color = 'white';
+            btn.style.borderColor = '#228B22';
+        } else {
+            btn.textContent = '⚪ Log Spam: OFF';
+            btn.style.background = '#444';
+            btn.style.color = '#ccc';
+            btn.style.borderColor = '#666';
+        }
     }
 
     checkGameOver() {
@@ -249,5 +328,29 @@ class Game {
     // Get living villager count
     getLivingVillagerCount() {
         return this.gameState.villagers.filter(v => v.isAlive).length;
+    }
+
+    logSummaryIfNeeded() {
+        if (!this.summaryLoggingEnabled) return;
+        const now = performance.now() / 1000; // seconds
+        if (this.nextFibIndex >= this.fibIntervals.length) return;
+        const nextLogTime = this.lastSummaryLog + this.fibIntervals[this.nextFibIndex];
+        if (now >= nextLogTime) {
+            this.lastSummaryLog = now;
+            this.nextFibIndex++;
+            // Log summary
+            const entityTypes = {};
+            if (this.world && this.world.entities) {
+                this.world.entities.forEach(e => {
+                    entityTypes[e.type] = (entityTypes[e.type] || 0) + 1;
+                });
+            }
+            const playerPos = this.player ? { x: Math.round(this.player.position.x), y: Math.round(this.player.position.y) } : null;
+            console.log('[SUMMARY]', {
+                time: now.toFixed(1),
+                entities: entityTypes,
+                player: playerPos
+            });
+        }
     }
 } 
