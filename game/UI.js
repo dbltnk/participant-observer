@@ -175,9 +175,34 @@ class UI {
             z-index: 1000;
         `;
 
+        // Get the current seed from localStorage or default
+        let currentSeed = parseInt(localStorage.getItem('alpine-seed'), 10);
+        if (!currentSeed || isNaN(currentSeed)) {
+            currentSeed = 1;
+        }
+
+        // Current seed display (top line)
         this.seedDisplay = document.createElement('div');
-        this.seedDisplay.textContent = 'Seed: 1';
-        this.seedDisplay.style.marginBottom = '5px';
+        this.seedDisplay.textContent = `Current Seed: ${currentSeed}`;
+        this.seedDisplay.style.cssText = 'margin-bottom: 8px; font-size: 12px;';
+
+        // Editable seed input for next game
+        const seedInput = document.createElement('input');
+        seedInput.type = 'number';
+        seedInput.min = 1;
+        seedInput.max = 999;
+        seedInput.value = currentSeed;
+        seedInput.style.cssText = `
+            width: 60px; 
+            margin-right: 5px; 
+            font-size: 12px;
+            background: white;
+            color: black;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            padding: 2px 4px;
+        `;
+        seedInput.placeholder = '1-999';
 
         const newGameBtn = document.createElement('button');
         newGameBtn.textContent = 'New Game';
@@ -188,12 +213,24 @@ class UI {
             padding: 5px 10px;
             border-radius: 3px;
             cursor: pointer;
+            font-size: 12px;
         `;
         newGameBtn.addEventListener('click', () => {
-            location.reload();
+            const val = parseInt(seedInput.value, 10);
+            if (isNaN(val) || val < 1 || val > 999) {
+                alert('Please enter a valid seed number between 1 and 999.');
+                return;
+            }
+            const confirmMessage = `Start a new game with seed ${val}?\n\nThis will:\n• Delete all current game progress\n• Generate a new world with this seed\n• Reset all player stats and inventory\n\nAre you sure you want to continue?`;
+            if (confirm(confirmMessage)) {
+                localStorage.setItem('alpine-seed', val);
+                document.dispatchEvent(new CustomEvent('alpine-set-seed', { detail: { seed: val } }));
+                location.reload();
+            }
         });
 
         seedContainer.appendChild(this.seedDisplay);
+        seedContainer.appendChild(seedInput);
         seedContainer.appendChild(newGameBtn);
         document.body.appendChild(seedContainer);
     }
@@ -279,12 +316,24 @@ class UI {
         if (!window.game) return;
 
         const time = window.game.getCurrentTime();
-        const livingVillagers = window.game.getLivingVillagerCount();
+        const livingVillagers = window.game.getLivingVillagers ? window.game.getLivingVillagerCount() : 0;
+
+        // Determine time of day emoji
+        let timeEmoji = '🌅'; // default to sunrise
+        if (time.hour >= 6 && time.hour < 12) {
+            timeEmoji = '🌞'; // morning
+        } else if (time.hour >= 12 && time.hour < 18) {
+            timeEmoji = '☀️'; // afternoon
+        } else if (time.hour >= 18 && time.hour < 22) {
+            timeEmoji = '🌆'; // evening
+        } else {
+            timeEmoji = '🌙'; // night
+        }
 
         this.timeDisplay.innerHTML = `
-            <div>Day ${time.day}</div>
-            <div>${formatTime(time.hour, time.minute)}</div>
-            <div>Neighbours: ${livingVillagers}</div>
+            <div>📅 Day ${time.day}</div>
+            <div>${timeEmoji} ${formatTime(time.hour, time.minute)}</div>
+            <div>👥 Neighbours: ${livingVillagers}</div>
         `;
     }
 

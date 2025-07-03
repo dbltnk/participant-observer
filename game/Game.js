@@ -6,7 +6,7 @@ class Game {
         this.gameState = {
             // Core game state
             seed: seed,
-            currentTime: 0, // seconds since game start
+            currentTime: 8 * 3600, // start at 08:00
             currentDay: 1,
             gameSpeed: 1, // multiplier for time acceleration
             isRunning: false,
@@ -158,8 +158,10 @@ class Game {
     }
 
     updateGameTime(deltaTime) {
-        // Convert real time to game time
-        const gameTimeDelta = (deltaTime / 1000) * this.gameState.gameSpeed;
+        // Convert real time to game time using config
+        // 1 real second = 144 game seconds (86400/600)
+        const timeAcceleration = 86400 / GameConfig.time.realSecondsPerGameDay;
+        const gameTimeDelta = (deltaTime / 1000) * timeAcceleration;
         this.gameState.currentTime += gameTimeDelta;
 
         // Update day counter

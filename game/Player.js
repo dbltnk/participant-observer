@@ -118,18 +118,6 @@ class Player {
         // TODO: Add fire proximity check
         const nearFire = false;
 
-        // Debug logging
-        if (window.game && window.game.gameState.currentTime % 60 < 1) { // log once per in-game minute
-            console.log('[DEBUG] updateNeeds', {
-                inGameMinutes,
-                hour: gameTime.hour,
-                minute: gameTime.minute,
-                isNight,
-                decay: this.dailyDecay,
-                needs: { ...this.needs }
-            });
-        }
-
         // Drain needs
         if (isNight && !nearFire) {
             this.needs.temperature -= this.dailyDecay.temperature * inGameMinutes;

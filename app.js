@@ -337,33 +337,19 @@ if (document.readyState === 'loading') {
 // Game initialization function
 function initGame() {
     console.log('Initializing Alpine Sustainability...');
-
-    // Get seed from URL parameter or use default
-    const urlParams = new URLSearchParams(window.location.search);
-    const seedParam = urlParams.get('seed');
-    const seed = seedParam ? parseInt(seedParam) : 1;
-
-    // Create and start game
+    let seed = parseInt(localStorage.getItem('alpine-seed'), 10);
+    if (!seed || isNaN(seed)) {
+        seed = getRandomSeed();
+        localStorage.setItem('alpine-seed', seed);
+    }
     window.game = new Game(seed);
     window.game.start();
-
-    // Add debug info
-    addDebugInfo();
-
+    addInfoBox();
     console.log('Game initialization complete');
 }
 
-function addDebugInfo() {
-    const debugInfo = document.createElement('div');
-    debugInfo.className = 'debug-info';
-    debugInfo.innerHTML = `
-        <div>Alpine Sustainability v1.0</div>
-        <div>Seed: ${window.game.gameState.seed}</div>
-        <div>Controls: WASD to move</div>
-        <div>Click inventory slots to select</div>
-        <div>Logging: Active</div>
-    `;
-    document.body.appendChild(debugInfo);
+function getRandomSeed() {
+    return Math.floor(Math.random() * 999) + 1; // 1 to 999
 }
 
 // Handle window resize
@@ -400,4 +386,32 @@ window.addEventListener('unhandledrejection', (event) => {
     if (window.game) {
         window.game.showMessage('An error occurred. Check console for details.');
     }
-}); 
+});
+
+// Listen for seed changes from UI
+document.addEventListener('alpine-set-seed', (e) => {
+    localStorage.setItem('alpine-seed', e.detail.seed);
+});
+
+function addInfoBox() {
+    const infoBox = document.createElement('div');
+    infoBox.className = 'info-box';
+    infoBox.style.cssText = `
+        position: fixed;
+        bottom: 10px;
+        left: 10px;
+        background: rgba(0,0,0,0.7);
+        color: white;
+        padding: 10px;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 13px;
+        z-index: 1000;
+    `;
+    infoBox.innerHTML = `
+        <div>Alpine Sustainability v1.0</div>
+        <div>Controls: WASD to move</div>
+        <div>Click inventory slots to select</div>
+    `;
+    document.body.appendChild(infoBox);
+} 
