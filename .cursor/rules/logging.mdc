@@ -11,7 +11,7 @@ Automated browser console and DOM state capture system optimized for LLM agent c
 
 **Components:**
 - `index.html` - Web application with early console capture
-- `app.js` - Browser logging logic with call stack capture
+- `phaser-main.js` - Browser logging logic with call stack capture (integrated into main game file)
 - `server.js` - Node.js HTTP server for log aggregation
 - `logs/` - Output directory for debugging data
 
@@ -32,9 +32,9 @@ Automated browser console and DOM state capture system optimized for LLM agent c
 [12:30:24] WARN: cdn.tailwindcss.com should not be used in production
   @24:index.html
 [12:30:56] LOG: Test button clicked
-  @79:app.js → @281:app.js
+  @79:phaser-main.js → @281:phaser-main.js
 [12:30:57] ERROR: API call failed
-  @84:app.js → @285:app.js
+  @84:phaser-main.js → @285:phaser-main.js
 === SESSION END: session-1735123456789 ===
 ```
 

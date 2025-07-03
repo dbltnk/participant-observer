@@ -8,7 +8,7 @@
 // - All needs drain rates are in in-game hours to empty (see needsDrain)
 // - needsVariance is the ±% range applied to each need per day
 
-const GameConfig = {
+window.GameConfig = {
     // World settings - Controls the size and layout of the game world
     world: {
         width: 1200,  // Total world width in pixels (3-4 screens worth)
@@ -79,7 +79,7 @@ const GameConfig = {
         temperature: 8,   // 8 in-game hours to empty (only drains at night when not near fire)
         water: 24,        // 24 in-game hours to empty
         calories: 36,     // 36 in-game hours to empty
-        vitamins: 48      // 12 in-game hours to empty (reduced from 48 for better visibility)
+        vitamins: 48      // 48 in-game hours to empty
         // Formula: decayRate = 100 / (hoursToEmpty * 60) [per in-game minute]
     },
 
@@ -155,42 +155,14 @@ const GameConfig = {
         barWidth: 150, // Width of need bars in pixels
         inventorySlotSize: 50, // Size of inventory slots in pixels (width and height)
 
-        // Z-index values
-        needBarsZIndex: 1000,
-        timeDisplayZIndex: 1000,
-        inventoryZIndex: 1000,
-        seedUIZIndex: 1000,
-        infoBoxZIndex: 1000,
-        messageZIndex: 2000,
-
         // Seed input
         seedInputWidth: 60, // Width of seed input field in pixels
         seedInputMaxValue: 999, // Maximum seed value
         seedInputMinValue: 1, // Minimum seed value
 
-        // Font sizes
-        needBarFontSize: 10, // Font size for need bar values
-        seedUIFontSize: 12, // Font size for seed UI elements
-        infoBoxFontSize: 13, // Font size for info box
-
         // Spacing and padding
         needBarSpacing: 5, // Spacing between need bars
-        needBarLabelWidth: 20, // Width of need bar labels
-        needBarValuePadding: 5, // Padding for need bar values
-        inventorySlotSpacing: 5, // Spacing between inventory slots
-        seedUISpacing: 8, // Spacing in seed UI
-        seedInputMargin: 5, // Margin for seed input
-
-        // Colors
-        backgroundColor: 'rgba(0,0,0,0.7)',
-        borderColor: '#666',
-        selectedBorderColor: '#fff',
-        criticalColor: '#ff0000',
-        warningColor: '#ffaa00',
-        buttonColor: '#4CAF50',
-        inputBackgroundColor: 'white',
-        inputTextColor: 'black',
-        inputBorderColor: '#ccc'
+        uiMargin: 20, // Margin from screen edges for all UI elements
     },
 
     // Game loop settings
@@ -218,4 +190,7 @@ const GameConfig = {
         maxWood: 2, // Maximum wood that can be stored in a fire
         dailyWoodConsumption: 1 // Wood consumed per day when burning
     }
-}; 
+};
+
+console.log('[GameConfig.js] Loaded at', new Date().toISOString(), 'cache-bust:', Math.random());
+console.log('[GameConfig.js] window.GameConfig:', window.GameConfig); 

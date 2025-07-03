@@ -10,12 +10,23 @@
     <script>
         // Capture ALL console output from the very beginning
         window.earlyLogs = [];
+        window.summaryLoggingEnabled = false; // Default to OFF to reduce spam
         const originalLog = console.log;
         const originalWarn = console.warn;
         const originalError = console.error;
         const originalInfo = console.info;
 
         function captureConsoleOutput(type, args) {
+            // Check if logging is disabled for spammy logs
+            if (!window.summaryLoggingEnabled && type === 'LOG') {
+                // Filter out ONLY truly spammy logs that happen every frame
+                const message = args.map(arg => String(arg)).join(' ');
+                if (message.includes('[Seed] updatePhaserUI') ||
+                    message.includes('setting seed text')) {
+                    return; // Skip this log
+                }
+            }
+
             // Get call stack information
             const stack = new Error().stack;
             const stackLines = stack ? stack.split('\n').slice(2) : []; // Skip Error constructor and this function
@@ -90,46 +101,16 @@
             background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
             overflow: hidden;
         }
-
-        .entity {
-            user-select: none;
-            -webkit-user-select: none;
-        }
-
-        .player {
-            user-select: none;
-            -webkit-user-select: none;
-        }
-
-        /* Debug info */
-        .debug-info {
-            position: fixed;
-            bottom: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 12px;
-            z-index: 1000;
-        }
     </style>
 </head>
 
 <body>
-    <div id="game-area">
-        <!-- Game content will be rendered here -->
-    </div>
+    <div id="game-area"></div>
 
     <!-- Game Scripts -->
     <script src="config/GameConfig.js"></script>
-    <script src="game/Utils.js"></script>
-    <script src="game/World.js"></script>
-    <script src="game/Player.js"></script>
-    <script src="game/UI.js"></script>
-    <script src="game/Game.js"></script>
-    <script src="app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+    <script src="phaser-main.js"></script>
 </body>
 
 </html>

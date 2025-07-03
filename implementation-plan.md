@@ -5,18 +5,11 @@
 ```
 sustain/
 ├── index.html          # Main game page ✅ COMPLETED
-├── app.js              # Game entry point and initialization ✅ COMPLETED
-├── game/
-│   ├── Game.js         # Main game loop and state management ✅ COMPLETED
-│   ├── World.js        # World generation and management ✅ COMPLETED
-│   ├── Player.js       # Player character logic ✅ COMPLETED
-│   ├── Villager.js     # Villager AI and behavior 🔄 NOT STARTED
-│   ├── Resources.js    # Resource types and management 🔄 NOT STARTED
-│   ├── UI.js           # User interface management ✅ COMPLETED
-│   └── Utils.js        # Utility functions (Perlin noise, etc.) ✅ COMPLETED
+├── phaser-main.js      # Phaser 3 main entry point ✅ COMPLETED
 ├── config/
 │   └── GameConfig.js   # All configurable game parameters ✅ COMPLETED
-└── logs/               # Browser logging system (existing) ✅ PRESERVED
+├── logs/               # Browser logging system ✅ PRESERVED
+└── ...
 ```
 
 ## Development Phases
@@ -25,7 +18,7 @@ sustain/
 1. ✅ Set up project structure
 2. ✅ Implement basic game loop
 3. ✅ Create configuration system
-4. ✅ Set up basic rendering system (HTML elements with emojis)
+4. ✅ Set up Phaser 3 rendering system (emoji-based)
 5. ✅ Implement simple player movement
 
 **Fully Functional Features:**
@@ -53,7 +46,7 @@ sustain/
 ### Phase 3: Player Systems ✅ COMPLETED
 1. ✅ Implement player needs system with daily variance (±20%)
 2. ✅ Create inventory system (visual, 6 slots)
-3. 🔄 Add resource collection (not implemented yet)
+3. ✅ Add resource collection (click to collect, inventory management)
 4. ✅ Implement complete UI (need bars, inventory, time, seed)
 5. ✅ Add time system with proper acceleration
 
@@ -78,7 +71,7 @@ sustain/
 4. ✅ Add comprehensive error handling
 5. ✅ Test and balance core systems
 
-## Current Status: PHASE 1 COMPLETE - READY FOR PHASE 4 (VILLAGER AI)
+## Current Status: PHASE 3 COMPLETE - READY FOR PHASE 4 (VILLAGER AI)
 
 **What you can test right now:**
 1. **Game loads** - Open index.html, game initializes with random seed
@@ -91,137 +84,113 @@ sustain/
 8. **Seed system** - Random seed on first load, editable seed input, confirmation dialogs
 9. **Logging** - Browser console and server logs capture everything
 10. **Performance** - Smooth 60fps with deltaTime capping to prevent large jumps
+11. **Resource collection** - Click on resources to collect them into inventory
+12. **Inventory management** - Click slots to select, right-click to remove items
+13. **Well interaction** - Click wells to drink and restore water
 
 **Known limitations for current test:**
 - No villager AI yet (villagers don't exist)
-- No resource collection/interaction yet
 - No cooking, fires, or storage system yet
-- Inventory is visual only (no actual items)
 - No sleeping mechanics yet
+- Resource propagation not implemented yet
 
 ## Core Architecture
 
 ### 1. Game State Management ✅ IMPLEMENTED
-**Approach:** Single global game state object with clear separation of concerns.
+**Approach:** Scene-local state management with Phaser 3 integration.
 
 ```javascript
-// Game.js - Main state structure
-const gameState = {
-    // Core game state
-    seed: 1,
-    currentTime: 8 * 3600, // start at 08:00
-    currentDay: 1,
-    gameSpeed: 1, // multiplier for time acceleration
-    isRunning: false,
-    
-    // World state
-    world: {
-        width: 1200,  // 3-4 screens worth
-        height: 800,
-        entities: [], // All game objects (resources, buildings, etc.)
-        grid: []      // 2D grid for spatial queries
-    },
-    
-    // Player state
-    player: {
-        position: {x: 0, y: 0},
-        needs: {temperature: 100, water: 100, calories: 100, vitamins: [100, 100, 100, 100, 100]},
-        inventory: new Array(6).fill(null),
-        selectedSlot: 0
-    },
-    
-    // Villagers state
-    villagers: [], // Array of villager objects
-    
-    // UI state
-    ui: {
-        showInventory: false,
-        showStorage: false,
-        activeStorage: null
+// MainScene.js - State structure within Phaser scene
+class MainScene extends Phaser.Scene {
+    create() {
+        // Player state managed within scene
+        this.playerState = {
+            position: { ...this.playerStartPosition },
+            needs: {
+                temperature: GameConfig.needs.fullValue,
+                water: GameConfig.needs.fullValue,
+                calories: GameConfig.needs.fullValue,
+                vitamins: new Array(GameConfig.needs.vitaminCount).fill(GameConfig.needs.fullValue)
+            },
+            inventory: new Array(GameConfig.player.inventorySize).fill(null),
+            selectedSlot: 0,
+            currentTime: GameConfig.time.gameStartTime
+        };
+        
+        // World entities stored in scene
+        this.entities = []; // All game objects (resources, buildings, etc.)
+        this.camps = []; // Camp locations for villager AI
+        this.wells = []; // Well locations for water access
     }
-};
+}
 ```
 
 ### 2. Game Loop Architecture ✅ IMPLEMENTED
-**Approach:** Single `requestAnimationFrame` loop with fixed time step and deltaTime capping.
+**Approach:** Phaser 3 scene-based game loop with built-in deltaTime handling.
 
 ```javascript
-// Game.js - Main loop
-class Game {
-    constructor() {
-        this.lastTime = 0;
-        this.accumulator = 0;
-        this.timestep = 1000 / 60; // 60 FPS target
-    }
-    
-    gameLoop(currentTime) {
-        const MAX_DELTA = 200; // ms, cap to 0.2s per frame
-        const deltaTime = Math.min(currentTime - this.lastTime, MAX_DELTA);
-        this.lastTime = currentTime;
-        this.accumulator += deltaTime;
+// MainScene.js - Phaser game loop
+class MainScene extends Phaser.Scene {
+    update(time, delta) {
+        // Advance game time (accelerated)
+        const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
+        const gameTimeDelta = (delta / 1000) * timeAcceleration;
+        this.playerState.currentTime += gameTimeDelta;
         
-        while (this.accumulator >= this.timestep) {
-            this.update(this.timestep);
-            this.accumulator -= this.timestep;
+        // Update needs
+        updateNeeds(this.playerState, delta);
+        
+        // Update UI
+        this.updatePhaserUI();
+        
+        // Check game over
+        const reason = checkGameOver(this.playerState);
+        if (reason) {
+            this.showGameOverOverlay(reason);
+            this.scene.pause();
+            return;
         }
         
-        this.render();
-        requestAnimationFrame(this.gameLoop.bind(this));
-    }
-    
-    update(deltaTime) {
-        // Update game time (accelerated)
-        this.updateGameTime(deltaTime);
-        
-        // Update all systems
-        if (this.world) this.world.update(deltaTime);
-        if (this.player) this.player.update(deltaTime, this.keys);
-        if (this.gameState.villagers.length > 0) {
-            this.gameState.villagers.forEach(v => v.update(deltaTime));
-        }
-        if (this.ui) this.ui.update(deltaTime);
-        
-        // Check game over conditions
-        this.checkGameOver();
+        // Player movement
+        this.handlePlayerMovement(delta);
     }
 }
 ```
 
 ### 3. World Generation System ✅ IMPLEMENTED
-**Approach:** Perlin noise-based generation with configurable parameters.
+**Approach:** Perlin noise-based generation with configurable parameters, integrated into Phaser scene.
 
 ```javascript
-// World.js - Generation system
-class World {
-    constructor(seed) {
-        this.seed = seed;
-        this.noise = new PerlinNoise(seed);
-        this.config = GameConfig.world;
-    }
-    
-    generate() {
-        // Generate terrain features using Perlin noise
+// MainScene.js - World generation
+class MainScene extends Phaser.Scene {
+    create() {
+        // Generate world using Perlin noise
+        this.noise = new PerlinNoise(currentSeed);
+        this.seededRandom = new SeededRandom(currentSeed);
+        
+        // Generate village, camps, wells, and resources
         this.generateVillage();
         this.generateCamps();
         this.generateWells();
         this.generateResources();
+        
+        // Render all entities as Phaser text objects
+        this.renderEntities();
     }
     
     generateResources() {
-        const villagers = this.config.villagerCount + 1; // +1 for player
-        const resourcesPerVillager = this.config.resourcesPerVillager;
-        
-        for (let i = 0; i < villagers * resourcesPerVillager; i++) {
+        const totalResources = (cfg.villagerCount + 1) * cfg.resourcesPerVillager;
+        for (let i = 0; i < totalResources; i++) {
             const position = this.findResourcePosition();
             const resourceType = resourceTypes[i % resourceTypes.length];
-            const resource = {
-                position,
-                type: resourceType,
-                emoji: this.getResourceEmoji(resourceType),
-                collected: false,
-                propagationChance: 0.1
-            };
-            this.entities.push(resource);
+            const emoji = this.getResourceEmoji(resourceType);
+            this.entities.push({ 
+                position, 
+                type: resourceType, 
+                emoji, 
+                collected: false, 
+                propagationChance: GameConfig.resources.propagationChance 
+            });
         }
     }
 }
@@ -344,67 +313,51 @@ class Resource {
 ```
 
 ### 6. UI System ✅ COMPLETED
-**Approach:** HTML-based UI with comprehensive functionality.
+**Approach:** Phaser-native UI with comprehensive functionality.
 
 ```javascript
-// UI.js - Interface management
-class UI {
-    constructor() {
-        this.elements = {};
-        this.needBars = {};
-        this.inventorySlots = [];
-        this.timeDisplay = null;
-        this.seedDisplay = null;
-        this.initializeUI();
-    }
-    
-    initializeUI() {
-        // Create UI elements
+// MainScene.js - UI management
+class MainScene extends Phaser.Scene {
+    create() {
+        // Create UI container (fixed to camera)
+        this.uiContainer = this.add.container(0, 0).setScrollFactor(0);
+        
+        // Create need bars (top left)
         this.createNeedBars();
-        this.createTimeDisplay();
+        
+        // Create inventory (bottom center)
         this.createInventory();
+        
+        // Create time display (top right)
+        this.createTimeDisplay();
+        
+        // Create seed UI (bottom right)
         this.createSeedUI();
+        
+        // Create info box (bottom left)
+        this.createInfoBox();
     }
     
     createNeedBars() {
         const needTypes = ['temperature', 'water', 'calories', 'vitaminA', 'vitaminB', 'vitaminC', 'vitaminD', 'vitaminE'];
         const needLabels = ['🌡️', '💧', '🍽️', 'A', 'B', 'C', 'D', 'E'];
         
-        needTypes.forEach((type, index) => {
-            // Create progress bar with label, fill, and value display
-            const bar = this.createProgressBar(type, needLabels[index]);
-            this.needBars[type] = bar;
-        });
+        for (let i = 0; i < needLabels.length; i++) {
+            const barBg = this.add.rectangle(/* position */, GameConfig.ui.barWidth, GameConfig.ui.barHeight, 0x333333);
+            const barFill = this.add.rectangle(/* position */, GameConfig.ui.barWidth, GameConfig.ui.barHeight, getPhaserBarColor(needTypes[i]));
+            const label = this.add.text(/* position */, needLabels[i], { fontSize: '16px' });
+            const value = this.add.text(/* position */, '100', { fontSize: '12px' });
+            
+            this.uiContainer.add([barBg, barFill, label, value]);
+            this.ui.needsBars.push({ barBg, barFill, label, value });
+        }
     }
     
-    updateNeedBars() {
-        const needs = gameState.player.needs;
-        
-        // Update temperature, water, calories
-        ['temperature', 'water', 'calories'].forEach(needType => {
-            if (this.needBars[needType]) {
-                const value = needs[needType];
-                const percentage = Math.max(0, Math.min(100, value));
-                this.needBars[needType].fill.style.width = `${percentage}%`;
-                this.needBars[needType].value.textContent = Math.round(value);
-            }
-        });
-        
-        // Update vitamins (array-based)
-        const vitaminTypes = ['vitaminA', 'vitaminB', 'vitaminC', 'vitaminD', 'vitaminE'];
-        vitaminTypes.forEach((vitaminType, index) => {
-            if (this.needBars[vitaminType] && needs.vitamins && needs.vitamins[index] !== undefined) {
-                const value = needs.vitamins[index];
-                const percentage = Math.max(0, Math.min(100, value));
-                this.needBars[vitaminType].fill.style.width = `${percentage}%`;
-                this.needBars[vitaminType].value.textContent = Math.round(value);
-            }
-        });
-    }
-    
-    createSeedUI() {
-        // Current seed display and editable input for next game
-        // Includes confirmation dialog with detailed explanation
+    updatePhaserUI() {
+        // Update all UI elements with current game state
+        this.updateNeedBars();
+        this.updateInventory();
+        this.updateTimeDisplay();
     }
 }
 ```
@@ -484,7 +437,7 @@ const GameConfig = {
 
 ### Error Handling Strategy ✅ IMPLEMENTED
 ```javascript
-// Utils.js - Assert system
+// phaser-main.js - Assert system
 function assert(condition, message) {
     if (!condition) {
         console.error(`ASSERTION FAILED: ${message}`);
@@ -495,8 +448,8 @@ function assert(condition, message) {
 }
 
 // Usage throughout codebase
-assert(gameState.player.needs.temperature >= 0, "Temperature cannot be negative");
-assert(gameState.player.needs.temperature <= 100, "Temperature cannot exceed 100");
+assert(this.playerState.needs.temperature >= 0, "Temperature cannot be negative");
+assert(this.playerState.needs.temperature <= 100, "Temperature cannot exceed 100");
 ```
 
 ### Performance Considerations ✅ IMPLEMENTED
@@ -542,8 +495,13 @@ assert(gameState.player.needs.temperature <= 100, "Temperature cannot exceed 100
 5. **Game start time** - Now starts at 08:00 instead of midnight
 6. **Info box** - Restored bottom-left info box with game controls
 7. **Debug logging** - Removed spam, kept essential logging
+8. **Phaser migration** - Successfully migrated from vanilla JS to Phaser 3
+9. **Resource collection** - Implemented click-to-collect with inventory management
+10. **Well interaction** - Implemented drinking from wells to restore water
+11. **Code cleanup** - Removed orphaned CSS classes and legacy config values
+12. **Documentation** - Updated design doc and implementation plan to reflect Phaser 3 architecture
 
 ### 🔄 Next Priority: Phase 4 - Villager AI
-The core infrastructure is now complete and stable. The next major phase should focus on implementing the villager AI system to add life to the world and create the core gameplay dynamic of shared resources and competition.
+The core infrastructure is now complete and stable with Phaser 3. The next major phase should focus on implementing the villager AI system to add life to the world and create the core gameplay dynamic of shared resources and competition.
 
-This plan prioritizes the core gameplay loop while maintaining flexibility for the 1-day timeline. The modular structure allows for easy iteration and debugging. 
+This plan prioritizes the core gameplay loop while maintaining flexibility for the 1-day timeline. The modular structure allows for easy iteration and debugging.

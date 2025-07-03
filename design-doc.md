@@ -12,9 +12,9 @@ The game centers on **sustainability** in a low-fantasy world inspired by the Al
 
 * **Platform:** Widescreen computers and laptops.
 * **Input:** Mouse and keyboard (WASD for movement, mouse for interaction).
-* **Technology Stack:** HTML/CSS/JS. **Vanilla JavaScript** will be used for game logic and rendering. Basic UI elements will be handled directly with HTML/CSS. If a minimal library is needed for specific graphics or animation, **p5.js** is a lightweight option that can be included via a CDN, requiring no installation.
+* **Technology Stack:** HTML/CSS/JS with **Phaser 3** for game engine and rendering. All game objects are rendered as emoji text sprites using Phaser's text system. UI elements are handled through Phaser's native UI components.
 * **Game Session:** Single-player, single-session. No save or load functionality in V1.
-* **Random Seed:** Every game uses a random seed, displayed on-screen. V2 will allow loading games from a specific seed. An empty seed input will result in a random seed, which will then be displayed. Default seed is 1.
+* **Random Seed:** Every game uses a random seed, displayed on-screen. V2 will allow loading games from a specific seed. An empty seed input will result in a random seed, which will then be displayed. Default seed is 23.
 
 ---
 
@@ -23,7 +23,7 @@ The game centers on **sustainability** in a low-fantasy world inspired by the Al
 * **Setting:** A low-fantasy world inspired by the Alps.
 * **Technology Level:** Pre-agricultural, low-tech. No magic.
 * **Visuals:**
-    * **V1:** All in-game objects rendered as **emojis** using HTML elements (simple, maintainable approach).
+    * **V1:** All in-game objects rendered as **emojis** using Phaser 3 text sprites (simple, maintainable approach).
     * **V2:** Pixel art with a slightly eerie, somber aesthetic. Color palette emphasizes darker, bluer, and less saturated tones, akin to *Gothic 1* with the greys and greens of the Alps.
 * **Map Structure:**
     * **Village:** At the center with a communal well and a large communal storage box (size: 20).
@@ -109,7 +109,7 @@ The game centers on **sustainability** in a low-fantasy world inspired by the Al
 * **Top Left:** Bars for Temperature, Water, Calories, and 5 Vitamins (A to E) - instant updates, no animations.
 * **Bottom:** Player inventory hotbar (Minecraft style, size 6).
 * **Bottom Right:** Seed selection UI.
-    * Defaults to a fixed seed (1).
+    * Defaults to a fixed seed (23).
     * Allows any integer input.
     * Leaving empty selects a random seed (displayed for the next game).
     * "New Game" button next to it.
