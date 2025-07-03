@@ -78,6 +78,15 @@
             captureConsoleOutput('ERROR', args);
         };
 
+        // Also capture uncaught errors
+        window.addEventListener('error', function (event) {
+            console.error('Uncaught error:', event.error);
+        });
+
+        window.addEventListener('unhandledrejection', function (event) {
+            console.error('Unhandled promise rejection:', event.reason);
+        });
+
         console.info = function (...args) {
             originalInfo.apply(console, args);
             captureConsoleOutput('INFO', args);

@@ -11,12 +11,12 @@
 window.GameConfig = {
     // World settings - Controls the size and layout of the game world
     world: {
-        width: 1200,  // Total world width in pixels (3-4 screens worth)
-        height: 800,  // Total world height in pixels (3-4 screens worth)
+        width: window.innerWidth * 10, // 10x viewport width
+        height: window.innerHeight * 10, // 10x viewport height
         tileSize: 32, // Size of each "tile" for spatial calculations (used in distance checks)
         villagerCount: 8, // Total camps (7 AI villagers + 1 player camp)
-        resourcesPerVillager: 3, // Initial resources spawned per villager (including player)
-        maxResourcesPerType: 10, // Global cap on resources per type (prevents overpopulation)
+        resourcesPerVillager: 50, // Initial resources spawned per villager (including player) 
+        maxResourcesPerType: 500, // Global cap on resources per type (prevents overpopulation) 
 
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 0 }, // Offset for village well from center
@@ -25,14 +25,14 @@ window.GameConfig = {
         playerStartOffset: { x: 40, y: 0 }, // Player start position relative to their camp
 
         // Resource generation
-        resourceVillageMinDistance: 100, // Minimum distance from village center for resources
-        wellMinDistance: 200, // Minimum distance between wells
-        wellCount: 3, // Number of additional wells beyond village well
+        resourceVillageMinDistance: 600, // Minimum distance from village center for resources
+        wellMinDistance: 3000, // Minimum distance between wells
+        wellCount: 30, // Number of additional wells beyond village well
         wellMaxAttempts: 50, // Maximum attempts to place a well
 
         // Perlin noise settings
-        noiseScale: 10, // Scale factor for Perlin noise in resource placement
-        noiseBias: 0.5 // Bias factor for noise-based positioning
+        noiseScale: 5, // Scale factor for Perlin noise in resource placement - reduced for better clustering
+        noiseBias: 0.7 // Bias factor for noise-based positioning - increased for better clustering
     },
 
     // Time settings - Controls how fast game time passes relative to real time
@@ -138,13 +138,13 @@ window.GameConfig = {
 
     // Resource settings - Controls how resources spawn and spread
     resources: {
-        propagationRadius: 100, // Distance within which resources can spawn new ones
+        propagationRadius: 80, // Distance within which resources can spawn new ones - reduced for tighter clustering
         // Formula: if (nearbyResources >= 2 && distance < propagationRadius) { chanceToSpawn() }
         // Higher values = resources spread over larger areas
-        propagationChance: 0.1, // Probability of resource spawning a new one overnight
+        propagationChance: 0.15, // Probability of resource spawning a new one overnight - increased for faster growth
         // Formula: if (Math.random() < propagationChance) { spawnNewResource() }
         // Higher values = faster resource growth
-        maxDensity: 5 // Maximum resources per area (prevents overcrowding)
+        maxDensity: 8 // Maximum resources per area (prevents overcrowding) - increased for denser clusters
         // Formula: if (resourcesInArea >= maxDensity) { noNewSpawns() }
         // Lower values = more sparse resource distribution
     },
@@ -191,6 +191,10 @@ window.GameConfig = {
         dailyWoodConsumption: 1 // Wood consumed per day when burning
     }
 };
+
+// Assert world is much larger than viewport
+console.assert(window.GameConfig.world.width >= window.innerWidth * 10, '[GameConfig] World width should be at least 10x viewport width');
+console.assert(window.GameConfig.world.height >= window.innerHeight * 10, '[GameConfig] World height should be at least 10x viewport height');
 
 console.log('[GameConfig.js] Loaded at', new Date().toISOString(), 'cache-bust:', Math.random());
 console.log('[GameConfig.js] window.GameConfig:', window.GameConfig); 

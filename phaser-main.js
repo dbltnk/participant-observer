@@ -1051,9 +1051,10 @@ console.log('Phaser main loaded');
         }
         preload() { }
         create() {
-            // Set world and game size to fill the browser window
-            GameConfig.world.width = window.innerWidth;
-            GameConfig.world.height = window.innerHeight;
+            // Keep world size large for exploration (10x viewport as configured)
+            // Don't override the large world dimensions from GameConfig
+            assert(GameConfig.world.width >= window.innerWidth * 10, 'World width should be at least 10x viewport width');
+            assert(GameConfig.world.height >= window.innerHeight * 10, 'World height should be at least 10x viewport height');
 
             // --- World/entities ---
             this.entities = [];
@@ -1061,6 +1062,10 @@ console.log('Phaser main loaded');
             console.log(`[World Generation] Using seed: ${currentSeed}`);
             this.noise = new PerlinNoise(currentSeed);
             this.seededRandom = new SeededRandom(currentSeed);
+
+            // Create ground texture for better navigation (after noise is initialized)
+            this.createGroundTexture();
+
             const cfg = GameConfig.world;
             const centerX = cfg.width / 2;
             const centerY = cfg.height / 2;
@@ -1151,25 +1156,84 @@ console.log('Phaser main loaded');
                     this.wells.push(well);
                 }
             }
-            // --- Resources (Perlin noise placement) ---
+            // --- Resources (Small clusters of same type, spreading from village) ---
             const resourceTypes = ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'];
             const totalResources = (cfg.villagerCount + 1) * cfg.resourcesPerVillager;
-            console.log(`[World Generation] Generating ${totalResources} resources for ${cfg.villagerCount} villagers + 1 player`);
+            console.log(`[World Generation] Generating ${totalResources} resources in clusters for ${cfg.villagerCount} villagers + 1 player`);
 
-            for (let i = 0; i < totalResources; i++) {
-                let attempts = 0, pos;
+            // Calculate cluster parameters
+            const clusterSize = 2 + this.seededRandom.randomInt(0, 2); // 2-4 resources per cluster
+            const clusterCount = Math.ceil(totalResources / clusterSize);
+
+            // Create clusters starting near village and spreading outward
+            const maxDistance = Math.min(cfg.width, cfg.height) / 2; // Maximum distance from village center
+
+            let resourcesGenerated = 0;
+
+            for (let clusterIndex = 0; clusterIndex < clusterCount && resourcesGenerated < totalResources; clusterIndex++) {
+                // Calculate distance from village (closer clusters first)
+                const distanceFromVillage = (clusterIndex / clusterCount) * maxDistance;
+
+                // Add some randomness to distance
+                const distanceVariation = (this.seededRandom.random() - 0.5) * 200;
+                const actualDistance = Math.max(100, distanceFromVillage + distanceVariation);
+
+                // Generate cluster center position
+                let clusterCenter;
+                let attempts = 0;
                 do {
-                    const noiseX = this.seededRandom.randomRange(0, cfg.noiseScale);
-                    const noiseY = this.seededRandom.randomRange(0, cfg.noiseScale);
-                    const noiseValue = this.noise.noise2D(noiseX, noiseY);
-                    const biasX = (noiseValue + 1) * cfg.noiseBias;
-                    const biasY = (this.noise.noise2D(noiseX + cfg.noiseScale / 2, noiseY + cfg.noiseScale / 2) + 1) * cfg.noiseBias;
-                    pos = { x: biasX * cfg.width, y: biasY * cfg.height };
+                    const angle = this.seededRandom.random() * 2 * Math.PI;
+                    clusterCenter = {
+                        x: centerX + Math.cos(angle) * actualDistance,
+                        y: centerY + Math.sin(angle) * actualDistance
+                    };
+
+                    // Ensure within world bounds
+                    clusterCenter.x = Math.max(0, Math.min(cfg.width, clusterCenter.x));
+                    clusterCenter.y = Math.max(0, Math.min(cfg.height, clusterCenter.y));
+
                     attempts++;
-                } while (this.isTooCloseToVillage(pos) && attempts < cfg.wellMaxAttempts);
-                const resourceType = resourceTypes[i % resourceTypes.length];
-                const emoji = this.getResourceEmoji(resourceType);
-                this.entities.push({ position: pos, type: resourceType, emoji, collected: false, propagationChance: GameConfig.resources.propagationChance });
+                } while (this.isTooCloseToVillage(clusterCenter) && attempts < cfg.wellMaxAttempts);
+
+                if (attempts >= cfg.wellMaxAttempts) continue;
+
+                // Choose primary resource type for this cluster (80% chance same type)
+                const primaryType = resourceTypes[this.seededRandom.randomInt(0, resourceTypes.length - 1)];
+
+                // Generate resources in this cluster
+                const resourcesInCluster = Math.min(clusterSize, totalResources - resourcesGenerated);
+
+                for (let i = 0; i < resourcesInCluster; i++) {
+                    // 80% chance to use primary type, 20% chance to use random type
+                    const resourceType = this.seededRandom.random() < 0.8 ? primaryType : resourceTypes[this.seededRandom.randomInt(0, resourceTypes.length - 1)];
+
+                    // Generate position within cluster (20-60 pixels from center)
+                    const clusterRadius = 20 + this.seededRandom.random() * 40;
+                    const angle = this.seededRandom.random() * 2 * Math.PI;
+
+                    const pos = {
+                        x: clusterCenter.x + Math.cos(angle) * clusterRadius,
+                        y: clusterCenter.y + Math.sin(angle) * clusterRadius
+                    };
+
+                    // Ensure within world bounds
+                    pos.x = Math.max(0, Math.min(cfg.width, pos.x));
+                    pos.y = Math.max(0, Math.min(cfg.height, pos.y));
+
+                    const emoji = this.getResourceEmoji(resourceType);
+                    this.entities.push({
+                        position: pos,
+                        type: resourceType,
+                        emoji,
+                        collected: false,
+                        propagationChance: GameConfig.resources.propagationChance,
+                        clusterId: clusterIndex // Track which cluster this belongs to
+                    });
+
+                    resourcesGenerated++;
+                }
+
+                console.log(`[World Generation] Created cluster ${clusterIndex} with ${resourcesInCluster} ${primaryType} resources at distance ${Math.round(actualDistance)} from village`);
             }
 
             console.log(`[World Generation] Generated ${totalResources} resources, total entities: ${this.entities.length}`);
@@ -1261,9 +1325,10 @@ console.log('Phaser main loaded');
             };
             this.player = this.add.text(this.playerState.position.x, this.playerState.position.y, '👤', { fontSize: GameConfig.player.fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
             assert(this.player, 'Failed to create player emoji.');
-            // Camera
+            // Camera - follow player with smooth interpolation, no bounds restriction
             this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
-            this.cameras.main.setBounds(0, 0, GameConfig.world.width, GameConfig.world.height);
+            // Remove camera bounds to allow free exploration of the large world
+            // this.cameras.main.setBounds(0, 0, GameConfig.world.width, GameConfig.world.height);
             // Input
             this.cursors = this.input.keyboard.addKeys({
                 up: Phaser.Input.Keyboard.KeyCodes.W,
@@ -1291,10 +1356,10 @@ console.log('Phaser main loaded');
                 this.uiContainer.add([barBg, barFill, label, value]);
                 this.ui.needsBars.push({ barBg, barFill, label, value });
             }
-            // Inventory (bottom center)
+            // Inventory (bottom center) - use viewport dimensions
             const inventoryWidth = GameConfig.player.inventorySize * 56;
-            const inventoryStartX = (GameConfig.world.width - inventoryWidth) / 2;
-            const inventoryY = GameConfig.world.height - margin - 30; // Add 30px more space from bottom
+            const inventoryStartX = (window.innerWidth - inventoryWidth) / 2;
+            const inventoryY = window.innerHeight - margin - 30; // Add 30px more space from bottom
             this.ui.inventorySlots = [];
             for (let i = 0; i < GameConfig.player.inventorySize; i++) {
                 const slot = this.add.rectangle(inventoryStartX + i * 56, inventoryY, 50, 50, 0x222222).setOrigin(0.5).setStrokeStyle(2, 0x666666);
@@ -1327,14 +1392,14 @@ console.log('Phaser main loaded');
                     this.updatePhaserUI();
                 }
             });
-            // Time display (top right)
-            this.ui.timeText = this.add.text(GameConfig.world.width - margin, margin, '', { fontSize: '18px', fontFamily: 'monospace', color: '#fff' }).setOrigin(1, 0);
+            // Time display (top right) - use viewport width instead of world width
+            this.ui.timeText = this.add.text(window.innerWidth - margin, margin, '', { fontSize: '18px', fontFamily: 'monospace', color: '#fff' }).setOrigin(1, 0);
             this.uiContainer.add(this.ui.timeText);
-            // Info box (bottom left)
-            this.ui.infoBox = this.add.text(margin, GameConfig.world.height - margin, 'Alpine Sustainability v1.0\nControls: WASD to move\nClick inventory slots to select', { fontSize: '13px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#222', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1);
+            // Info box (bottom left) - use viewport height instead of world height
+            this.ui.infoBox = this.add.text(margin, window.innerHeight - margin, 'Alpine Sustainability v1.0\nControls: WASD to move\nClick inventory slots to select', { fontSize: '13px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#222', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1);
             this.uiContainer.add(this.ui.infoBox);
-            // Debug toggle (bottom left, above log spam button)
-            this.ui.debugBtn = this.add.text(margin, GameConfig.world.height - margin - 120, '⚪ Debug: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive();
+            // Debug toggle (bottom left, above log spam button) - use viewport height
+            this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - 120, '⚪ Debug: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive();
             this.ui.debugBtn.on('pointerdown', () => {
                 window.villagerDebugEnabled = !window.villagerDebugEnabled;
                 updateDebugBtn.call(this);
@@ -1353,8 +1418,8 @@ console.log('Phaser main loaded');
             updateDebugBtn.call(this);
             this.uiContainer.add(this.ui.debugBtn);
 
-            // Log spam toggle (bottom left, above info box)
-            this.ui.logSpamBtn = this.add.text(margin, GameConfig.world.height - margin - 90, '⚪ Log Spam: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive();
+            // Log spam toggle (bottom left, above info box) - use viewport height
+            this.ui.logSpamBtn = this.add.text(margin, window.innerHeight - margin - 90, '⚪ Log Spam: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive();
             this.ui.logSpamBtn.on('pointerdown', () => {
                 window.summaryLoggingEnabled = !window.summaryLoggingEnabled;
                 updateLogSpamBtn.call(this);
@@ -1369,10 +1434,10 @@ console.log('Phaser main loaded');
             updateLogSpamBtn.call(this);
             this.uiContainer.add(this.ui.logSpamBtn);
 
-            // Seed control box (bottom right)
-            const seedBoxY = GameConfig.world.height - margin;
+            // Seed control box (bottom right) - use viewport dimensions
+            const seedBoxY = window.innerHeight - margin;
             const seedBoxWidth = 200;
-            const seedBoxX = GameConfig.world.width - margin - seedBoxWidth;
+            const seedBoxX = window.innerWidth - margin - seedBoxWidth;
 
             // Seed label
             this.ui.seedLabel = this.add.text(seedBoxX, seedBoxY - 25, '🌱 Seed:', { fontSize: '13px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 1);
@@ -1446,8 +1511,12 @@ console.log('Phaser main loaded');
             const moveSpeed = GameConfig.player.moveSpeed;
             this.playerState.position.x += vx * moveSpeed * (delta / 1000);
             this.playerState.position.y += vy * moveSpeed * (delta / 1000);
+
+            // Allow player to move freely within the large world bounds
+            // Only clamp to prevent going outside the actual world boundaries
             this.playerState.position.x = Math.max(0, Math.min(GameConfig.world.width, this.playerState.position.x));
             this.playerState.position.y = Math.max(0, Math.min(GameConfig.world.height, this.playerState.position.y));
+
             this.player.setPosition(this.playerState.position.x, this.playerState.position.y);
         }
         updatePhaserUI() {
@@ -1550,7 +1619,23 @@ console.log('Phaser main loaded');
         isTooCloseToVillage(pos) {
             const centerX = GameConfig.world.width / 2;
             const centerY = GameConfig.world.height / 2;
-            return distance(pos, { x: centerX, y: centerY }) < GameConfig.world.resourceVillageMinDistance;
+
+            // Check minimum distance from village center
+            if (distance(pos, { x: centerX, y: centerY }) < GameConfig.world.resourceVillageMinDistance) {
+                return true;
+            }
+
+            // Also check distance from each camp to prevent resources spawning inside camps
+            if (this.camps && this.camps.length > 0) {
+                for (let i = 0; i < this.camps.length; i++) {
+                    const campDistance = distance(pos, this.camps[i]);
+                    if (campDistance < 200) { // Minimum 200 pixels from any camp
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
         isTooCloseToExistingWell(pos) {
             if (!this.wells) return false;
@@ -1599,6 +1684,70 @@ console.log('Phaser main loaded');
             this.ui.seedInputText.setText(currentSeed.toString());
             // Store the new seed value for when New Game is clicked
             this.currentSeedValue = currentSeed;
+        }
+
+        createGroundTexture() {
+            try {
+                // Create a subtle ground texture using Perlin noise for natural variation
+                const tileSize = 64; // Size of each texture tile
+                const worldWidth = GameConfig.world.width;
+                const worldHeight = GameConfig.world.height;
+
+                // Ensure noise is initialized
+                if (!this.noise) {
+                    console.error('[Ground Texture] Noise not initialized, skipping ground texture creation');
+                    return;
+                }
+
+                // Create tiles across the entire world
+                for (let x = 0; x < worldWidth; x += tileSize) {
+                    for (let y = 0; y < worldHeight; y += tileSize) {
+                        // Use Perlin noise to determine tile color for natural variation
+                        const noiseX = x / 200; // Scale for smooth variation
+                        const noiseY = y / 200;
+                        const noiseValue = this.noise.noise2D(noiseX, noiseY);
+
+                        // Map noise to color variation
+                        let color;
+                        if (noiseValue < -0.3) {
+                            color = 0x4a5d23; // Darker green
+                        } else if (noiseValue < 0.3) {
+                            color = 0x5a6d33; // Medium green
+                        } else {
+                            color = 0x6a7d43; // Lighter green
+                        }
+
+                        // Add some grey variation for texture
+                        const greyNoise = this.noise.noise2D(noiseX * 2, noiseY * 2);
+                        if (greyNoise > 0.5) {
+                            color = 0x6b6b6b; // Light grey
+                        } else if (greyNoise > 0.2) {
+                            color = 0x5a5a5a; // Medium grey
+                        }
+
+                        // Create the ground tile
+                        const tile = this.add.rectangle(
+                            x + tileSize / 2,
+                            y + tileSize / 2,
+                            tileSize,
+                            tileSize,
+                            color
+                        ).setOrigin(0.5);
+
+                        // Set very low alpha for subtle effect
+                        tile.setAlpha(0.3);
+
+                        // Store reference for potential cleanup
+                        if (!this.groundTiles) this.groundTiles = [];
+                        this.groundTiles.push(tile);
+                    }
+                }
+
+                console.log(`[Ground Texture] Created ${this.groundTiles.length} ground tiles for navigation`);
+            } catch (error) {
+                console.error('[Ground Texture] Error creating ground texture:', error);
+                // Don't crash the game if ground texture fails
+            }
         }
 
         showNewGameConfirmation() {
