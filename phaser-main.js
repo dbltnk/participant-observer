@@ -2314,23 +2314,24 @@ console.log('Phaser main loaded');
         }
 
         updateResourceCountDisplay() {
-            if (!window.villagerDebugEnabled) {
-                if (this.resourceCountText) {
-                    this.resourceCountText.setVisible(false);
-                }
-                return;
+            // Clean up any existing resource count text objects
+            if (this.resourceCountTexts) {
+                this.resourceCountTexts.forEach(textObj => {
+                    if (textObj && typeof textObj.destroy === 'function') {
+                        textObj.destroy();
+                    }
+                });
+                this.resourceCountTexts = [];
             }
 
-            // Create resource count text if it doesn't exist
-            if (!this.resourceCountText) {
-                this.resourceCountText = this.add.text(20, 275, '', {
-                    fontSize: '10px',
-                    fontFamily: 'monospace',
-                    color: '#fff',
-                    backgroundColor: '#000',
-                    padding: { left: 5, right: 5, top: 2, bottom: 2 }
-                }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000);
-                this.uiContainer.add(this.resourceCountText);
+            // Also clean up any old resourceCountText (singular) that might exist
+            if (this.resourceCountText && typeof this.resourceCountText.destroy === 'function') {
+                this.resourceCountText.destroy();
+                this.resourceCountText = null;
+            }
+
+            if (!window.villagerDebugEnabled) {
+                return;
             }
 
             // Count resources by type (in the wild)
@@ -2382,12 +2383,8 @@ console.log('Phaser main loaded');
                 const wildCount = wildCounts[type] || 0;
                 const storedCount = storedCounts[type] || 0;
 
-                // Use grey text for extinct resources (wild count = 0)
-                if (wildCount === 0) {
-                    displayText += `%c${emoji} ${type}: ${wildCount}+${storedCount}\n`;
-                } else {
-                    displayText += `${emoji} ${type}: ${wildCount}+${storedCount}\n`;
-                }
+                // Add resource line (color will be determined per line in updateResourceCountTextWithColors)
+                displayText += `${emoji} ${type}: ${wildCount}+${storedCount}\n`;
             }
 
             // Add total
@@ -2400,32 +2397,40 @@ console.log('Phaser main loaded');
         }
 
         updateResourceCountTextWithColors(displayText) {
-            // Remove existing resource count text
-            if (this.resourceCountText) {
-                this.resourceCountText.destroy();
-                this.resourceCountText = null;
+            // Initialize array to track all text objects
+            if (!this.resourceCountTexts) {
+                this.resourceCountTexts = [];
             }
 
-            // Split text by color markers
-            const parts = displayText.split(/(%c)/);
+            // Split text by lines and process each line individually
+            const lines = displayText.split('\n');
             let currentY = 275;
             const lineHeight = 12;
 
-            for (let i = 0; i < parts.length; i++) {
-                const part = parts[i];
-                if (part === '%c') {
-                    // This is a color marker, next part should be grey
-                    continue;
+            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+                const line = lines[lineIndex];
+                if (line.trim() === '') continue;
+
+                // Check if this line should be grey (contains a resource with wild count = 0)
+                let isGrey = false;
+                if (line.includes(':')) {
+                    // Extract the wild count from the line (format: "emoji name: wild+stored")
+                    const match = line.match(/: (\d+)\+(\d+)/);
+                    if (match) {
+                        const wildCount = parseInt(match[1], 10);
+                        isGrey = wildCount === 0;
+                    }
                 }
 
-                if (part.trim() === '') continue;
-
-                // Determine color based on whether this part follows a color marker
-                const isGrey = i > 0 && parts[i - 1] === '%c';
                 const color = isGrey ? '#888888' : '#ffffff';
 
-                // Create text object for this part
-                const textObj = this.add.text(20, currentY, part, {
+                // Debug: log the color assignment for resource lines
+                if (window.summaryLoggingEnabled && line.includes(':')) {
+                    console.log(`[ResourceCount] Line: "${line.trim()}", isGrey: ${isGrey}, color: ${color}`);
+                }
+
+                // Create text object for this line
+                const textObj = this.add.text(20, currentY, line, {
                     fontSize: '10px',
                     fontFamily: 'monospace',
                     color: color,
@@ -2434,15 +2439,10 @@ console.log('Phaser main loaded');
                 }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000);
 
                 this.uiContainer.add(textObj);
+                this.resourceCountTexts.push(textObj);
 
-                // Store reference to main text object for visibility control
-                if (!this.resourceCountText) {
-                    this.resourceCountText = textObj;
-                }
-
-                // Calculate next Y position based on number of lines in this part
-                const lines = part.split('\n').length;
-                currentY += (lines - 1) * lineHeight;
+                // Move to next line
+                currentY += lineHeight;
             }
         }
 
