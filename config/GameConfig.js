@@ -115,7 +115,7 @@ window.GameConfig = {
         millisecondsPerSecond: 1000, // Conversion factor for deltaTime
 
         // Interaction constants
-        interactionThreshold: 32, // Distance threshold for interactions (pixels)
+        interactionThreshold: 48, // Distance threshold for interactions (pixels) - increased by 50%
 
         // Rendering
         fontSize: 32, // Player emoji font size
@@ -139,14 +139,47 @@ window.GameConfig = {
     // Resource settings - Controls how resources spawn and spread
     resources: {
         propagationRadius: 80, // Distance within which resources can spawn new ones - reduced for tighter clustering
-        // Formula: if (nearbyResources >= 2 && distance < propagationRadius) { chanceToSpawn() }
-        // Higher values = resources spread over larger areas
         propagationChance: 0.15, // Probability of resource spawning a new one overnight - increased for faster growth
-        // Formula: if (Math.random() < propagationChance) { spawnNewResource() }
-        // Higher values = faster resource growth
-        maxDensity: 8 // Maximum resources per area (prevents overcrowding) - increased for denser clusters
-        // Formula: if (resourcesInArea >= maxDensity) { noNewSpawns() }
-        // Lower values = more sparse resource distribution
+        maxDensity: 8, // Maximum resources per area (prevents overcrowding) - increased for denser clusters
+
+        // === DESIGNER BALANCING SECTION ===
+        // All food/resource types with complete data (easier to maintain)
+        foodData: {
+            // Plants
+            'blackberry': { calories: 90, vitamins: [0, 0, 0, 2, 0], water: 5, emoji: '🫐' },
+            'mushroom': { calories: 80, vitamins: [0, 0, 2, 0, 0], water: 0, emoji: '🍄' },
+            'herb': { calories: 60, vitamins: [2, 0, 0, 0, 0], water: 0, emoji: '🌿' },
+            'blueberry': { calories: 85, vitamins: [0, 0, 0, 2, 0], water: 5, emoji: '🫐' },
+            'raspberry': { calories: 90, vitamins: [0, 0, 0, 2, 0], water: 5, emoji: '🍓' },
+            'elderberry': { calories: 80, vitamins: [0, 0, 0, 2, 1], water: 0, emoji: '🫐' },
+            'wild_garlic': { calories: 70, vitamins: [1, 2, 0, 0, 0], water: 0, emoji: '🧄' },
+            'dandelion': { calories: 60, vitamins: [0, 2, 0, 0, 1], water: 0, emoji: '🌼' },
+            'nettle': { calories: 70, vitamins: [2, 0, 1, 0, 0], water: 0, emoji: '🌿' },
+            'sorrel': { calories: 65, vitamins: [0, 1, 2, 0, 0], water: 0, emoji: '🌿' },
+            'watercress': { calories: 60, vitamins: [0, 0, 2, 1, 0], water: 5, emoji: '🌿' },
+            'wild_onion': { calories: 75, vitamins: [1, 1, 0, 1, 0], water: 0, emoji: '🧅' },
+            'chickweed': { calories: 60, vitamins: [0, 2, 0, 1, 0], water: 0, emoji: '🌱' },
+            'plantain': { calories: 70, vitamins: [2, 0, 0, 1, 0], water: 0, emoji: '🌿' },
+            'yarrow': { calories: 60, vitamins: [0, 0, 1, 2, 0], water: 5, emoji: '🌸' },
+            // Animals
+            'rabbit': { calories: 200, vitamins: [0, 2, 0, 0, 0], water: 0, emoji: '🐰' },
+            'deer': { calories: 300, vitamins: [0, 2, 0, 0, 2], water: 0, emoji: '🦌' },
+            'squirrel': { calories: 120, vitamins: [1, 1, 0, 0, 0], water: 0, emoji: '🐿️' },
+            'pheasant': { calories: 140, vitamins: [0, 2, 1, 0, 0], water: 0, emoji: '🦃' },
+            'duck': { calories: 130, vitamins: [0, 1, 2, 0, 0], water: 0, emoji: '🦆' },
+            'goose': { calories: 150, vitamins: [0, 1, 1, 1, 0], water: 0, emoji: '🦢' },
+            'hare': { calories: 180, vitamins: [0, 2, 0, 1, 0], water: 0, emoji: '🐰' },
+            'fox': { calories: 110, vitamins: [1, 0, 2, 0, 0], water: 0, emoji: '🦊' },
+            'boar': { calories: 220, vitamins: [0, 2, 0, 2, 0], water: 0, emoji: '🐗' },
+            'elk': { calories: 250, vitamins: [0, 2, 0, 0, 2], water: 0, emoji: '🦌' },
+            'marten': { calories: 100, vitamins: [1, 0, 1, 1, 0], water: 0, emoji: '🦦' },
+            'grouse': { calories: 120, vitamins: [0, 1, 2, 0, 0], water: 0, emoji: '🦃' },
+            'woodcock': { calories: 110, vitamins: [0, 1, 1, 1, 0], water: 0, emoji: '🦅' },
+            'beaver': { calories: 160, vitamins: [1, 1, 0, 1, 0], water: 0, emoji: '🦫' },
+            'otter': { calories: 130, vitamins: [1, 0, 1, 1, 0], water: 0, emoji: '🦦' },
+            // Resources (non-food)
+            'tree': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, emoji: '🌲' }
+        }
     },
 
     // UI settings - Controls the appearance and layout of user interface elements
@@ -189,12 +222,28 @@ window.GameConfig = {
     fires: {
         maxWood: 2, // Maximum wood that can be stored in a fire
         dailyWoodConsumption: 1 // Wood consumed per day when burning
-    }
+    },
+
+    // Villager names for random generation
+    villagerNames: [
+        'Alaric', 'Brigid', 'Cormac', 'Deirdre', 'Eamon', 'Fiona', 'Gareth', 'Helena',
+        'Ivar', 'Jocelyn', 'Kieran', 'Luna', 'Mael', 'Niamh', 'Oisin', 'Pádraig',
+        'Quinn', 'Róisín', 'Seamus', 'Tara', 'Ulf', 'Vera', 'Wynn', 'Yara',
+        'Zara', 'Aiden', 'Brenna', 'Cian', 'Dara', 'Eira', 'Finn', 'Gwen',
+        'Hale', 'Iona', 'Jace', 'Kara', 'Liam', 'Maya', 'Nash', 'Orla',
+        'Pax', 'Raven', 'Sage', 'Teagan', 'Uma', 'Vale', 'Wren', 'Xander',
+        'Yuki', 'Zane', 'Aria', 'Blake', 'Cora', 'Dax', 'Echo', 'Faye',
+        'Gray', 'Haven', 'Indigo', 'Jade', 'Kai', 'Lark', 'Moss', 'Nova',
+        'Ocean', 'Pine', 'Quill', 'River', 'Sky', 'Thorne', 'Unity', 'Vale',
+        'Willow', 'Xero', 'Yarrow', 'Zephyr', 'Ash', 'Birch', 'Cedar', 'Dove',
+        'Elm', 'Fern', 'Grove', 'Hazel', 'Ivy', 'Juniper', 'Kestrel', 'Linden',
+        'Maple', 'Nettle', 'Oak', 'Poppy', 'Quince', 'Rowan', 'Sage', 'Thistle',
+        'Umber', 'Violet', 'Wisteria', 'Yew', 'Zinnia', 'Alder', 'Bramble', 'Clover'
+    ]
 };
 
 // Assert world is much larger than viewport
 console.assert(window.GameConfig.world.width >= window.innerWidth * 10, '[GameConfig] World width should be at least 10x viewport width');
 console.assert(window.GameConfig.world.height >= window.innerHeight * 10, '[GameConfig] World height should be at least 10x viewport height');
 
-console.log('[GameConfig.js] Loaded at', new Date().toISOString(), 'cache-bust:', Math.random());
-console.log('[GameConfig.js] window.GameConfig:', window.GameConfig); 
+console.log('[GameConfig.js] Loaded at', new Date().toISOString(), 'cache-bust:', Math.random()); 

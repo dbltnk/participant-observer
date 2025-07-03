@@ -24,6 +24,9 @@ console.log('Phaser main loaded');
     let domSnapshotInterval;
     let lastDomSnapshot = '';
 
+    // Extract all food types from GameConfig for easy access
+    const ALL_FOOD_TYPES = Object.keys(GameConfig.resources.foodData);
+
     // Initialize logging system
     function initLogging() {
         console.log('[Logging] Initializing browser logging system...');
@@ -64,9 +67,21 @@ console.log('Phaser main loaded');
         // Format logs for server
         const formattedLogs = logsToSend.map(log => ({
             type: log.type,
-            message: log.args.map(arg =>
-                typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
-            ).join(' '),
+            message: log.args.map(arg => {
+                if (typeof arg === 'object') {
+                    // Handle Error objects specially
+                    if (arg instanceof Error || (arg && arg.message && arg.stack)) {
+                        return `${arg.name || 'Error'}: ${arg.message}\n  ${arg.stack}`;
+                    }
+                    // Handle other objects
+                    try {
+                        return JSON.stringify(arg, null, 2);
+                    } catch (e) {
+                        return String(arg);
+                    }
+                }
+                return String(arg);
+            }).join(' '),
             timestamp: log.timestamp,
             callStack: log.callStack
         }));
@@ -584,8 +599,7 @@ console.log('Phaser main loaded');
         }
 
         isValidForagingTarget(entity) {
-            return !entity.collected &&
-                ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'].includes(entity.type);
+            return !entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === 'tree');
         }
 
         addToMemory(entity) {
@@ -789,15 +803,10 @@ console.log('Phaser main loaded');
         }
 
         getNutrition(foodType) {
-            const baseType = foodType.replace('cooked_', '');
-            const nutrition = {
-                'blackberry': { calories: 50, vitamins: [0, 0, 0, 1, 0] },
-                'mushroom': { calories: 30, vitamins: [0, 0, 1, 0, 0] },
-                'herb': { calories: 20, vitamins: [1, 0, 0, 0, 0] },
-                'rabbit': { calories: 200, vitamins: [0, 1, 0, 0, 0] },
-                'deer': { calories: 500, vitamins: [0, 1, 0, 0, 1] }
-            };
-            return nutrition[baseType] || { calories: 0, vitamins: [0, 0, 0, 0, 0] };
+            if (GameConfig.resources.foodData[foodType]) {
+                return GameConfig.resources.foodData[foodType];
+            }
+            throw new Error(`[getNutrition] Unknown food type: ${foodType}. Please check GameConfig.resources.foodData.`);
         }
 
         eatFromStorage(storageBox) {
@@ -1030,7 +1039,7 @@ console.log('Phaser main loaded');
         }
 
         isFood(type) {
-            return ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer'].includes(type);
+            return ALL_FOOD_TYPES.includes(type);
         }
 
         getCurrentTime(gameTime) {
@@ -1366,7 +1375,9 @@ console.log('Phaser main loaded');
                 const startHour = GameConfig.time.gameStartHour;
                 if (startHour >= GameConfig.time.dayStartHour && startHour < GameConfig.time.nightStartHour) {
                     villager.state = 'FORAGING';
-                    console.log(`[MainScene] Villager ${villagerName} starting in FORAGING state (daytime)`);
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[MainScene] Villager ${villagerName} starting in FORAGING state (daytime)`);
+                    }
                 }
 
                 // Create visual representation
@@ -1374,7 +1385,9 @@ console.log('Phaser main loaded');
                 this.villagerVisuals.push(visuals);
 
                 this.villagers.push(villager);
-                console.log(`[MainScene] Created villager ${villagerName} at camp ${i} (spawned at ${Math.round(villagerSpawnPosition.x)}, ${Math.round(villagerSpawnPosition.y)})`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[MainScene] Created villager ${villagerName} at camp ${i} (spawned at ${Math.round(villagerSpawnPosition.x)}, ${Math.round(villagerSpawnPosition.y)})`);
+                }
             }
             // --- Additional wells ---
             this.wells = [villageWell];
@@ -1391,7 +1404,16 @@ console.log('Phaser main loaded');
                 }
             }
             // --- Resources (Small clusters of same type, spreading from village) ---
-            const resourceTypes = ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'];
+            const resourceTypes = [
+                // Plants
+                'blackberry', 'mushroom', 'herb', 'blueberry', 'raspberry', 'elderberry', 'wild_garlic', 'dandelion', 'nettle', 'sorrel',
+                'watercress', 'wild_onion', 'chickweed', 'plantain', 'yarrow',
+                // Animals
+                'rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk',
+                'marten', 'grouse', 'woodcock', 'beaver', 'otter',
+                // Tree (wood resource)
+                'tree'
+            ];
             const totalResources = (cfg.villagerCount + 1) * cfg.resourcesPerVillager;
             console.log(`[World Generation] Generating ${totalResources} resources in clusters for ${cfg.villagerCount} villagers + 1 player`);
 
@@ -1474,7 +1496,12 @@ console.log('Phaser main loaded');
             // --- Render all entities as Phaser text objects ---
             this.worldEntities = [];
             for (const entity of this.entities) {
-                const fontSize = entity.type === 'camp' ? 28 : entity.type === 'fireplace' || entity.type === 'sleeping_bag' ? 24 : entity.type === 'storage_box' ? 24 : ['well', 'blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'].includes(entity.type) ? 22 : 22;
+                let fontSize = entity.type === 'camp' ? 28 : entity.type === 'fireplace' || entity.type === 'sleeping_bag' ? 24 : entity.type === 'storage_box' ? 24 : ['well', 'blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'].includes(entity.type) ? 22 : 22;
+
+                // Make communal storage 2x larger
+                if (entity.type === 'storage_box' && !entity.isPersonal) {
+                    fontSize = 48; // 2x the normal 24px size
+                }
                 const textObj = this.add.text(entity.position.x, entity.position.y, entity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
                 entity._phaserText = textObj;
                 this.worldEntities.push(textObj);
@@ -1483,7 +1510,7 @@ console.log('Phaser main loaded');
                 this.addDebugElements(entity);
 
                 // --- Resource collection: make resources interactive ---
-                if (["blackberry", "mushroom", "herb", "rabbit", "deer", "tree"].includes(entity.type)) {
+                if (ALL_FOOD_TYPES.includes(entity.type) || entity.type === "tree") {
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         if (entity.collected) return;
@@ -1645,21 +1672,21 @@ console.log('Phaser main loaded');
                             return;
                         }
 
-                        // Second priority: eat food if near a fire
+                        // Second priority: eat food if near a burning fire
                         if (this.isFood(item.type)) {
                             const nearbyFire = this.findNearbyFire();
-                            console.log(`[Inventory] Food item ${item.type}, nearby fire:`, nearbyFire ? 'found' : 'not found');
                             if (nearbyFire) {
-                                console.log('[Inventory] Eating food near fire');
                                 this.eatFoodFromInventory(i, item);
+                                return;
+                            } else {
+                                this.showTempMessage('Must be near a burning fire to eat!', 1500);
                                 return;
                             }
                         }
 
-                        // Third priority: add wood to fire if near a fire
+                        // Third priority: add wood to fire if near a burning fire
                         if (item.type === 'tree') {
                             const nearbyFire = this.findNearbyFire();
-                            console.log(`[Inventory] Wood item, nearby fire:`, nearbyFire ? 'found' : 'not found');
                             if (nearbyFire && nearbyFire.wood < nearbyFire.maxWood) {
                                 nearbyFire.wood++;
                                 nearbyFire.isBurning = true;
@@ -1980,7 +2007,9 @@ console.log('Phaser main loaded');
                         villager.stateText.setColor('#ff0000'); // Red color for dead villagers
                     }
 
-                    console.log(`[MainScene] Villager ${villager.name} died and became a corpse`);
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[MainScene] Villager ${villager.name} died and became a corpse`);
+                    }
                 }
             }
 
@@ -2026,10 +2055,19 @@ console.log('Phaser main loaded');
             return false;
         }
         getResourceEmoji(type) {
-            const emojis = {
-                'blackberry': '🫐', 'mushroom': '🍄', 'herb': '🌿', 'rabbit': '🐰', 'deer': '🦌', 'tree': '🌲'
+            // Get emoji from GameConfig.resources.foodData
+            if (GameConfig.resources.foodData[type]) {
+                return GameConfig.resources.foodData[type].emoji;
+            }
+            // Fallback for non-food entities
+            const fallbackEmojis = {
+                'well': '💧',
+                'fireplace': '🔥',
+                'sleeping_bag': '🛏️',
+                'storage_box': '📦',
+                'tree': '🌲'
             };
-            return emojis[type] || '❓';
+            return fallbackEmojis[type] || '❓';
         }
         showTempMessage(msg, duration = 2000) {
             if (this._tempMsg) this._tempMsg.destroy();
@@ -2291,7 +2329,7 @@ console.log('Phaser main loaded');
         }
 
         isFood(type) {
-            return ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer'].includes(type);
+            return ALL_FOOD_TYPES.includes(type);
         }
 
         getCookedVersion(type) {
@@ -2486,40 +2524,24 @@ console.log('Phaser main loaded');
         }
 
         isFood(type) {
-            return ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer'].includes(type);
+            return ALL_FOOD_TYPES.includes(type);
         }
 
         eatFoodFromInventory(slot, item) {
-            // Check if food needs to be cooked
-            if (item.type.startsWith('cooked_')) {
-                // Already cooked, apply nutrition
-                this.applyNutrition(item.type);
+            // Only allow eating if near a burning fire
+            const nearbyFire = this.findNearbyFire();
+            if (nearbyFire) {
+                this.applyNutrition(item.type, 1.0);
                 this.playerState.inventory[slot] = null;
                 this.updatePhaserUI();
-                this.showTempMessage(`Ate cooked ${item.type.replace('cooked_', '')}!`, 1200);
+                this.showTempMessage(`Ate ${item.type}!`, 1200);
             } else {
-                // Raw food - try to cook it first
-                const nearbyFire = this.findNearbyFire();
-                if (nearbyFire) {
-                    // Cook the food
-                    const cookedFood = this.getCookedVersion(item.type);
-                    this.playerState.inventory[slot] = cookedFood;
-                    this.applyNutrition(cookedFood.type);
-                    this.playerState.inventory[slot] = null;
-                    this.updatePhaserUI();
-                    this.showTempMessage(`Cooked and ate ${item.type}!`, 1200);
-                } else {
-                    // Eat raw (less nutrition)
-                    this.applyNutrition(item.type, 0.5);
-                    this.playerState.inventory[slot] = null;
-                    this.updatePhaserUI();
-                    this.showTempMessage(`Ate raw ${item.type} (half nutrition)!`, 1200);
-                }
+                this.showTempMessage('Must be near a burning fire to eat!', 1500);
             }
         }
 
-        findNearbyBurningFire() {
-            // Find a burning fire within interaction range
+        findNearbyFire() {
+            // Only return burning fires within interaction range
             for (const entity of this.entities) {
                 if (entity.type === 'fireplace' && entity.isBurning) {
                     const dist = distance(this.playerState.position, entity.position);
@@ -2558,15 +2580,10 @@ console.log('Phaser main loaded');
         }
 
         getNutrition(foodType) {
-            const baseType = foodType.replace('cooked_', '');
-            const nutrition = {
-                'blackberry': { calories: 50, vitamins: [0, 0, 0, 1, 0] },
-                'mushroom': { calories: 30, vitamins: [0, 0, 1, 0, 0] },
-                'herb': { calories: 20, vitamins: [1, 0, 0, 0, 0] },
-                'rabbit': { calories: 200, vitamins: [0, 1, 0, 0, 0] },
-                'deer': { calories: 500, vitamins: [0, 1, 0, 0, 1] }
-            };
-            return nutrition[baseType] || { calories: 0, vitamins: [0, 0, 0, 0, 0] };
+            if (GameConfig.resources.foodData[foodType]) {
+                return GameConfig.resources.foodData[foodType];
+            }
+            throw new Error(`[getNutrition] Unknown food type: ${foodType}. Please check GameConfig.resources.foodData.`);
         }
 
         updateDayNightLighting() {
