@@ -1349,10 +1349,10 @@ console.log('Phaser main loaded');
             const barStartX = margin + iconWidth + 5; // Start bars after icons with 5px spacing
 
             for (let i = 0; i < needLabels.length; i++) {
-                const barBg = this.add.rectangle(barStartX + GameConfig.ui.barWidth / 2, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing), GameConfig.ui.barWidth, GameConfig.ui.barHeight, 0x333333).setOrigin(0.5, 0);
-                const barFill = this.add.rectangle(barStartX + GameConfig.ui.barWidth / 2, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing), GameConfig.ui.barWidth, GameConfig.ui.barHeight, getPhaserBarColor(needTypes[i])).setOrigin(0.5, 0);
-                const label = this.add.text(margin, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, needLabels[i], { fontSize: '16px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 0.5);
-                const value = this.add.text(barStartX + GameConfig.ui.barWidth + 10, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, '100', { fontSize: '12px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 0.5);
+                const barBg = this.add.rectangle(barStartX + GameConfig.ui.barWidth / 2, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing), GameConfig.ui.barWidth, GameConfig.ui.barHeight, 0x333333).setOrigin(0.5, 0).setScrollFactor(0);
+                const barFill = this.add.rectangle(barStartX + GameConfig.ui.barWidth / 2, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing), GameConfig.ui.barWidth, GameConfig.ui.barHeight, getPhaserBarColor(needTypes[i])).setOrigin(0.5, 0).setScrollFactor(0);
+                const label = this.add.text(margin, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, needLabels[i], { fontSize: '16px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 0.5).setScrollFactor(0);
+                const value = this.add.text(barStartX + GameConfig.ui.barWidth + 10, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, '100', { fontSize: '12px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 0.5).setScrollFactor(0);
                 this.uiContainer.add([barBg, barFill, label, value]);
                 this.ui.needsBars.push({ barBg, barFill, label, value });
             }
@@ -1362,8 +1362,8 @@ console.log('Phaser main loaded');
             const inventoryY = window.innerHeight - margin - 30; // Add 30px more space from bottom
             this.ui.inventorySlots = [];
             for (let i = 0; i < GameConfig.player.inventorySize; i++) {
-                const slot = this.add.rectangle(inventoryStartX + i * 56, inventoryY, 50, 50, 0x222222).setOrigin(0.5).setStrokeStyle(2, 0x666666);
-                const emoji = this.add.text(inventoryStartX + i * 56, inventoryY, '', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+                const slot = this.add.rectangle(inventoryStartX + i * 56, inventoryY, 50, 50, 0x222222).setOrigin(0.5).setStrokeStyle(2, 0x666666).setScrollFactor(0);
+                const emoji = this.add.text(inventoryStartX + i * 56, inventoryY, '', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setScrollFactor(0);
                 this.uiContainer.add([slot, emoji]);
                 this.ui.inventorySlots.push({ slot, emoji });
                 // --- Inventory slot selection: click to select ---
@@ -1392,14 +1392,14 @@ console.log('Phaser main loaded');
                     this.updatePhaserUI();
                 }
             });
-            // Time display (top right) - use viewport width instead of world width
-            this.ui.timeText = this.add.text(window.innerWidth - margin, margin, '', { fontSize: '18px', fontFamily: 'monospace', color: '#fff' }).setOrigin(1, 0);
+            // Time display (top right) - fixed to camera viewport
+            this.ui.timeText = this.add.text(window.innerWidth - margin, margin, '', { fontSize: '18px', fontFamily: 'monospace', color: '#fff' }).setOrigin(1, 0).setScrollFactor(0);
             this.uiContainer.add(this.ui.timeText);
-            // Info box (bottom left) - use viewport height instead of world height
-            this.ui.infoBox = this.add.text(margin, window.innerHeight - margin, 'Alpine Sustainability v1.0\nControls: WASD to move\nClick inventory slots to select', { fontSize: '13px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#222', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1);
+            // Info box (bottom left) - fixed to camera viewport
+            this.ui.infoBox = this.add.text(margin, window.innerHeight - margin, 'Alpine Sustainability v1.0\nControls: WASD to move\nClick inventory slots to select', { fontSize: '13px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#222', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.infoBox);
-            // Debug toggle (bottom left, above log spam button) - use viewport height
-            this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - 120, '⚪ Debug: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive();
+            // Debug toggle (bottom left, above log spam button) - fixed to camera viewport
+            this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - 120, '⚪ Debug: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.debugBtn.on('pointerdown', () => {
                 window.villagerDebugEnabled = !window.villagerDebugEnabled;
                 updateDebugBtn.call(this);
@@ -1418,8 +1418,8 @@ console.log('Phaser main loaded');
             updateDebugBtn.call(this);
             this.uiContainer.add(this.ui.debugBtn);
 
-            // Log spam toggle (bottom left, above info box) - use viewport height
-            this.ui.logSpamBtn = this.add.text(margin, window.innerHeight - margin - 90, '⚪ Log Spam: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive();
+            // Log spam toggle (bottom left, above info box) - fixed to camera viewport
+            this.ui.logSpamBtn = this.add.text(margin, window.innerHeight - margin - 90, '⚪ Log Spam: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.logSpamBtn.on('pointerdown', () => {
                 window.summaryLoggingEnabled = !window.summaryLoggingEnabled;
                 updateLogSpamBtn.call(this);
@@ -1439,38 +1439,41 @@ console.log('Phaser main loaded');
             const seedBoxWidth = 200;
             const seedBoxX = window.innerWidth - margin - seedBoxWidth;
 
-            // Seed label
-            this.ui.seedLabel = this.add.text(seedBoxX, seedBoxY - 25, '🌱 Seed:', { fontSize: '13px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 1);
+            // Seed label - fixed to camera viewport
+            this.ui.seedLabel = this.add.text(seedBoxX, seedBoxY - 25, '🌱 Seed:', { fontSize: '13px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.seedLabel);
 
-            // Seed input background
-            this.ui.seedInputBg = this.add.rectangle(seedBoxX + 30, seedBoxY - 15, 60, 20, 0x333333).setOrigin(0, 1).setStrokeStyle(1, 0x666666);
+            // Seed input background - fixed to camera viewport
+            this.ui.seedInputBg = this.add.rectangle(seedBoxX + 30, seedBoxY - 15, 60, 20, 0x333333).setOrigin(0, 1).setStrokeStyle(1, 0x666666).setScrollFactor(0);
             this.uiContainer.add(this.ui.seedInputBg);
 
-            // Seed input text
-            this.ui.seedInputText = this.add.text(seedBoxX + 56, seedBoxY - 17, getCurrentSeed().toString(), { fontSize: '12px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5, 1);
+            // Seed input text - fixed to camera viewport
+            this.ui.seedInputText = this.add.text(seedBoxX + 56, seedBoxY - 17, getCurrentSeed().toString(), { fontSize: '12px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.seedInputText);
 
-            // Decrement button (-)
-            this.ui.seedDecrementBtn = this.add.text(seedBoxX + 25, seedBoxY - 15, '-', { fontSize: '14px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 6, right: 6, top: 2, bottom: 2 } }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true });
+            // Decrement button (-) - fixed to camera viewport
+            this.ui.seedDecrementBtn = this.add.text(seedBoxX + 25, seedBoxY - 15, '-', { fontSize: '14px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 6, right: 6, top: 2, bottom: 2 } }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.seedDecrementBtn.on('pointerdown', () => {
                 console.log('[Seed] Decrement button clicked');
                 this.decrementSeed();
             });
             this.uiContainer.add(this.ui.seedDecrementBtn);
 
-            // Increment button (+)
-            this.ui.seedIncrementBtn = this.add.text(seedBoxX + 85, seedBoxY - 15, '+', { fontSize: '14px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 6, right: 6, top: 2, bottom: 2 } }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true });
+            // Increment button (+) - fixed to camera viewport
+            this.ui.seedIncrementBtn = this.add.text(seedBoxX + 85, seedBoxY - 15, '+', { fontSize: '14px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 6, right: 6, top: 2, bottom: 2 } }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.seedIncrementBtn.on('pointerdown', () => {
                 console.log('[Seed] Increment button clicked');
                 this.incrementSeed();
             });
             this.uiContainer.add(this.ui.seedIncrementBtn);
 
-            // New Game button
-            this.ui.newGameBtn = this.add.text(seedBoxX + 100, seedBoxY - 15, '🔄 New Game', { fontSize: '12px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#228B22', padding: { left: 8, right: 8, top: 4, bottom: 4 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true });
-            this.ui.newGameBtn.on('pointerdown', () => this.showNewGameConfirmation());
-            this.uiContainer.add(this.ui.newGameBtn);
+            // New Game button - fixed to camera viewport
+            this.ui.newGameBtn = this.add.text(seedBoxX + 100, seedBoxY - 15, '🔄 New Game', { fontSize: '12px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#228B22', padding: { left: 8, right: 8, top: 4, bottom: 4 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.newGameBtn.on('pointerdown', () => {
+                console.log('[NewGame] New Game button clicked');
+                this.showNewGameConfirmation();
+            });
+            // Don't add to container - keep it as a direct scene element for better interaction
 
             // Initialize current seed value
             this.currentSeedValue = getCurrentSeed();
@@ -1768,21 +1771,21 @@ console.log('Phaser main loaded');
                 seed = GameConfig.ui.seedInputMaxValue;
             }
 
-            // Background overlay
-            const bg = this.add.rectangle(w / 2, h / 2, 400, 200, 0x222222, 0.95).setOrigin(0.5).setDepth(1000);
+            // Background overlay - fixed to camera viewport
+            const bg = this.add.rectangle(w / 2, h / 2, 400, 200, 0x222222, 0.95).setOrigin(0.5).setDepth(1000).setScrollFactor(0);
 
-            // Title
-            const title = this.add.text(w / 2, h / 2 - 60, 'Start New Game?', { fontSize: '24px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5).setDepth(1001);
+            // Title - fixed to camera viewport
+            const title = this.add.text(w / 2, h / 2 - 60, 'Start New Game?', { fontSize: '24px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
 
-            // Message
-            const message = this.add.text(w / 2, h / 2 - 20, `Seed: ${seed}`, { fontSize: '16px', fontFamily: 'monospace', color: '#ccc' }).setOrigin(0.5).setDepth(1001);
+            // Message - fixed to camera viewport
+            const message = this.add.text(w / 2, h / 2 - 20, `Seed: ${seed}`, { fontSize: '16px', fontFamily: 'monospace', color: '#ccc' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
 
-            // Buttons
+            // Buttons - fixed to camera viewport
             const yesBtn = this.add.text(w / 2 - 60, h / 2 + 30, 'Yes', { fontSize: '16px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#228B22', padding: { left: 12, right: 12, top: 6, bottom: 6 } })
-                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1001);
+                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1001).setScrollFactor(0);
 
             const noBtn = this.add.text(w / 2 + 60, h / 2 + 30, 'No', { fontSize: '16px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 12, right: 12, top: 6, bottom: 6 } })
-                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1001);
+                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1001).setScrollFactor(0);
 
             // Button handlers
             yesBtn.on('pointerdown', () => {
