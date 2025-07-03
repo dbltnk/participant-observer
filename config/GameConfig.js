@@ -14,14 +14,14 @@ window.GameConfig = {
         width: 1200,  // Total world width in pixels (3-4 screens worth)
         height: 800,  // Total world height in pixels (3-4 screens worth)
         tileSize: 32, // Size of each "tile" for spatial calculations (used in distance checks)
-        villagerCount: 7, // Number of AI villagers (excluding player)
+        villagerCount: 8, // Total camps (7 AI villagers + 1 player camp)
         resourcesPerVillager: 3, // Initial resources spawned per villager (including player)
         maxResourcesPerType: 10, // Global cap on resources per type (prevents overpopulation)
 
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 0 }, // Offset for village well from center
-        campRadius: 150, // Distance from village center to camps
-        campSpacing: { x: 20, y: 30 }, // Spacing between camp facilities
+        campRadius: 300, // Distance from village center to camps (doubled from 150)
+        campSpacing: { x: 40, y: 60 }, // Spacing between camp facilities (doubled from 20,30)
         playerStartOffset: { x: 40, y: 0 }, // Player start position relative to their camp
 
         // Resource generation
@@ -128,7 +128,7 @@ window.GameConfig = {
         // Formula: newPosition = oldPosition + (moveSpeed * deltaTime / 1000)
         memoryCapacity: 10, // Maximum number of resource locations a villager can remember
         // Used in: villager.memory.knownFoodLocations.length <= memoryCapacity
-        explorationRadius: 200, // How far villagers explore when they don't know of nearby food
+        explorationRadius: 400, // How far villagers explore when they don't know of nearby food (doubled from 200)
         // Formula: if (distanceToNearestKnownFood > explorationRadius) { exploreNewArea() }
         // Higher values = villagers explore further from their camp
         foragingEfficiency: 0.8 // Success rate when villagers try to collect resources

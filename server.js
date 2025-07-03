@@ -185,6 +185,9 @@ const server = http.createServer(async (req, res) => {
 
 // Start server
 server.listen(PORT, () => {
+    // Clear previous logs on server startup
+    clearFiles();
+
     console.log(`🚀 Browser logging server running on http://localhost:${PORT}`);
     console.log(`📁 Log files will be written to: ${LOGS_DIR}`);
     console.log(`📝 Console logs: ${LOGS_FILE}`);

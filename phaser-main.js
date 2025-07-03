@@ -28,6 +28,9 @@ console.log('Phaser main loaded');
     function initLogging() {
         console.log('[Logging] Initializing browser logging system...');
 
+        // Clear logs on page load
+        clearLogsOnPageLoad();
+
         // Start log transmission (every 2 seconds)
         logTransmissionInterval = setInterval(sendLogsToServer, 2000);
 
@@ -35,6 +38,21 @@ console.log('Phaser main loaded');
         domSnapshotInterval = setInterval(sendDomSnapshot, 5000);
 
         console.log('[Logging] Logging system initialized');
+    }
+
+    // Clear logs when page loads
+    function clearLogsOnPageLoad() {
+        fetch('http://localhost:3000/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        }).then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    console.log('[Logging] Cleared previous session logs on page load');
+                }
+            }).catch(err => {
+                console.warn('[Logging] Failed to clear logs on page load:', err.message);
+            });
     }
 
     // Send captured logs to server
@@ -183,6 +201,650 @@ console.log('Phaser main loaded');
         }
     }
     // === END: PerlinNoise and utility functions ===
+
+    // === BEGIN: Villager AI System ===
+    class Villager {
+        constructor(name, campPosition, villagerId) {
+            this.name = name;
+            this.campPosition = campPosition;
+            this.villagerId = villagerId;
+
+            // State management
+            this.state = 'SLEEPING';
+            this.stateTimer = 0;
+
+            // Position and movement
+            this.position = { ...campPosition };
+            this.targetPosition = null;
+            this.moveSpeed = GameConfig.villager.moveSpeed;
+
+            // Needs system (same as player)
+            this.needs = {
+                temperature: GameConfig.needs.fullValue,
+                water: GameConfig.needs.fullValue,
+                calories: GameConfig.needs.fullValue,
+                vitamins: new Array(GameConfig.needs.vitaminCount).fill(GameConfig.needs.fullValue)
+            };
+
+            // Inventory (same as player)
+            this.inventory = new Array(GameConfig.player.inventorySize).fill(null);
+            this.selectedSlot = 0;
+
+            // Memory system for resource locations
+            this.memory = {
+                knownFoodLocations: [], // Array of {x, y, resourceType, lastSeen}
+                knownWoodLocations: [],
+                lastKnownPosition: null
+            };
+
+            // Daily variance for needs (different per villager)
+            this.dailyDecay = this.generateDailyDecay();
+
+            // Visual representation
+            this.phaserText = null;
+            this.nameText = null;
+            this.healthEmoji = '😊';
+
+            // State-specific data
+            this.currentTarget = null;
+            this.foragingAttempts = 0;
+            this.maxForagingAttempts = 10;
+
+            // Goal persistence system
+            this.goalTimer = 0;
+            this.goalPersistenceTime = 10000; // 10 seconds to stick with current goal
+            this.randomDirection = Math.random() * 2 * Math.PI; // Random direction for exploration
+            this.explorationTarget = null; // Current exploration target position
+
+            console.log(`[Villager] Created villager ${name} at camp ${villagerId}`);
+        }
+
+        generateDailyDecay() {
+            // Generate unique daily decay rates for this villager
+            const variance = GameConfig.needsVariance;
+            return {
+                temperature: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.temperature * GameConfig.needs.minutesPerHour) * (1 + (Math.random() - 0.5) * variance),
+                water: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.water * GameConfig.needs.minutesPerHour) * (1 + (Math.random() - 0.5) * variance),
+                calories: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.calories * GameConfig.needs.minutesPerHour) * (1 + (Math.random() - 0.5) * variance),
+                vitamins: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.vitamins * GameConfig.needs.minutesPerHour) * (1 + (Math.random() - 0.5) * variance)
+            };
+        }
+
+        update(deltaTime, gameTime, entities, storageBoxes) {
+            // Update needs
+            this.updateNeeds(deltaTime, gameTime);
+
+            // Update state based on time
+            this.updateState(gameTime, deltaTime);
+
+            // Execute current state behavior
+            this.executeCurrentState(deltaTime, entities, storageBoxes);
+
+            // Update visual representation
+            this.updateVisuals();
+
+            // Check for death
+            return this.checkDeath();
+        }
+
+        updateNeeds(deltaTime, gameTime) {
+            const realSecondsPerGameDay = GameConfig.time.realSecondsPerGameDay;
+            const inGameMinutesPerMs = (24 * 60) / (realSecondsPerGameDay * 1000);
+            const inGameMinutes = deltaTime * inGameMinutesPerMs;
+
+            const t = this.getCurrentTime(gameTime);
+            const isNight = (t.hour < GameConfig.time.gameStartHour || t.hour >= GameConfig.time.nightStartHour);
+
+            // Apply decay based on config values
+            if (isNight) this.needs.temperature -= this.dailyDecay.temperature * inGameMinutes;
+            this.needs.water -= this.dailyDecay.water * inGameMinutes;
+            this.needs.calories -= this.dailyDecay.calories * inGameMinutes;
+
+            for (let i = 0; i < this.needs.vitamins.length; i++) {
+                this.needs.vitamins[i] -= this.dailyDecay.vitamins * inGameMinutes;
+            }
+
+            // Clamp values to valid range
+            this.needs.temperature = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.temperature));
+            this.needs.water = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.water));
+            this.needs.calories = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.calories));
+
+            for (let i = 0; i < this.needs.vitamins.length; i++) {
+                this.needs.vitamins[i] = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.vitamins[i]));
+            }
+        }
+
+        updateState(gameTime, deltaTime) {
+            const t = this.getCurrentTime(gameTime);
+            const hour = t.hour;
+
+            // State transitions based on time
+            if (hour >= GameConfig.time.dayStartHour && hour < GameConfig.time.nightStartHour) {
+                if (this.state === 'SLEEPING') {
+                    this.state = 'FORAGING';
+                    this.stateTimer = 0; // Reset timer
+                    console.log(`[Villager] ${this.name} woke up and started foraging`);
+                }
+            } else if (hour >= GameConfig.time.nightStartHour) {
+                if (this.state === 'FORAGING') {
+                    this.state = 'RETURNING';
+                    this.stateTimer = 0; // Reset timer
+                    console.log(`[Villager] ${this.name} returning to camp for the night`);
+                }
+            }
+
+            // State-specific transitions with cooldowns
+            if (this.state === 'RETURNING' && this.isAtCamp()) {
+                this.state = 'EATING';
+                this.stateTimer = 0; // Reset timer
+                console.log(`[Villager] ${this.name} arrived at camp and is eating`);
+            } else if (this.state === 'EATING' && this.needs.calories > 80 && this.stateTimer > 5000) { // 5 second cooldown
+                this.state = 'SLEEPING';
+                this.stateTimer = 0; // Reset timer
+                console.log(`[Villager] ${this.name} finished eating and went to sleep`);
+            }
+
+            // Increment state timer
+            this.stateTimer += deltaTime; // Use actual deltaTime
+
+            // Debug: Log state changes occasionally (behind log spam gate)
+            if (window.summaryLoggingEnabled && Math.random() < 0.01) { // 1% chance per frame when spam enabled
+                console.log(`[Villager] ${this.name} state: ${this.state}, hour: ${hour}, timer: ${Math.round(this.stateTimer)}, needs: T${Math.round(this.needs.temperature)} W${Math.round(this.needs.water)} C${Math.round(this.needs.calories)}`);
+            }
+        }
+
+        executeCurrentState(deltaTime, entities, storageBoxes) {
+            switch (this.state) {
+                case 'FORAGING':
+                    // First, move away from camp if we're too close
+                    if (this.isAtCamp()) {
+                        this.leaveCamp(deltaTime);
+                    } else {
+                        this.forage(entities, deltaTime);
+                    }
+                    break;
+                case 'RETURNING':
+                    this.moveTowards(this.campPosition, deltaTime);
+                    break;
+                case 'EATING':
+                    this.eatAndDrink(storageBoxes);
+                    break;
+                case 'SLEEPING':
+                    this.sleep();
+                    break;
+            }
+        }
+
+        forage(entities, deltaTime) {
+            // Increment goal timer
+            this.goalTimer += deltaTime;
+
+            // Check if we have a current target and stick with it for goalPersistenceTime
+            if (this.currentTarget && !this.currentTarget.collected && this.goalTimer < this.goalPersistenceTime) {
+                // Move towards current target
+                this.moveTowards(this.currentTarget.position, deltaTime);
+
+                // Check if we're close enough to collect
+                if (distance(this.position, this.currentTarget.position) <= GameConfig.player.interactionThreshold) {
+                    this.collectResource(this.currentTarget);
+                    this.currentTarget = null;
+                    this.goalTimer = 0; // Reset timer after collecting
+                }
+            } else if (this.explorationTarget && this.goalTimer < this.goalPersistenceTime) {
+                // Move towards exploration target
+                this.moveTowards(this.explorationTarget, deltaTime);
+
+                // If we reached exploration target, reset
+                if (distance(this.position, this.explorationTarget) < 20) {
+                    this.explorationTarget = null;
+                    this.goalTimer = 0;
+                }
+            } else {
+                // Find new target or exploration direction
+                this.findNewForagingTarget(entities);
+            }
+
+            // If we can't find anything or inventory is full, return to camp
+            if (this.isInventoryFull() || this.foragingAttempts >= this.maxForagingAttempts) {
+                this.state = 'RETURNING';
+                this.foragingAttempts = 0;
+                this.goalTimer = 0;
+            }
+
+            // Debug: Log movement occasionally (behind log spam gate)
+            if (window.summaryLoggingEnabled && Math.random() < 0.05) { // 5% chance per frame when spam enabled
+                console.log(`[Villager] ${this.name} foraging at (${Math.round(this.position.x)}, ${Math.round(this.position.y)}), target: ${this.currentTarget ? this.currentTarget.type : 'none'}, goalTimer: ${Math.round(this.goalTimer)}, attempts: ${this.foragingAttempts}`);
+            }
+        }
+
+        findNewForagingTarget(entities) {
+            // Reset goal timer when finding new target
+            this.goalTimer = 0;
+
+            // First check memory for known locations
+            const knownTarget = this.findNearestKnownFood(entities);
+            if (knownTarget) {
+                this.currentTarget = knownTarget;
+                this.explorationTarget = null; // Clear exploration target
+                return;
+            }
+
+            // Explore new area if no known locations
+            const foundTarget = this.exploreNewArea(entities);
+            if (!foundTarget) {
+                // No resources found, set exploration target in random direction
+                this.setExplorationTarget();
+            }
+        }
+
+        findNearestKnownFood(entities) {
+            let nearest = null;
+            let nearestDistance = Infinity;
+
+            for (const location of this.memory.knownFoodLocations) {
+                // Find if this resource still exists and isn't collected
+                const entity = entities.find(e =>
+                    e.position.x === location.x &&
+                    e.position.y === location.y &&
+                    e.type === location.resourceType &&
+                    !e.collected
+                );
+
+                if (entity) {
+                    const dist = distance(this.position, entity.position);
+                    if (dist < nearestDistance && dist <= GameConfig.villager.explorationRadius) {
+                        nearest = entity;
+                        nearestDistance = dist;
+                    }
+                }
+            }
+
+            return nearest;
+        }
+
+        exploreNewArea(entities) {
+            // Find nearest uncollected resource within exploration radius
+            let nearest = null;
+            let nearestDistance = Infinity;
+
+            for (const entity of entities) {
+                if (this.isValidForagingTarget(entity)) {
+                    const dist = distance(this.position, entity.position);
+                    if (dist < nearestDistance && dist <= GameConfig.villager.explorationRadius) {
+                        nearest = entity;
+                        nearestDistance = dist;
+                    }
+                }
+            }
+
+            if (nearest) {
+                this.currentTarget = nearest;
+                this.explorationTarget = null; // Clear exploration target
+                // Add to memory
+                this.addToMemory(nearest);
+                return true; // Found a target
+            } else {
+                // No targets found, increment attempts
+                this.foragingAttempts++;
+                return false; // No target found
+            }
+        }
+
+        isValidForagingTarget(entity) {
+            return !entity.collected &&
+                ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'].includes(entity.type);
+        }
+
+        addToMemory(entity) {
+            const memoryEntry = {
+                x: entity.position.x,
+                y: entity.position.y,
+                resourceType: entity.type,
+                lastSeen: Date.now()
+            };
+
+            // Add to appropriate memory list
+            if (entity.type === 'tree') {
+                this.addToMemoryList(this.memory.knownWoodLocations, memoryEntry);
+            } else {
+                this.addToMemoryList(this.memory.knownFoodLocations, memoryEntry);
+            }
+        }
+
+        addToMemoryList(memoryList, entry) {
+            // Check if already in memory
+            const existing = memoryList.find(m =>
+                m.x === entry.x && m.y === entry.y && m.resourceType === entry.resourceType
+            );
+
+            if (!existing) {
+                memoryList.push(entry);
+
+                // Limit memory capacity
+                if (memoryList.length > GameConfig.villager.memoryCapacity) {
+                    memoryList.shift(); // Remove oldest memory
+                }
+            } else {
+                // Update last seen time
+                existing.lastSeen = entry.lastSeen;
+            }
+        }
+
+        collectResource(entity) {
+            // Check if we can carry it
+            const slot = this.inventory.findIndex(i => i === null);
+            if (slot === -1) {
+                console.log(`[Villager] ${this.name} inventory full, can't collect ${entity.type}`);
+                return false;
+            }
+
+            // Success chance based on foraging efficiency
+            if (Math.random() < GameConfig.villager.foragingEfficiency) {
+                this.inventory[slot] = { type: entity.type, emoji: entity.emoji };
+                entity.collected = true;
+                if (entity._phaserText) entity._phaserText.setVisible(false);
+
+                console.log(`[Villager] ${this.name} collected ${entity.type}`);
+                return true;
+            } else {
+                console.log(`[Villager] ${this.name} failed to collect ${entity.type}`);
+                return false;
+            }
+        }
+
+        moveTowards(target, deltaTime) {
+            if (!target) return;
+
+            const dx = target.x - this.position.x;
+            const dy = target.y - this.position.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > 0) {
+                const speed = this.moveSpeed * (deltaTime / 1000);
+                const moveX = (dx / distance) * speed;
+                const moveY = (dy / distance) * speed;
+
+                this.position.x += moveX;
+                this.position.y += moveY;
+
+                // Update visual position
+                if (this.phaserText) {
+                    this.phaserText.setPosition(this.position.x, this.position.y);
+                }
+                if (this.nameText) {
+                    this.nameText.setPosition(this.position.x, this.position.y - 30);
+                }
+                if (this.stateText) {
+                    this.stateText.setPosition(this.position.x, this.position.y + 30);
+                }
+                if (this.rangeIndicator) {
+                    this.rangeIndicator.setPosition(this.position.x, this.position.y);
+                }
+
+                // Debug: Log movement occasionally (behind log spam gate)
+                if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance per frame when spam enabled
+                    console.log(`[Villager] ${this.name} moving to (${Math.round(this.position.x)}, ${Math.round(this.position.y)})`);
+                }
+            }
+        }
+
+        eatAndDrink(storageBoxes) {
+            // Find personal storage box
+            const personalStorage = storageBoxes.find(box =>
+                box.isPersonal && box.villagerId === this.villagerId
+            );
+
+            // Eat from inventory first
+            this.eatFromInventory();
+
+            // Eat from personal storage if needed
+            if (personalStorage && this.needs.calories < 80) {
+                this.eatFromStorage(personalStorage);
+            }
+
+            // Drink from wells if needed
+            if (this.needs.water < 80) {
+                this.drinkFromWells();
+            }
+
+            // Restock fire
+            this.restockFire();
+
+            // Store excess resources
+            this.storeExcessResources(storageBoxes);
+        }
+
+        eatFromInventory() {
+            for (let i = 0; i < this.inventory.length; i++) {
+                const item = this.inventory[i];
+                if (item && this.isFood(item.type)) {
+                    // Apply nutrition (simplified)
+                    this.needs.calories = Math.min(GameConfig.needs.fullValue, this.needs.calories + 50);
+                    this.inventory[i] = null;
+                    console.log(`[Villager] ${this.name} ate ${item.type}`);
+                    break;
+                }
+            }
+        }
+
+        eatFromStorage(storageBox) {
+            for (let i = 0; i < storageBox.items.length; i++) {
+                const item = storageBox.items[i];
+                if (item && this.isFood(item.type)) {
+                    this.needs.calories = Math.min(GameConfig.needs.fullValue, this.needs.calories + 50);
+                    storageBox.items.splice(i, 1);
+                    console.log(`[Villager] ${this.name} ate ${item.type} from storage`);
+                    break;
+                }
+            }
+        }
+
+        drinkFromWells() {
+            // Find nearest well and drink
+            // This is simplified - in full implementation, would check well positions
+            this.needs.water = GameConfig.needs.fullValue;
+            console.log(`[Villager] ${this.name} drank from well`);
+        }
+
+        restockFire() {
+            // Find wood in inventory and add to fire
+            const woodSlot = this.inventory.findIndex(item => item && item.type === 'tree');
+            if (woodSlot !== -1) {
+                // Find fireplace at this camp
+                // Simplified - would need to find actual fireplace entity
+                this.inventory[woodSlot] = null;
+                console.log(`[Villager] ${this.name} added wood to fire`);
+            }
+        }
+
+        storeExcessResources(storageBoxes) {
+            // Find personal storage box
+            const personalStorage = storageBoxes.find(box =>
+                box.isPersonal && box.villagerId === this.villagerId
+            );
+
+            // Store items in personal storage first
+            for (let i = 0; i < this.inventory.length; i++) {
+                const item = this.inventory[i];
+                if (item && personalStorage && personalStorage.items.length < personalStorage.capacity) {
+                    personalStorage.items.push(item);
+                    this.inventory[i] = null;
+                    console.log(`[Villager] ${this.name} stored ${item.type} in personal storage`);
+                }
+            }
+
+            // Store remaining items in communal storage
+            const communalStorage = storageBoxes.find(box => !box.isPersonal);
+            for (let i = 0; i < this.inventory.length; i++) {
+                const item = this.inventory[i];
+                if (item && communalStorage && communalStorage.items.length < communalStorage.capacity) {
+                    communalStorage.items.push(item);
+                    this.inventory[i] = null;
+                    console.log(`[Villager] ${this.name} stored ${item.type} in communal storage`);
+                }
+            }
+        }
+
+        sleep() {
+            // Restore some needs while sleeping
+            this.needs.temperature = Math.min(GameConfig.needs.fullValue, this.needs.temperature + 10);
+        }
+
+        isAtCamp() {
+            return distance(this.position, this.campPosition) < 50;
+        }
+
+        setExplorationTarget() {
+            // Set a new exploration target in the current random direction
+            const distance = 150 + Math.random() * 100; // 150-250 pixels away
+            this.explorationTarget = {
+                x: this.position.x + Math.cos(this.randomDirection) * distance,
+                y: this.position.y + Math.sin(this.randomDirection) * distance
+            };
+
+            // Keep exploration target within world bounds
+            this.explorationTarget.x = Math.max(0, Math.min(GameConfig.world.width, this.explorationTarget.x));
+            this.explorationTarget.y = Math.max(0, Math.min(GameConfig.world.height, this.explorationTarget.y));
+
+            // Debug: Log exploration target (behind log spam gate)
+            if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance per frame when spam enabled
+                console.log(`[Villager] ${this.name} set exploration target to (${Math.round(this.explorationTarget.x)}, ${Math.round(this.explorationTarget.y)})`);
+            }
+        }
+
+        leaveCamp(deltaTime) {
+            // Move in a random direction away from camp
+            const angle = Math.random() * 2 * Math.PI;
+            const targetX = this.campPosition.x + Math.cos(angle) * 100;
+            const targetY = this.campPosition.y + Math.sin(angle) * 100;
+
+            this.moveTowards({ x: targetX, y: targetY }, deltaTime);
+
+            // Debug: Log leaving camp (behind log spam gate)
+            if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance per frame when spam enabled
+                console.log(`[Villager] ${this.name} leaving camp, moving to (${Math.round(targetX)}, ${Math.round(targetY)})`);
+            }
+        }
+
+        isInventoryFull() {
+            return this.inventory.every(item => item !== null);
+        }
+
+        isFood(type) {
+            return ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer'].includes(type);
+        }
+
+        getCurrentTime(gameTime) {
+            const totalSeconds = gameTime;
+            const hour = Math.floor((totalSeconds % GameConfig.time.secondsPerDay) / GameConfig.time.secondsPerHour);
+            const minute = Math.floor((totalSeconds % GameConfig.time.secondsPerHour) / GameConfig.time.secondsPerMinute);
+            return { hour, minute };
+        }
+
+        updateVisuals() {
+            // Update health emoji based on needs
+            const avgNeeds = (this.needs.temperature + this.needs.water + this.needs.calories +
+                this.needs.vitamins.reduce((a, b) => a + b, 0) / this.needs.vitamins.length) / 4;
+
+            if (avgNeeds > 80) this.healthEmoji = '😊';
+            else if (avgNeeds > 50) this.healthEmoji = '😐';
+            else if (avgNeeds > 20) this.healthEmoji = '😟';
+            else this.healthEmoji = '😵';
+
+            if (this.nameText) {
+                this.nameText.setText(`${this.name} ${this.healthEmoji}`);
+            }
+
+            // Update state text
+            if (this.stateText) {
+                this.stateText.setText(this.state);
+            }
+        }
+
+        checkDeath() {
+            const n = this.needs;
+            if (n.temperature <= 0 || n.water <= 0 || n.calories <= 0) {
+                console.log(`[Villager] ${this.name} died!`);
+                return true;
+            }
+
+            for (let i = 0; i < n.vitamins.length; i++) {
+                if (n.vitamins[i] <= 0) {
+                    console.log(`[Villager] ${this.name} died from vitamin deficiency!`);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        createVisuals(scene) {
+            // Create villager emoji
+            this.phaserText = scene.add.text(
+                this.position.x,
+                this.position.y,
+                '👤',
+                { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }
+            ).setOrigin(0.5);
+
+            // Create name and health display
+            this.nameText = scene.add.text(
+                this.position.x,
+                this.position.y - 30,
+                `${this.name} ${this.healthEmoji}`,
+                { fontSize: '12px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#000', padding: { left: 4, right: 4, top: 2, bottom: 2 } }
+            ).setOrigin(0.5);
+
+            // Add state indicator
+            this.stateText = scene.add.text(
+                this.position.x,
+                this.position.y + 30,
+                this.state,
+                { fontSize: '10px', fontFamily: 'monospace', color: '#aaa', backgroundColor: '#000', padding: { left: 2, right: 2, top: 1, bottom: 1 } }
+            ).setOrigin(0.5);
+
+            // Add exploration radius indicator (semi-transparent circle)
+            this.rangeIndicator = scene.add.circle(
+                this.position.x,
+                this.position.y,
+                GameConfig.villager.explorationRadius,
+                0x00ff00,
+                0.1 // Very transparent
+            ).setOrigin(0.5);
+
+            return [this.phaserText, this.nameText, this.stateText, this.rangeIndicator];
+        }
+
+        destroy() {
+            if (this.phaserText) this.phaserText.destroy();
+            if (this.nameText) this.nameText.destroy();
+            if (this.stateText) this.stateText.destroy();
+            if (this.rangeIndicator) this.rangeIndicator.destroy();
+        }
+    }
+
+    // Villager name generator
+    const villagerNames = [
+        'Alaric', 'Brigid', 'Cormac', 'Deirdre', 'Eamon', 'Fiona', 'Gareth', 'Helena',
+        'Ivar', 'Jocelyn', 'Kieran', 'Luna', 'Mael', 'Niamh', 'Oisin', 'Pádraig',
+        'Quinn', 'Róisín', 'Seamus', 'Tara', 'Ulf', 'Vera', 'Wynn', 'Yara',
+        'Zara', 'Aiden', 'Brenna', 'Cian', 'Dara', 'Eira', 'Finn', 'Gwen',
+        'Hale', 'Iona', 'Jace', 'Kara', 'Liam', 'Maya', 'Nash', 'Orla',
+        'Pax', 'Raven', 'Sage', 'Teagan', 'Uma', 'Vale', 'Wren', 'Xander',
+        'Yuki', 'Zane', 'Aria', 'Blake', 'Cora', 'Dax', 'Echo', 'Faye',
+        'Gray', 'Haven', 'Indigo', 'Jade', 'Kai', 'Lark', 'Moss', 'Nova',
+        'Ocean', 'Pine', 'Quill', 'River', 'Sky', 'Thorne', 'Unity', 'Vale',
+        'Willow', 'Xero', 'Yarrow', 'Zephyr', 'Ash', 'Birch', 'Cedar', 'Dove',
+        'Elm', 'Fern', 'Grove', 'Hazel', 'Ivy', 'Juniper', 'Kestrel', 'Linden',
+        'Maple', 'Nettle', 'Oak', 'Poppy', 'Quince', 'Rowan', 'Sage', 'Thistle',
+        'Umber', 'Violet', 'Wisteria', 'Yew', 'Zinnia', 'Alder', 'Bramble', 'Clover'
+    ];
+
+    function generateVillagerName() {
+        return villagerNames[Math.floor(Math.random() * villagerNames.length)];
+    }
+    // === END: Villager AI System ===
+
     class MainScene extends Phaser.Scene {
         constructor() {
             super('MainScene');
@@ -202,9 +864,8 @@ console.log('Phaser main loaded');
             const cfg = GameConfig.world;
             const centerX = cfg.width / 2;
             const centerY = cfg.height / 2;
-            // --- Village ---
-            const village = { position: { x: centerX, y: centerY }, type: 'village', emoji: '🏘️' };
-            this.entities.push(village);
+            // --- Village center (no visual, just reference point) ---
+            const villageCenter = { position: { x: centerX, y: centerY }, type: 'village_center' };
             // --- Village well ---
             const villageWell = {
                 position: { x: centerX + cfg.villageCenterOffset.x, y: centerY + cfg.villageCenterOffset.y },
@@ -217,15 +878,22 @@ console.log('Phaser main loaded');
                 type: 'storage_box', emoji: '📦', capacity: GameConfig.storage.communalCapacity, items: []
             };
             this.entities.push(communalStorage);
-            // --- Camps and facilities ---
+            // --- Camps and facilities (organic placement, not perfect circle) ---
             this.camps = [];
             for (let i = 0; i < cfg.villagerCount; i++) {
-                const angle = (i / cfg.villagerCount) * 2 * Math.PI;
-                const x = centerX + Math.cos(angle) * cfg.campRadius;
-                const y = centerY + Math.sin(angle) * cfg.campRadius;
-                const camp = { position: { x, y }, type: 'camp', emoji: '🏕️', villagerId: i };
+                // Create more organic placement with some randomness
+                const baseAngle = (i / cfg.villagerCount) * 2 * Math.PI;
+                const angleVariation = (this.seededRandom.random() - 0.5) * 0.5; // ±0.25 radians variation
+                const radiusVariation = (this.seededRandom.random() - 0.5) * 50; // ±25 pixels radius variation
+                const angle = baseAngle + angleVariation;
+                const radius = cfg.campRadius + radiusVariation;
+
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                const camp = { position: { x, y }, type: 'camp', villagerId: i };
                 this.camps.push(camp);
-                this.entities.push(camp);
+                // Don't add camp to entities since we don't want to render it
+
                 // Fireplace
                 this.entities.push({ position: { x: x + cfg.campSpacing.x, y: y }, type: 'fireplace', emoji: '🔥', isBurning: false, wood: 0, maxWood: GameConfig.fires.maxWood });
                 // Sleeping bag
@@ -239,6 +907,36 @@ console.log('Phaser main loaded');
                 x: playerCamp.position.x + cfg.playerStartOffset.x,
                 y: playerCamp.position.y + cfg.playerStartOffset.y
             };
+
+            // --- Create villagers (skip camp 0 since player takes that role) ---
+            this.villagers = [];
+            this.villagerVisuals = [];
+            for (let i = 1; i < cfg.villagerCount; i++) { // Start from 1, skip camp 0
+                const camp = this.camps[i];
+                const villagerName = generateVillagerName();
+
+                // Spawn villager next to camp, not inside it
+                const villagerSpawnPosition = {
+                    x: camp.position.x + cfg.playerStartOffset.x,
+                    y: camp.position.y + cfg.playerStartOffset.y
+                };
+
+                const villager = new Villager(villagerName, villagerSpawnPosition, i);
+
+                // Set initial state based on game start time
+                const startHour = GameConfig.time.gameStartHour;
+                if (startHour >= GameConfig.time.dayStartHour && startHour < GameConfig.time.nightStartHour) {
+                    villager.state = 'FORAGING';
+                    console.log(`[MainScene] Villager ${villagerName} starting in FORAGING state (daytime)`);
+                }
+
+                // Create visual representation
+                const visuals = villager.createVisuals(this);
+                this.villagerVisuals.push(visuals);
+
+                this.villagers.push(villager);
+                console.log(`[MainScene] Created villager ${villagerName} at camp ${i} (spawned at ${Math.round(villagerSpawnPosition.x)}, ${Math.round(villagerSpawnPosition.y)})`);
+            }
             // --- Additional wells ---
             this.wells = [villageWell];
             for (let i = 0; i < cfg.wellCount; i++) {
@@ -274,7 +972,7 @@ console.log('Phaser main loaded');
             // --- Render all entities as Phaser text objects ---
             this.worldEntities = [];
             for (const entity of this.entities) {
-                const fontSize = entity.type === 'village' ? 32 : entity.type === 'camp' ? 28 : entity.type === 'fireplace' || entity.type === 'sleeping_bag' ? 24 : entity.type === 'storage_box' ? 24 : ['well', 'blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'].includes(entity.type) ? 22 : 22;
+                const fontSize = entity.type === 'camp' ? 28 : entity.type === 'fireplace' || entity.type === 'sleeping_bag' ? 24 : entity.type === 'storage_box' ? 24 : ['well', 'blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'].includes(entity.type) ? 22 : 22;
                 const textObj = this.add.text(entity.position.x, entity.position.y, entity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
                 entity._phaserText = textObj;
                 this.worldEntities.push(textObj);
@@ -493,10 +1191,16 @@ console.log('Phaser main loaded');
             const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
             const gameTimeDelta = (delta / 1000) * timeAcceleration;
             this.playerState.currentTime += gameTimeDelta;
+
+            // Update villagers
+            this.updateVillagers(delta);
+
             // Needs
             updateNeeds(this.playerState, delta);
+
             // UI update
             this.updatePhaserUI();
+
             // Game over
             const reason = checkGameOver(this.playerState);
             if (reason) {
@@ -504,6 +1208,7 @@ console.log('Phaser main loaded');
                 this.scene.pause();
                 return;
             }
+
             // Player movement
             let vx = 0, vy = 0;
             if (this.cursors.left.isDown) vx -= 1;
@@ -550,11 +1255,67 @@ console.log('Phaser main loaded');
             else if (t.hour >= 12 && t.hour < GameConfig.time.nightStartHour) timeEmoji = '☀️';
             else if (t.hour >= GameConfig.time.nightStartHour && t.hour < 22) timeEmoji = '🌆';
             else timeEmoji = '🌙';
-            this.ui.timeText.setText(`📅 Day ${t.day}\n${timeEmoji} ${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}\n👥 Neighbours: ${GameConfig.world.villagerCount}`);
+
+            // Count living villagers
+            const livingVillagers = this.villagers ? this.villagers.filter(v => !v.isDead).length : 0;
+            this.ui.timeText.setText(`📅 Day ${t.day}\n${timeEmoji} ${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}\n👥 Neighbours: ${livingVillagers}`);
             // Seed UI
             const currentSeed = this.currentSeedValue || getCurrentSeed();
             this.ui.seedInputText.setText(currentSeed.toString());
         }
+
+        updateVillagers(delta) {
+            if (!this.villagers) return;
+
+            // Get storage boxes for villager interactions
+            const storageBoxes = this.entities.filter(e => e.type === 'storage_box');
+
+            // Update each villager
+            for (let i = this.villagers.length - 1; i >= 0; i--) {
+                const villager = this.villagers[i];
+
+                // Skip if already dead
+                if (villager.isDead) continue;
+
+                // Update villager
+                const isDead = villager.update(delta, this.playerState.currentTime, this.entities, storageBoxes);
+
+                if (isDead) {
+                    // Mark as dead and create corpse
+                    villager.isDead = true;
+                    villager.state = 'DEAD';
+
+                    // Change visual to corpse
+                    if (villager.phaserText) {
+                        villager.phaserText.setText('💀');
+                        villager.phaserText.setColor('#ff0000'); // Red color for dead villagers
+                    }
+                    if (villager.nameText) {
+                        villager.nameText.setText(`${villager.name} 💀`);
+                        villager.nameText.setColor('#ff0000'); // Red color for dead villagers
+                    }
+                    if (villager.stateText) {
+                        villager.stateText.setText('DEAD');
+                        villager.stateText.setColor('#ff0000'); // Red color for dead villagers
+                    }
+
+                    console.log(`[MainScene] Villager ${villager.name} died and became a corpse`);
+                }
+            }
+
+            // Debug: Log villager positions occasionally (behind log spam gate)
+            if (window.summaryLoggingEnabled && Math.random() < 0.02) { // 2% chance per frame when spam enabled
+                this.logVillagerPositions();
+            }
+        }
+
+        logVillagerPositions() {
+            const positions = this.villagers.map(v =>
+                `${v.name}: ${v.state} at (${Math.round(v.position.x)}, ${Math.round(v.position.y)})`
+            ).join(', ');
+            console.log(`[Villagers] ${positions}`);
+        }
+
         isTooCloseToVillage(pos) {
             const centerX = GameConfig.world.width / 2;
             const centerY = GameConfig.world.height / 2;
