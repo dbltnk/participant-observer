@@ -25,7 +25,7 @@ console.log('Phaser main loaded');
     let lastDomSnapshot = '';
 
     // Extract all food types from GameConfig for easy access
-    const ALL_FOOD_TYPES = Object.keys(GameConfig.resources.foodData);
+    const ALL_FOOD_TYPES = Object.keys(GameConfig.resources.foodData).filter(type => GameConfig.resources.foodData[type].calories > 0);
 
     // Initialize logging system
     function initLogging() {
@@ -315,6 +315,15 @@ console.log('Phaser main loaded');
             // Update needs
             this.updateNeeds(deltaTime, gameTime);
 
+            // Log what villager is trying to do when needs are critically low
+            const hasCriticalNeeds = this.needs.temperature < 5 || this.needs.water < 5 || this.needs.calories < 5 || this.needs.vitamins.some(v => v < 5);
+            if (hasCriticalNeeds) {
+                const t = this.getCurrentTime(gameTime);
+                console.log(`[Villager] ${this.name} CRITICAL ACTION LOG: State=${this.state}, Task=${this.currentTask || 'none'}, Target=${this.currentTarget ? this.currentTarget.type : 'none'}, Hour=${t.hour.toFixed(1)}`);
+                console.log(`[Villager] ${this.name} CRITICAL ACTION LOG: Position=(${Math.round(this.position.x)}, ${Math.round(this.position.y)}), Camp=(${Math.round(this.campPosition.x)}, ${Math.round(this.campPosition.y)})`);
+                console.log(`[Villager] ${this.name} CRITICAL ACTION LOG: Inventory=[${this.inventory.map(item => item ? item.type : 'empty').join(', ')}], IsAtCamp=${this.isAtCamp()}`);
+            }
+
             // Update state based on time
             this.updateState(gameTime, deltaTime);
 
@@ -336,6 +345,14 @@ console.log('Phaser main loaded');
             const t = this.getCurrentTime(gameTime);
             const isNight = (t.hour < GameConfig.time.gameStartHour || t.hour >= GameConfig.time.nightStartHour);
 
+            // Store old values for comparison
+            const oldNeeds = {
+                temperature: this.needs.temperature,
+                water: this.needs.water,
+                calories: this.needs.calories,
+                vitamins: [...this.needs.vitamins]
+            };
+
             // Apply decay based on config values
             if (isNight) this.needs.temperature -= this.dailyDecay.temperature * inGameMinutes;
             this.needs.water -= this.dailyDecay.water * inGameMinutes;
@@ -345,6 +362,29 @@ console.log('Phaser main loaded');
                 this.needs.vitamins[i] -= this.dailyDecay.vitamins * inGameMinutes;
             }
 
+            // Apply fire temperature effects for villagers (same as player)
+            if (isNight && this.gameEntities) {
+                for (const entity of this.gameEntities) {
+                    if (entity.type === 'fireplace' && entity.isBurning && entity.wood > 0) {
+                        const dist = distance(this.position, entity.position);
+                        const fireRange = GameConfig.player.interactionThreshold * 3; // Triple the range
+
+                        if (dist <= fireRange) {
+                            // Calculate temperature gain (same rate as night decay)
+                            const decayRate = GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.temperature * GameConfig.needs.minutesPerHour);
+                            const temperatureGain = decayRate * inGameMinutes;
+
+                            this.needs.temperature = Math.min(GameConfig.needs.fullValue, this.needs.temperature + temperatureGain);
+
+                            // Wood consumption is now handled globally in MainScene.applyFireTemperatureEffects()
+                            // No need to consume wood here to avoid double consumption
+
+                            break; // Only apply from one fire
+                        }
+                    }
+                }
+            }
+
             // Clamp values to valid range
             this.needs.temperature = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.temperature));
             this.needs.water = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.water));
@@ -352,6 +392,48 @@ console.log('Phaser main loaded');
 
             for (let i = 0; i < this.needs.vitamins.length; i++) {
                 this.needs.vitamins[i] = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.vitamins[i]));
+            }
+
+            // Check if any need dropped below 2 and log detailed information
+            const criticalNeeds = [];
+            if (this.needs.temperature < 2 && oldNeeds.temperature >= 2) criticalNeeds.push('temperature');
+            if (this.needs.water < 2 && oldNeeds.water >= 2) criticalNeeds.push('water');
+            if (this.needs.calories < 2 && oldNeeds.calories >= 2) criticalNeeds.push('calories');
+            for (let i = 0; i < this.needs.vitamins.length; i++) {
+                if (this.needs.vitamins[i] < 2 && oldNeeds.vitamins[i] >= 2) {
+                    criticalNeeds.push(`vitamin${String.fromCharCode(65 + i)}`);
+                }
+            }
+
+            if (criticalNeeds.length > 0) {
+                const t = this.getCurrentTime(gameTime);
+                console.log(`[Villager] ${this.name} CRITICAL NEEDS ALERT: ${criticalNeeds.join(', ')} dropped below 2!`);
+                console.log(`[Villager] ${this.name} Current stats: T${this.needs.temperature.toFixed(1)} W${this.needs.water.toFixed(1)} C${this.needs.calories.toFixed(1)} V[${this.needs.vitamins.map(v => v.toFixed(1)).join(',')}]`);
+                console.log(`[Villager] ${this.name} Current state: ${this.state}, hour: ${t.hour.toFixed(1)}, position: (${Math.round(this.position.x)}, ${Math.round(this.position.y)})`);
+                console.log(`[Villager] ${this.name} Inventory: [${this.inventory.map(item => item ? item.type : 'empty').join(', ')}]`);
+                console.log(`[Villager] ${this.name} Current task: ${this.currentTask || 'none'}, target: ${this.currentTarget ? this.currentTarget.type : 'none'}`);
+                console.log(`[Villager] ${this.name} Daily decay rates: T${this.dailyDecay.temperature.toFixed(4)} W${this.dailyDecay.water.toFixed(4)} C${this.dailyDecay.calories.toFixed(4)} V${this.dailyDecay.vitamins.toFixed(4)}`);
+                console.log(`[Villager] ${this.name} Is night: ${isNight}, inGameMinutes: ${inGameMinutes.toFixed(4)}`);
+            }
+
+            // Also log when any need is critically low (below 5) every 10 seconds
+            const now = Date.now();
+            if (!this.lastCriticalLog || now - this.lastCriticalLog > 10000) {
+                const lowNeeds = [];
+                if (this.needs.temperature < 5) lowNeeds.push(`T${this.needs.temperature.toFixed(1)}`);
+                if (this.needs.water < 5) lowNeeds.push(`W${this.needs.water.toFixed(1)}`);
+                if (this.needs.calories < 5) lowNeeds.push(`C${this.needs.calories.toFixed(1)}`);
+                for (let i = 0; i < this.needs.vitamins.length; i++) {
+                    if (this.needs.vitamins[i] < 5) {
+                        lowNeeds.push(`V${String.fromCharCode(65 + i)}${this.needs.vitamins[i].toFixed(1)}`);
+                    }
+                }
+
+                if (lowNeeds.length > 0) {
+                    const t = this.getCurrentTime(gameTime);
+                    console.log(`[Villager] ${this.name} LOW NEEDS WARNING: ${lowNeeds.join(', ')} | State: ${this.state}, Hour: ${t.hour.toFixed(1)}, Task: ${this.currentTask || 'none'}`);
+                    this.lastCriticalLog = now;
+                }
             }
         }
 
@@ -563,10 +645,15 @@ console.log('Phaser main loaded');
             let nearest = null;
             let nearestDistance = Infinity;
             let validEntitiesFound = 0;
+            let treeCount = 0;
+            let foodCount = 0;
 
             for (const entity of entities) {
                 if (this.isValidForagingTarget(entity)) {
                     validEntitiesFound++;
+                    if (entity.type === 'tree') treeCount++;
+                    else if (ALL_FOOD_TYPES.includes(entity.type)) foodCount++;
+
                     const dist = distance(this.position, entity.position);
                     if (dist < nearestDistance && dist <= GameConfig.villager.explorationRadius) {
                         nearest = entity;
@@ -575,9 +662,12 @@ console.log('Phaser main loaded');
                 }
             }
 
-            // Debug logging
+            // Debug logging with tree/food breakdown
             if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance per frame when spam enabled
-                console.log(`[Villager] ${this.name} exploreNewArea: found ${validEntitiesFound} valid entities, nearest at ${nearestDistance ? Math.round(nearestDistance) : 'none'} distance, exploration radius: ${GameConfig.villager.explorationRadius}`);
+                console.log(`[Villager] ${this.name} exploreNewArea: found ${validEntitiesFound} valid entities (${treeCount} trees, ${foodCount} food), nearest at ${nearestDistance ? Math.round(nearestDistance) : 'none'} distance, exploration radius: ${GameConfig.villager.explorationRadius}`);
+                if (nearest) {
+                    console.log(`[Villager] ${this.name} selected target: ${nearest.type} at distance ${Math.round(nearestDistance)}`);
+                }
             }
 
             if (nearest) {
@@ -600,7 +690,22 @@ console.log('Phaser main loaded');
         }
 
         isValidForagingTarget(entity) {
-            return !entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === 'tree');
+            // Custom foraging logic for wood reservation
+            const inventoryCount = this.inventory.filter(i => i !== null).length;
+            const hasWood = this.inventory.some(i => i && i.type === 'tree');
+            if (inventoryCount < 5) {
+                // Pick up anything
+                return !entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === 'tree');
+            } else if (inventoryCount === 5 && !hasWood) {
+                // Only pick up wood
+                return !entity.collected && entity.type === 'tree';
+            } else if (inventoryCount < 6) {
+                // If we already have wood, can pick up anything
+                return !entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === 'tree');
+            } else {
+                // Inventory full
+                return false;
+            }
         }
 
         addToMemory(entity) {
@@ -709,6 +814,13 @@ console.log('Phaser main loaded');
                 box.isPersonal && box.villagerId === this.villagerId
             );
 
+            // Log eating attempt when needs are critical
+            const hasCriticalNeeds = this.needs.temperature < 5 || this.needs.water < 5 || this.needs.calories < 5 || this.needs.vitamins.some(v => v < 5);
+            if (hasCriticalNeeds) {
+                console.log(`[Villager] ${this.name} EATING ATTEMPT: Calories=${this.needs.calories.toFixed(1)}, Water=${this.needs.water.toFixed(1)}, Inventory=[${this.inventory.map(item => item ? item.type : 'empty').join(', ')}]`);
+                console.log(`[Villager] ${this.name} EATING ATTEMPT: Personal storage items=[${personalStorage ? personalStorage.items.map(item => item.type).join(', ') : 'none'}], Has burning fire=${this.findNearbyBurningFire() ? 'yes' : 'no'}`);
+            }
+
             // Eat from inventory first
             this.eatFromInventory();
 
@@ -735,6 +847,19 @@ console.log('Phaser main loaded');
                 if (item && this.isFood(item.type)) {
                     // Only eat if near a burning fire
                     const nearbyFire = this.findNearbyBurningFire();
+
+                    // Log fire finding attempt when needs are critical
+                    const hasCriticalNeeds = this.needs.temperature < 5 || this.needs.water < 5 || this.needs.calories < 5 || this.needs.vitamins.some(v => v < 5);
+                    if (hasCriticalNeeds) {
+                        console.log(`[Villager] ${this.name} FIRE CHECK: Trying to eat ${item.type}, Found burning fire=${nearbyFire ? 'yes' : 'no'}, Position=(${Math.round(this.position.x)}, ${Math.round(this.position.y)})`);
+                        if (!nearbyFire) {
+                            // Check what fires exist nearby
+                            const allFires = this.gameEntities ? this.gameEntities.filter(e => e.type === 'fireplace') : [];
+                            const nearbyFires = allFires.filter(fire => distance(this.position, fire.position) <= 100);
+                            console.log(`[Villager] ${this.name} FIRE CHECK: Nearby fires: ${nearbyFires.map(f => `(${Math.round(f.position.x)}, ${Math.round(f.position.y)}) burning=${f.isBurning} wood=${f.wood}`).join(', ')}`);
+                        }
+                    }
+
                     if (nearbyFire) {
                         this.applyNutrition(item.type);
                         this.inventory[i] = null;
@@ -798,6 +923,19 @@ console.log('Phaser main loaded');
         drinkFromWells() {
             // Find nearest well within interaction range
             const nearestWell = this.findNearestWell();
+
+            // Log well finding attempt when needs are critical
+            const hasCriticalNeeds = this.needs.temperature < 5 || this.needs.water < 5 || this.needs.calories < 5 || this.needs.vitamins.some(v => v < 5);
+            if (hasCriticalNeeds) {
+                console.log(`[Villager] ${this.name} WELL CHECK: Water=${this.needs.water.toFixed(1)}, Found well=${nearestWell ? 'yes' : 'no'}, Position=(${Math.round(this.position.x)}, ${Math.round(this.position.y)})`);
+                if (!nearestWell) {
+                    // Check what wells exist nearby
+                    const allWells = this.gameEntities ? this.gameEntities.filter(e => e.type === 'well') : [];
+                    const nearbyWells = allWells.filter(well => distance(this.position, well.position) <= 200);
+                    console.log(`[Villager] ${this.name} WELL CHECK: Nearby wells: ${nearbyWells.map(w => `(${Math.round(w.position.x)}, ${Math.round(w.position.y)})`).join(', ')}`);
+                }
+            }
+
             if (nearestWell && distance(this.position, nearestWell.position) <= GameConfig.player.interactionThreshold) {
                 this.needs.water = Math.min(GameConfig.needs.fullValue, this.needs.water + GameConfig.wells.drinkingAmount);
                 if (window.summaryLoggingEnabled) {
@@ -826,6 +964,13 @@ console.log('Phaser main loaded');
         restockFire() {
             // Find wood in inventory and add to fire
             const woodSlot = this.inventory.findIndex(item => item && item.type === 'tree');
+
+            // Log restock attempt when needs are critical
+            const hasCriticalNeeds = this.needs.temperature < 5 || this.needs.water < 5 || this.needs.calories < 5 || this.needs.vitamins.some(v => v < 5);
+            if (hasCriticalNeeds) {
+                console.log(`[Villager] ${this.name} RESTOCK FIRE: Wood slot=${woodSlot}, Inventory=[${this.inventory.map(item => item ? item.type : 'empty').join(', ')}]`);
+            }
+
             if (woodSlot !== -1) {
                 // Find fireplace at this camp
                 const campFire = this.findCampFire();
@@ -833,9 +978,32 @@ console.log('Phaser main loaded');
                     campFire.wood++;
                     campFire.isBurning = true;
                     this.inventory[woodSlot] = null;
+
+                    // Fire emoji will be updated by MainScene's updateAllFireEmojis
+
                     if (window.summaryLoggingEnabled) {
                         console.log(`[Villager] ${this.name} added wood to fire`);
                     }
+                } else if (hasCriticalNeeds) {
+                    console.log(`[Villager] ${this.name} RESTOCK FIRE: Camp fire found=${!!campFire}, wood=${campFire ? campFire.wood : 'N/A'}, maxWood=${campFire ? campFire.maxWood : 'N/A'}`);
+                }
+            } else if (hasCriticalNeeds) {
+                console.log(`[Villager] ${this.name} RESTOCK FIRE: No wood in inventory`);
+            }
+        }
+
+        updateFireEmoji(fire) {
+            // Update fire emoji based on wood level - SINGLE SOURCE OF TRUTH
+            if (fire._phaserText) {
+                if (fire.wood === 0) {
+                    fire._phaserText.setText('🪵'); // Cold/empty fire (logs but not burning)
+                    fire.isBurning = false;
+                } else if (fire.wood === 1) {
+                    fire._phaserText.setText('🌋'); // Burning fire with 1 wood
+                    fire.isBurning = true;
+                } else if (fire.wood === 2) {
+                    fire._phaserText.setText('🔥'); // Burning fire with 2 wood
+                    fire.isBurning = true;
                 }
             }
         }
@@ -1294,7 +1462,7 @@ console.log('Phaser main loaded');
                 // Don't add camp to entities since we don't want to render it
 
                 // Fireplace
-                this.entities.push({ position: { x: x + cfg.campSpacing.x, y: y }, type: 'fireplace', emoji: '🔥', isBurning: false, wood: 0, maxWood: GameConfig.fires.maxWood });
+                this.entities.push({ position: { x: x + cfg.campSpacing.x, y: y }, type: 'fireplace', emoji: '🔥', isBurning: true, wood: 2, maxWood: GameConfig.fires.maxWood });
                 // Sleeping bag
                 this.entities.push({ position: { x: x - cfg.campSpacing.x, y: y }, type: 'sleeping_bag', emoji: '🛏️', isOccupied: false });
                 // Personal storage
@@ -1540,7 +1708,10 @@ console.log('Phaser main loaded');
                             entity.wood++;
                             this.playerState.inventory[woodSlot] = null;
                             entity.isBurning = true;
-                            textObj.setText('🔥'); // Burning fire emoji
+
+                            // Update fire emoji - SINGLE SOURCE OF TRUTH
+                            this.updateFireEmoji(entity);
+
                             this.updatePhaserUI();
                             this.showTempMessage('Added wood to fire!', 1200);
                         } else if (woodSlot !== -1) {
@@ -1667,6 +1838,10 @@ console.log('Phaser main loaded');
                                 nearbyFire.wood++;
                                 nearbyFire.isBurning = true;
                                 this.playerState.inventory[i] = null;
+
+                                // Update fire emoji - SINGLE SOURCE OF TRUTH
+                                this.updateFireEmoji(nearbyFire);
+
                                 this.updatePhaserUI();
                                 this.showTempMessage('Added wood to fire!', 1200);
                                 return;
@@ -1861,6 +2036,9 @@ console.log('Phaser main loaded');
 
             // Apply fire temperature effects (with sleep acceleration if sleeping)
             this.applyFireTemperatureEffects(effectiveDelta);
+
+            // Update fire emojis for all fires to reflect current wood levels
+            this.updateAllFireEmojis();
 
             // UI update
             this.updatePhaserUI();
@@ -2723,9 +2901,29 @@ console.log('Phaser main loaded');
             // Only apply fire effects at night when temperature would normally decrease
             if (!isNight) return;
 
-            // Find nearby burning fires
+            // Consume wood from ALL burning fires globally (not just near player)
             for (const entity of this.entities) {
-                if (entity.type === 'fireplace' && entity.isBurning) {
+                if (entity.type === 'fireplace' && entity.isBurning && entity.wood > 0) {
+                    // Consume wood over time (1 wood per day) - GLOBAL CONSUMPTION
+                    const realSecondsPerGameDay = GameConfig.time.realSecondsPerGameDay;
+                    const inGameMinutesPerMs = (24 * 60) / (realSecondsPerGameDay * 1000);
+                    const inGameMinutes = delta * inGameMinutesPerMs;
+
+                    const woodConsumptionRate = GameConfig.fires.dailyWoodConsumption / (24 * 60); // Wood per minute
+                    const woodConsumed = woodConsumptionRate * inGameMinutes;
+
+                    if (woodConsumed >= 1) {
+                        entity.wood = Math.max(0, entity.wood - 1);
+
+                        // Update fire emoji - SINGLE SOURCE OF TRUTH
+                        this.updateFireEmoji(entity);
+                    }
+                }
+            }
+
+            // Apply temperature effects from nearby fires to player
+            for (const entity of this.entities) {
+                if (entity.type === 'fireplace' && entity.isBurning && entity.wood > 0) {
                     const dist = distance(this.playerState.position, entity.position);
                     const fireRange = GameConfig.player.interactionThreshold * 3; // Triple the range
 
@@ -2739,8 +2937,34 @@ console.log('Phaser main loaded');
                         const temperatureGain = decayRate * inGameMinutes;
 
                         this.playerState.needs.temperature = Math.min(GameConfig.needs.fullValue, this.playerState.needs.temperature + temperatureGain);
+
                         break; // Only apply from one fire
                     }
+                }
+            }
+        }
+
+        updateAllFireEmojis() {
+            // Update emoji for all fires to reflect current wood levels - SINGLE SOURCE OF TRUTH
+            for (const entity of this.entities) {
+                if (entity.type === 'fireplace') {
+                    this.updateFireEmoji(entity);
+                }
+            }
+        }
+
+        updateFireEmoji(fire) {
+            // Update fire emoji based on wood level - SINGLE SOURCE OF TRUTH
+            if (fire._phaserText) {
+                if (fire.wood === 0) {
+                    fire._phaserText.setText('🪵'); // Cold/empty fire (logs but not burning)
+                    fire.isBurning = false;
+                } else if (fire.wood === 1) {
+                    fire._phaserText.setText('🌋'); // Burning fire with 1 wood
+                    fire.isBurning = true;
+                } else if (fire.wood === 2) {
+                    fire._phaserText.setText('🔥'); // Burning fire with 2 wood
+                    fire.isBurning = true;
                 }
             }
         }
