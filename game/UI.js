@@ -29,26 +29,26 @@ class UI {
             position: fixed;
             top: 10px;
             left: 10px;
-            background: rgba(0,0,0,0.7);
+            background: ${GameConfig.ui.backgroundColor};
             padding: 10px;
             border-radius: 5px;
             color: white;
             font-family: monospace;
-            z-index: 1000;
+            z-index: ${GameConfig.ui.needBarsZIndex};
         `;
 
         needTypes.forEach((type, index) => {
             const barContainer = document.createElement('div');
             barContainer.style.cssText = `
-                margin-bottom: 5px;
+                margin-bottom: ${GameConfig.ui.needBarSpacing}px;
                 display: flex;
                 align-items: center;
-                gap: 5px;
+                gap: ${GameConfig.ui.needBarSpacing}px;
             `;
 
             const label = document.createElement('span');
             label.textContent = needLabels[index];
-            label.style.width = '20px';
+            label.style.width = `${GameConfig.ui.needBarLabelWidth}px`;
 
             const bar = document.createElement('div');
             bar.className = `need-bar ${type}`;
@@ -56,7 +56,7 @@ class UI {
                 width: ${GameConfig.ui.barWidth}px;
                 height: ${GameConfig.ui.barHeight}px;
                 background: #333;
-                border: 1px solid #666;
+                border: 1px solid ${GameConfig.ui.borderColor};
                 position: relative;
                 overflow: hidden;
             `;
@@ -64,9 +64,9 @@ class UI {
             const fill = document.createElement('div');
             fill.className = `${type}-fill`;
             fill.style.cssText = `
-                height: 100%;
+                height: ${GameConfig.needs.maxValue}%;
                 background: ${this.getNeedBarColor(type)};
-                width: 100%;
+                width: ${GameConfig.needs.maxValue}%;
                 transition: width 0.1s ease;
             `;
 
@@ -74,10 +74,10 @@ class UI {
             value.className = `${type}-value`;
             value.style.cssText = `
                 position: absolute;
-                right: 5px;
+                right: ${GameConfig.ui.needBarValuePadding}px;
                 top: 50%;
                 transform: translateY(-50%);
-                font-size: 10px;
+                font-size: ${GameConfig.ui.needBarFontSize}px;
                 color: white;
                 text-shadow: 1px 1px 1px black;
             `;
@@ -101,12 +101,12 @@ class UI {
             position: fixed;
             top: 10px;
             right: 10px;
-            background: rgba(0,0,0,0.7);
+            background: ${GameConfig.ui.backgroundColor};
             color: white;
             padding: 10px;
             border-radius: 5px;
             font-family: monospace;
-            z-index: 1000;
+            z-index: ${GameConfig.ui.timeDisplayZIndex};
         `;
 
         document.body.appendChild(this.timeDisplay);
@@ -120,12 +120,12 @@ class UI {
             bottom: 10px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.7);
+            background: ${GameConfig.ui.backgroundColor};
             padding: 10px;
             border-radius: 5px;
             display: flex;
-            gap: 5px;
-            z-index: 1000;
+            gap: ${GameConfig.ui.inventorySlotSpacing}px;
+            z-index: ${GameConfig.ui.inventoryZIndex};
         `;
 
         for (let i = 0; i < GameConfig.player.inventorySize; i++) {
@@ -135,7 +135,7 @@ class UI {
             slot.style.cssText = `
                 width: ${GameConfig.ui.inventorySlotSize}px;
                 height: ${GameConfig.ui.inventorySlotSize}px;
-                border: 2px solid #666;
+                border: 2px solid ${GameConfig.ui.borderColor};
                 background: rgba(255,255,255,0.1);
                 display: flex;
                 align-items: center;
@@ -147,10 +147,10 @@ class UI {
 
             slot.addEventListener('click', () => this.handleInventoryClick(i));
             slot.addEventListener('mouseenter', () => {
-                slot.style.borderColor = '#fff';
+                slot.style.borderColor = GameConfig.ui.selectedBorderColor;
             });
             slot.addEventListener('mouseleave', () => {
-                slot.style.borderColor = '#666';
+                slot.style.borderColor = GameConfig.ui.borderColor;
             });
 
             inventoryContainer.appendChild(slot);
@@ -167,63 +167,63 @@ class UI {
             position: fixed;
             bottom: 10px;
             right: 10px;
-            background: rgba(0,0,0,0.7);
+            background: ${GameConfig.ui.backgroundColor};
             color: white;
             padding: 10px;
             border-radius: 5px;
             font-family: monospace;
-            z-index: 1000;
+            z-index: ${GameConfig.ui.seedUIZIndex};
         `;
 
         // Get the current seed from localStorage or default
-        let currentSeed = parseInt(localStorage.getItem('alpine-seed'), 10);
+        let currentSeed = parseInt(localStorage.getItem(GameConfig.storage.localStorageKey), 10);
         if (!currentSeed || isNaN(currentSeed)) {
-            currentSeed = 1;
+            currentSeed = GameConfig.ui.seedInputMinValue;
         }
 
         // Current seed display (top line)
         this.seedDisplay = document.createElement('div');
         this.seedDisplay.textContent = `Current Seed: ${currentSeed}`;
-        this.seedDisplay.style.cssText = 'margin-bottom: 8px; font-size: 12px;';
+        this.seedDisplay.style.cssText = `margin-bottom: ${GameConfig.ui.seedUISpacing}px; font-size: ${GameConfig.ui.seedUIFontSize}px;`;
 
         // Editable seed input for next game
         const seedInput = document.createElement('input');
         seedInput.type = 'number';
-        seedInput.min = 1;
-        seedInput.max = 999;
+        seedInput.min = GameConfig.ui.seedInputMinValue;
+        seedInput.max = GameConfig.ui.seedInputMaxValue;
         seedInput.value = currentSeed;
         seedInput.style.cssText = `
-            width: 60px; 
-            margin-right: 5px; 
-            font-size: 12px;
-            background: white;
-            color: black;
-            border: 1px solid #ccc;
+            width: ${GameConfig.ui.seedInputWidth}px; 
+            margin-right: ${GameConfig.ui.seedInputMargin}px; 
+            font-size: ${GameConfig.ui.seedUIFontSize}px;
+            background: ${GameConfig.ui.inputBackgroundColor};
+            color: ${GameConfig.ui.inputTextColor};
+            border: 1px solid ${GameConfig.ui.inputBorderColor};
             border-radius: 3px;
             padding: 2px 4px;
         `;
-        seedInput.placeholder = '1-999';
+        seedInput.placeholder = `${GameConfig.ui.seedInputMinValue}-${GameConfig.ui.seedInputMaxValue}`;
 
         const newGameBtn = document.createElement('button');
         newGameBtn.textContent = 'New Game';
         newGameBtn.style.cssText = `
-            background: #4CAF50;
+            background: ${GameConfig.ui.buttonColor};
             color: white;
             border: none;
             padding: 5px 10px;
             border-radius: 3px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: ${GameConfig.ui.seedUIFontSize}px;
         `;
         newGameBtn.addEventListener('click', () => {
             const val = parseInt(seedInput.value, 10);
-            if (isNaN(val) || val < 1 || val > 999) {
-                alert('Please enter a valid seed number between 1 and 999.');
+            if (isNaN(val) || val < GameConfig.ui.seedInputMinValue || val > GameConfig.ui.seedInputMaxValue) {
+                alert(`Please enter a valid seed number between ${GameConfig.ui.seedInputMinValue} and ${GameConfig.ui.seedInputMaxValue}.`);
                 return;
             }
             const confirmMessage = `Start a new game with seed ${val}?\n\nThis will:\n• Delete all current game progress\n• Generate a new world with this seed\n• Reset all player stats and inventory\n\nAre you sure you want to continue?`;
             if (confirm(confirmMessage)) {
-                localStorage.setItem('alpine-seed', val);
+                localStorage.setItem(GameConfig.storage.localStorageKey, val);
                 document.dispatchEvent(new CustomEvent('alpine-set-seed', { detail: { seed: val } }));
                 location.reload();
             }
@@ -274,16 +274,16 @@ class UI {
         ['temperature', 'water', 'calories'].forEach(needType => {
             if (this.needBars[needType]) {
                 const value = needs[needType];
-                const percentage = Math.max(0, Math.min(100, value));
+                const percentage = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, value));
 
                 this.needBars[needType].fill.style.width = `${percentage}%`;
                 this.needBars[needType].value.textContent = Math.round(value);
 
                 // Change color based on value
-                if (value < 20) {
-                    this.needBars[needType].fill.style.background = '#ff0000';
-                } else if (value < 50) {
-                    this.needBars[needType].fill.style.background = '#ffaa00';
+                if (value < GameConfig.needs.criticalThreshold) {
+                    this.needBars[needType].fill.style.background = GameConfig.ui.criticalColor;
+                } else if (value < GameConfig.needs.warningThreshold) {
+                    this.needBars[needType].fill.style.background = GameConfig.ui.warningColor;
                 } else {
                     this.needBars[needType].fill.style.background = this.getNeedBarColor(needType);
                 }
@@ -295,16 +295,16 @@ class UI {
         vitaminTypes.forEach((vitaminType, index) => {
             if (this.needBars[vitaminType] && needs.vitamins && needs.vitamins[index] !== undefined) {
                 const value = needs.vitamins[index];
-                const percentage = Math.max(0, Math.min(100, value));
+                const percentage = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, value));
 
                 this.needBars[vitaminType].fill.style.width = `${percentage}%`;
                 this.needBars[vitaminType].value.textContent = Math.round(value);
 
                 // Change color based on value
-                if (value < 20) {
-                    this.needBars[vitaminType].fill.style.background = '#ff0000';
-                } else if (value < 50) {
-                    this.needBars[vitaminType].fill.style.background = '#ffaa00';
+                if (value < GameConfig.needs.criticalThreshold) {
+                    this.needBars[vitaminType].fill.style.background = GameConfig.ui.criticalColor;
+                } else if (value < GameConfig.needs.warningThreshold) {
+                    this.needBars[vitaminType].fill.style.background = GameConfig.ui.warningColor;
                 } else {
                     this.needBars[vitaminType].fill.style.background = this.getNeedBarColor(vitaminType);
                 }
@@ -348,10 +348,10 @@ class UI {
 
             // Update slot appearance
             if (index === selectedSlot) {
-                slot.style.borderColor = '#fff';
+                slot.style.borderColor = GameConfig.ui.selectedBorderColor;
                 slot.style.borderWidth = '3px';
             } else {
-                slot.style.borderColor = '#666';
+                slot.style.borderColor = GameConfig.ui.borderColor;
                 slot.style.borderWidth = '2px';
             }
 
@@ -394,12 +394,12 @@ class UI {
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8);
+            background: ${GameConfig.ui.backgroundColor};
             color: white;
             padding: 15px 20px;
             border-radius: 5px;
             font-family: monospace;
-            z-index: 2000;
+            z-index: ${GameConfig.ui.messageZIndex};
             pointer-events: none;
         `;
 

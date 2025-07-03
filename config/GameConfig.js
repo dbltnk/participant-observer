@@ -16,7 +16,23 @@ const GameConfig = {
         tileSize: 32, // Size of each "tile" for spatial calculations (used in distance checks)
         villagerCount: 7, // Number of AI villagers (excluding player)
         resourcesPerVillager: 3, // Initial resources spawned per villager (including player)
-        maxResourcesPerType: 10 // Global cap on resources per type (prevents overpopulation)
+        maxResourcesPerType: 10, // Global cap on resources per type (prevents overpopulation)
+
+        // Village and camp generation
+        villageCenterOffset: { x: 50, y: 0 }, // Offset for village well from center
+        campRadius: 150, // Distance from village center to camps
+        campSpacing: { x: 20, y: 30 }, // Spacing between camp facilities
+        playerStartOffset: { x: 40, y: 0 }, // Player start position relative to their camp
+
+        // Resource generation
+        resourceVillageMinDistance: 100, // Minimum distance from village center for resources
+        wellMinDistance: 200, // Minimum distance between wells
+        wellCount: 3, // Number of additional wells beyond village well
+        wellMaxAttempts: 50, // Maximum attempts to place a well
+
+        // Perlin noise settings
+        noiseScale: 10, // Scale factor for Perlin noise in resource placement
+        noiseBias: 0.5 // Bias factor for noise-based positioning
     },
 
     // Time settings - Controls how fast game time passes relative to real time
@@ -27,7 +43,35 @@ const GameConfig = {
 
         dayStartHour: 8, // Hour when villagers wake up and start foraging
         nightStartHour: 18, // Hour when villagers return to camp
-        sleepAcceleration: 10 // Seconds to reach 8:00 when sleeping (time acceleration multiplier)
+        sleepAcceleration: 10, // Seconds to reach 8:00 when sleeping (time acceleration multiplier)
+
+        // Time constants
+        secondsPerDay: 86400, // Seconds in a game day (24 * 60 * 60)
+        secondsPerHour: 3600, // Seconds in a game hour (60 * 60)
+        secondsPerMinute: 60, // Seconds in a game minute
+
+        // Game start time
+        gameStartHour: 8, // Hour when the game starts (08:00)
+        gameStartTime: 8 * 3600 // Seconds from midnight when game starts
+    },
+
+    // Needs system constants
+    needs: {
+        maxValue: 100, // Maximum value for any need
+        minValue: 0, // Minimum value for any need
+        fullValue: 100, // Starting value for all needs
+
+        // Decay calculation constants
+        decayCalculationFactor: 100, // Used in: 100 / (hoursToEmpty * 60)
+        minutesPerHour: 60, // Minutes in an hour
+        hoursPerDay: 24, // Hours in a day
+
+        // UI thresholds
+        criticalThreshold: 20, // Value below which needs are critical (red)
+        warningThreshold: 50, // Value below which needs show warning (orange)
+
+        // Vitamin count
+        vitaminCount: 5 // Number of vitamins (A, B, C, D, E)
     },
 
     // Needs drain settings (in in-game hours to empty)
@@ -64,7 +108,18 @@ const GameConfig = {
             vitamins: 2 // Vitamin loss per minute of real time (applies to all vitamins A-E)
             // Formula: vitamins[i] -= decayRate * (deltaTime / 60000)
             // Higher values = faster vitamin deficiency
-        }
+        },
+
+        // Movement constants
+        diagonalMovementFactor: 0.707, // 1/√2 for normalized diagonal movement
+        millisecondsPerSecond: 1000, // Conversion factor for deltaTime
+
+        // Interaction constants
+        interactionThreshold: 32, // Distance threshold for interactions (pixels)
+
+        // Rendering
+        fontSize: 32, // Player emoji font size
+        zIndex: 100 // Player rendering z-index
     },
 
     // Villager settings - Controls AI villager behavior and capabilities
@@ -98,6 +153,69 @@ const GameConfig = {
     ui: {
         barHeight: 20, // Height of need bars in pixels
         barWidth: 150, // Width of need bars in pixels
-        inventorySlotSize: 50 // Size of inventory slots in pixels (width and height)
+        inventorySlotSize: 50, // Size of inventory slots in pixels (width and height)
+
+        // Z-index values
+        needBarsZIndex: 1000,
+        timeDisplayZIndex: 1000,
+        inventoryZIndex: 1000,
+        seedUIZIndex: 1000,
+        infoBoxZIndex: 1000,
+        messageZIndex: 2000,
+
+        // Seed input
+        seedInputWidth: 60, // Width of seed input field in pixels
+        seedInputMaxValue: 999, // Maximum seed value
+        seedInputMinValue: 1, // Minimum seed value
+
+        // Font sizes
+        needBarFontSize: 10, // Font size for need bar values
+        seedUIFontSize: 12, // Font size for seed UI elements
+        infoBoxFontSize: 13, // Font size for info box
+
+        // Spacing and padding
+        needBarSpacing: 5, // Spacing between need bars
+        needBarLabelWidth: 20, // Width of need bar labels
+        needBarValuePadding: 5, // Padding for need bar values
+        inventorySlotSpacing: 5, // Spacing between inventory slots
+        seedUISpacing: 8, // Spacing in seed UI
+        seedInputMargin: 5, // Margin for seed input
+
+        // Colors
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        borderColor: '#666',
+        selectedBorderColor: '#fff',
+        criticalColor: '#ff0000',
+        warningColor: '#ffaa00',
+        buttonColor: '#4CAF50',
+        inputBackgroundColor: 'white',
+        inputTextColor: 'black',
+        inputBorderColor: '#ccc'
+    },
+
+    // Game loop settings
+    gameLoop: {
+        targetFPS: 60, // Target frames per second
+        maxDeltaTime: 200, // Maximum delta time per frame (milliseconds)
+        timestep: 1000 / 60 // Fixed timestep for consistent physics
+    },
+
+    // Storage settings
+    storage: {
+        communalCapacity: 20, // Capacity of communal storage box
+        personalCapacity: 4, // Capacity of personal storage boxes
+        localStorageKey: 'alpine-seed' // LocalStorage key for seed persistence
+    },
+
+    // Well settings
+    wells: {
+        initialWaterLevel: 10, // Starting water level for wells
+        dailyRefill: 4 // Water refilled per day
+    },
+
+    // Fire settings
+    fires: {
+        maxWood: 2, // Maximum wood that can be stored in a fire
+        dailyWoodConsumption: 1 // Wood consumed per day when burning
     }
 }; 

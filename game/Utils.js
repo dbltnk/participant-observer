@@ -95,36 +95,13 @@ function distance(pos1, pos2) {
     return Math.sqrt(dx * dx + dy * dy);
 }
 
-function isNear(pos1, pos2, threshold = 32) {
+function isNear(pos1, pos2, threshold = GameConfig.player.interactionThreshold) {
     return distance(pos1, pos2) <= threshold;
 }
 
 // Time utility functions
-function secondsToGameTime(seconds) {
-    const gameDaySeconds = GameConfig.time.realSecondsPerGameDay;
-    const totalGameSeconds = seconds * GameConfig.time.realSecondsPerGameDay;
-    const day = Math.floor(totalGameSeconds / 86400) + 1;
-    const hour = Math.floor((totalGameSeconds % 86400) / 3600);
-    const minute = Math.floor((totalGameSeconds % 3600) / 60);
-    return { day, hour, minute };
-}
-
 function formatTime(hour, minute) {
     return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-}
-
-// Random number generation with seed
-function seededRandom(seed) {
-    let x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
-}
-
-// Generate random position within world bounds
-function randomPosition() {
-    return {
-        x: Math.random() * GameConfig.world.width,
-        y: Math.random() * GameConfig.world.height
-    };
 }
 
 // Clamp value between min and max

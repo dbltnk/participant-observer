@@ -29,10 +29,10 @@ class Player {
         // decayRate = 100 / (hoursToEmpty * 60)
         const d = GameConfig.needsDrain;
         return {
-            temperature: 100 / (d.temperature * 60),
-            water: 100 / (d.water * 60),
-            calories: 100 / (d.calories * 60),
-            vitamins: 100 / (d.vitamins * 60)
+            temperature: GameConfig.needs.decayCalculationFactor / (d.temperature * GameConfig.needs.minutesPerHour),
+            water: GameConfig.needs.decayCalculationFactor / (d.water * GameConfig.needs.minutesPerHour),
+            calories: GameConfig.needs.decayCalculationFactor / (d.calories * GameConfig.needs.minutesPerHour),
+            vitamins: GameConfig.needs.decayCalculationFactor / (d.vitamins * GameConfig.needs.minutesPerHour)
         };
     }
 
@@ -79,15 +79,15 @@ class Player {
 
         // Normalize diagonal movement
         if (this.velocity.x !== 0 && this.velocity.y !== 0) {
-            this.velocity.x *= 0.707; // 1/√2
-            this.velocity.y *= 0.707;
+            this.velocity.x *= GameConfig.player.diagonalMovementFactor;
+            this.velocity.y *= GameConfig.player.diagonalMovementFactor;
         }
 
         // Apply movement
-        const moveDistance = (this.velocity.x * deltaTime) / 1000;
+        const moveDistance = (this.velocity.x * deltaTime) / GameConfig.player.millisecondsPerSecond;
         const newX = this.position.x + moveDistance;
 
-        const moveDistanceY = (this.velocity.y * deltaTime) / 1000;
+        const moveDistanceY = (this.velocity.y * deltaTime) / GameConfig.player.millisecondsPerSecond;
         const newY = this.position.y + moveDistanceY;
 
         // Basic collision detection with world bounds
@@ -109,7 +109,7 @@ class Player {
 
         // Convert deltaTime (ms) to in-game minutes
         const realSecondsPerGameDay = GameConfig.time.realSecondsPerGameDay;
-        const inGameMinutesPerMs = (24 * 60) / (realSecondsPerGameDay * 1000); // in-game min per ms
+        const inGameMinutesPerMs = (GameConfig.needs.hoursPerDay * GameConfig.needs.minutesPerHour) / (realSecondsPerGameDay * GameConfig.player.millisecondsPerSecond);
         const inGameMinutes = deltaTime * inGameMinutesPerMs;
 
         // Get current in-game hour
@@ -129,17 +129,17 @@ class Player {
         }
 
         // Clamp values to valid ranges
-        this.needs.temperature = clamp(this.needs.temperature, 0, 100);
-        this.needs.water = clamp(this.needs.water, 0, 100);
-        this.needs.calories = clamp(this.needs.calories, 0, 100);
+        this.needs.temperature = clamp(this.needs.temperature, GameConfig.needs.minValue, GameConfig.needs.maxValue);
+        this.needs.water = clamp(this.needs.water, GameConfig.needs.minValue, GameConfig.needs.maxValue);
+        this.needs.calories = clamp(this.needs.calories, GameConfig.needs.minValue, GameConfig.needs.maxValue);
         for (let i = 0; i < this.needs.vitamins.length; i++) {
-            this.needs.vitamins[i] = clamp(this.needs.vitamins[i], 0, 100);
+            this.needs.vitamins[i] = clamp(this.needs.vitamins[i], GameConfig.needs.minValue, GameConfig.needs.maxValue);
         }
 
         // Assert valid state
-        assert(this.needs.temperature >= 0 && this.needs.temperature <= 100, "Temperature out of bounds");
-        assert(this.needs.water >= 0 && this.needs.water <= 100, "Water out of bounds");
-        assert(this.needs.calories >= 0 && this.needs.calories <= 100, "Calories out of bounds");
+        assert(this.needs.temperature >= GameConfig.needs.minValue && this.needs.temperature <= GameConfig.needs.maxValue, "Temperature out of bounds");
+        assert(this.needs.water >= GameConfig.needs.minValue && this.needs.water <= GameConfig.needs.maxValue, "Water out of bounds");
+        assert(this.needs.calories >= GameConfig.needs.minValue && this.needs.calories <= GameConfig.needs.maxValue, "Calories out of bounds");
     }
 
     updatePosition() {
@@ -153,8 +153,8 @@ class Player {
             this.element = document.createElement('div');
             this.element.className = 'player';
             this.element.style.position = 'absolute';
-            this.element.style.fontSize = '32px';
-            this.element.style.zIndex = '100';
+            this.element.style.fontSize = `${GameConfig.player.fontSize}px`;
+            this.element.style.zIndex = GameConfig.player.zIndex;
             this.element.style.pointerEvents = 'none';
             container.appendChild(this.element);
         }
@@ -170,13 +170,8 @@ class Player {
         }
     }
 
-    // Get needs as a formatted string for debugging
-    getNeedsString() {
-        return `T:${Math.round(this.needs.temperature)} W:${Math.round(this.needs.water)} C:${Math.round(this.needs.calories)} V:[${this.needs.vitamins.map(v => Math.round(v)).join(',')}]`;
-    }
-
     // Check if player is near a position
-    isNear(position, threshold = 32) {
+    isNear(position, threshold = GameConfig.player.interactionThreshold) {
         return distance(this.position, position) <= threshold;
     }
 

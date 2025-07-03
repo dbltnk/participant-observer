@@ -48,18 +48,24 @@ class World {
 
         // Add village well
         const well = {
-            position: { x: centerX + 50, y: centerY },
+            position: {
+                x: centerX + GameConfig.world.villageCenterOffset.x,
+                y: centerY + GameConfig.world.villageCenterOffset.y
+            },
             type: 'well',
             emoji: '💧',
-            waterLevel: 10
+            waterLevel: GameConfig.wells.initialWaterLevel
         };
 
         // Add communal storage
         const storage = {
-            position: { x: centerX - 50, y: centerY },
+            position: {
+                x: centerX - GameConfig.world.villageCenterOffset.x,
+                y: centerY + GameConfig.world.villageCenterOffset.y
+            },
             type: 'storage_box',
             emoji: '📦',
-            capacity: 20,
+            capacity: GameConfig.storage.communalCapacity,
             items: []
         };
 
@@ -72,12 +78,11 @@ class World {
     generateCamps() {
         const centerX = this.config.width / 2;
         const centerY = this.config.height / 2;
-        const campRadius = 150;
 
         for (let i = 0; i < this.config.villagerCount; i++) {
             const angle = (i / this.config.villagerCount) * 2 * Math.PI;
-            const x = centerX + Math.cos(angle) * campRadius;
-            const y = centerY + Math.sin(angle) * campRadius;
+            const x = centerX + Math.cos(angle) * GameConfig.world.campRadius;
+            const y = centerY + Math.sin(angle) * GameConfig.world.campRadius;
 
             const camp = {
                 position: { x, y },
@@ -88,26 +93,35 @@ class World {
 
             // Add camp facilities
             const fireplace = {
-                position: { x: x + 20, y: y },
+                position: {
+                    x: x + GameConfig.world.campSpacing.x,
+                    y: y
+                },
                 type: 'fireplace',
                 emoji: '🔥',
                 isBurning: false,
                 wood: 0,
-                maxWood: 2
+                maxWood: GameConfig.fires.maxWood
             };
 
             const sleepingBag = {
-                position: { x: x - 20, y: y },
+                position: {
+                    x: x - GameConfig.world.campSpacing.x,
+                    y: y
+                },
                 type: 'sleeping_bag',
                 emoji: '🛏️',
                 isOccupied: false
             };
 
             const personalStorage = {
-                position: { x: x, y: y + 30 },
+                position: {
+                    x: x,
+                    y: y + GameConfig.world.campSpacing.y
+                },
                 type: 'storage_box',
                 emoji: '📦',
-                capacity: 4,
+                capacity: GameConfig.storage.personalCapacity,
                 items: [],
                 isPersonal: true,
                 villagerId: i
@@ -120,8 +134,8 @@ class World {
         // Set player starting position near their camp (camp 0)
         const playerCamp = this.camps[0];
         this.playerStartPosition = {
-            x: playerCamp.position.x + 40,
-            y: playerCamp.position.y
+            x: playerCamp.position.x + GameConfig.world.playerStartOffset.x,
+            y: playerCamp.position.y + GameConfig.world.playerStartOffset.y
         };
 
         console.log(`${this.config.villagerCount} camps generated around village`);
@@ -129,7 +143,7 @@ class World {
 
     generateWells() {
         // Generate additional wells using Perlin noise
-        const wellCount = 3;
+        const wellCount = GameConfig.world.wellCount;
 
         for (let i = 0; i < wellCount; i++) {
             let attempts = 0;
@@ -141,14 +155,14 @@ class World {
                     y: Math.random() * this.config.height
                 };
                 attempts++;
-            } while (this.isTooCloseToExistingWell(position) && attempts < 50);
+            } while (this.isTooCloseToExistingWell(position) && attempts < GameConfig.world.wellMaxAttempts);
 
-            if (attempts < 50) {
+            if (attempts < GameConfig.world.wellMaxAttempts) {
                 const well = {
                     position,
                     type: 'well',
                     emoji: '💧',
-                    waterLevel: 10
+                    waterLevel: GameConfig.wells.initialWaterLevel
                 };
 
                 this.entities.push(well);
@@ -175,7 +189,7 @@ class World {
                 type: resourceType,
                 emoji: this.getResourceEmoji(resourceType),
                 collected: false,
-                propagationChance: 0.1
+                propagationChance: GameConfig.resources.propagationChance
             };
 
             this.entities.push(resource);
@@ -190,13 +204,13 @@ class World {
 
         do {
             // Use Perlin noise to create more natural distribution
-            const noiseX = Math.random() * 10;
-            const noiseY = Math.random() * 10;
+            const noiseX = Math.random() * GameConfig.world.noiseScale;
+            const noiseY = Math.random() * GameConfig.world.noiseScale;
             const noiseValue = this.noise.noise2D(noiseX, noiseY);
 
             // Bias towards areas with higher noise values
-            const biasX = (noiseValue + 1) * 0.5;
-            const biasY = (this.noise.noise2D(noiseX + 5, noiseY + 5) + 1) * 0.5;
+            const biasX = (noiseValue + 1) * GameConfig.world.noiseBias;
+            const biasY = (this.noise.noise2D(noiseX + GameConfig.world.noiseScale / 2, noiseY + GameConfig.world.noiseScale / 2) + 1) * GameConfig.world.noiseBias;
 
             position = {
                 x: biasX * this.config.width,
@@ -204,19 +218,19 @@ class World {
             };
 
             attempts++;
-        } while (this.isTooCloseToVillage(position) && attempts < 50);
+        } while (this.isTooCloseToVillage(position) && attempts < GameConfig.world.wellMaxAttempts);
 
         return position;
     }
 
     isTooCloseToVillage(position) {
         const villageDistance = distance(position, this.village.position);
-        return villageDistance < 100; // Keep resources away from village center
+        return villageDistance < GameConfig.world.resourceVillageMinDistance;
     }
 
     isTooCloseToExistingWell(position) {
         for (const well of this.wells) {
-            if (distance(position, well.position) < 200) {
+            if (distance(position, well.position) < GameConfig.world.wellMinDistance) {
                 return true;
             }
         }
@@ -279,7 +293,7 @@ class World {
     }
 
     // Get entities near a position
-    getEntitiesNear(position, radius = 50) {
+    getEntitiesNear(position, radius = GameConfig.world.tileSize * 1.5) {
         return this.entities.filter(entity => {
             return distance(entity.position, position) <= radius;
         });

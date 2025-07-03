@@ -6,7 +6,7 @@ class Game {
         this.gameState = {
             // Core game state
             seed: seed,
-            currentTime: 8 * 3600, // start at 08:00
+            currentTime: GameConfig.time.gameStartTime, // start at 08:00
             currentDay: 1,
             gameSpeed: 1, // multiplier for time acceleration
             isRunning: false,
@@ -22,8 +22,13 @@ class Game {
             // Player state
             player: {
                 position: { x: 0, y: 0 },
-                needs: { temperature: 100, water: 100, calories: 100, vitamins: [100, 100, 100, 100, 100] },
-                inventory: new Array(6).fill(null),
+                needs: {
+                    temperature: GameConfig.needs.fullValue,
+                    water: GameConfig.needs.fullValue,
+                    calories: GameConfig.needs.fullValue,
+                    vitamins: new Array(GameConfig.needs.vitaminCount).fill(GameConfig.needs.fullValue)
+                },
+                inventory: new Array(GameConfig.player.inventorySize).fill(null),
                 selectedSlot: 0
             },
 
@@ -41,7 +46,7 @@ class Game {
         // Game loop variables
         this.lastTime = 0;
         this.accumulator = 0;
-        this.timestep = 1000 / 60; // 60 FPS target
+        this.timestep = GameConfig.gameLoop.timestep;
 
         // System references (will be initialized later)
         this.world = null;
@@ -126,8 +131,7 @@ class Game {
     gameLoop(currentTime) {
         if (!this.gameState.isRunning) return;
 
-        const MAX_DELTA = 200; // ms, cap to 0.2s per frame
-        const deltaTime = Math.min(currentTime - this.lastTime, MAX_DELTA);
+        const deltaTime = Math.min(currentTime - this.lastTime, GameConfig.gameLoop.maxDeltaTime);
         this.lastTime = currentTime;
         this.accumulator += deltaTime;
 
@@ -160,12 +164,12 @@ class Game {
     updateGameTime(deltaTime) {
         // Convert real time to game time using config
         // 1 real second = 144 game seconds (86400/600)
-        const timeAcceleration = 86400 / GameConfig.time.realSecondsPerGameDay;
-        const gameTimeDelta = (deltaTime / 1000) * timeAcceleration;
+        const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
+        const gameTimeDelta = (deltaTime / GameConfig.player.millisecondsPerSecond) * timeAcceleration;
         this.gameState.currentTime += gameTimeDelta;
 
         // Update day counter
-        const newDay = Math.floor(this.gameState.currentTime / 86400) + 1;
+        const newDay = Math.floor(this.gameState.currentTime / GameConfig.time.secondsPerDay) + 1;
         if (newDay !== this.gameState.currentDay) {
             this.gameState.currentDay = newDay;
             console.log(`Day ${newDay} begins`);
@@ -198,14 +202,16 @@ class Game {
         const needs = this.gameState.player.needs;
 
         // Check if any need has reached zero
-        if (needs.temperature <= 0 || needs.water <= 0 || needs.calories <= 0) {
+        if (needs.temperature <= GameConfig.needs.minValue ||
+            needs.water <= GameConfig.needs.minValue ||
+            needs.calories <= GameConfig.needs.minValue) {
             this.gameOver('You died from lack of basic needs');
             return;
         }
 
         // Check vitamin deficiencies
         for (let i = 0; i < needs.vitamins.length; i++) {
-            if (needs.vitamins[i] <= 0) {
+            if (needs.vitamins[i] <= GameConfig.needs.minValue) {
                 this.gameOver(`You died from vitamin ${String.fromCharCode(65 + i)} deficiency`);
                 return;
             }
@@ -234,9 +240,9 @@ class Game {
     // Get current game time in readable format
     getCurrentTime() {
         const totalSeconds = this.gameState.currentTime;
-        const day = Math.floor(totalSeconds / 86400) + 1;
-        const hour = Math.floor((totalSeconds % 86400) / 3600);
-        const minute = Math.floor((totalSeconds % 3600) / 60);
+        const day = Math.floor(totalSeconds / GameConfig.time.secondsPerDay) + 1;
+        const hour = Math.floor((totalSeconds % GameConfig.time.secondsPerDay) / GameConfig.time.secondsPerHour);
+        const minute = Math.floor((totalSeconds % GameConfig.time.secondsPerHour) / GameConfig.time.secondsPerMinute);
         return { day, hour, minute };
     }
 

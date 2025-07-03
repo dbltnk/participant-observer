@@ -10,8 +10,6 @@ class BrowserLogger {
     constructor() {
         this.logBuffer = [];
         this.lastDomSnapshot = null;
-        this.logCount = 0;
-        this.domUpdateCount = 0;
         this.serverUrl = 'http://localhost:3000';
 
         this.init();
@@ -159,9 +157,6 @@ class BrowserLogger {
             message,
             callStack: callInfo
         });
-
-        this.logCount++;
-        this.updateDebugPanel();
     }
 
     startPeriodicLogging() {
@@ -197,8 +192,6 @@ class BrowserLogger {
             if (this.lastDomSnapshot === snapshotStr) return;
 
             this.lastDomSnapshot = snapshotStr;
-            this.domUpdateCount++;
-            this.updateDebugPanel();
 
             await fetch(`${this.serverUrl}/dom-snapshot`, {
                 method: 'POST',
@@ -314,10 +307,6 @@ class BrowserLogger {
         return conflicts;
     }
 
-    updateDebugPanel() {
-        // Debug panel removed - no longer needed for game
-    }
-
     setupEventListeners() {
         // No test buttons needed for game - logging runs automatically
     }
@@ -337,10 +326,10 @@ if (document.readyState === 'loading') {
 // Game initialization function
 function initGame() {
     console.log('Initializing Alpine Sustainability...');
-    let seed = parseInt(localStorage.getItem('alpine-seed'), 10);
+    let seed = parseInt(localStorage.getItem(GameConfig.storage.localStorageKey), 10);
     if (!seed || isNaN(seed)) {
         seed = getRandomSeed();
-        localStorage.setItem('alpine-seed', seed);
+        localStorage.setItem(GameConfig.storage.localStorageKey, seed);
     }
     window.game = new Game(seed);
     window.game.start();
@@ -349,7 +338,7 @@ function initGame() {
 }
 
 function getRandomSeed() {
-    return Math.floor(Math.random() * 999) + 1; // 1 to 999
+    return Math.floor(Math.random() * GameConfig.ui.seedInputMaxValue) + GameConfig.ui.seedInputMinValue;
 }
 
 // Handle window resize
@@ -390,7 +379,7 @@ window.addEventListener('unhandledrejection', (event) => {
 
 // Listen for seed changes from UI
 document.addEventListener('alpine-set-seed', (e) => {
-    localStorage.setItem('alpine-seed', e.detail.seed);
+    localStorage.setItem(GameConfig.storage.localStorageKey, e.detail.seed);
 });
 
 function addInfoBox() {
@@ -400,13 +389,13 @@ function addInfoBox() {
         position: fixed;
         bottom: 10px;
         left: 10px;
-        background: rgba(0,0,0,0.7);
+        background: ${GameConfig.ui.backgroundColor};
         color: white;
         padding: 10px;
         border-radius: 5px;
         font-family: monospace;
-        font-size: 13px;
-        z-index: 1000;
+        font-size: ${GameConfig.ui.infoBoxFontSize}px;
+        z-index: ${GameConfig.ui.infoBoxZIndex};
     `;
     infoBox.innerHTML = `
         <div>Alpine Sustainability v1.0</div>
