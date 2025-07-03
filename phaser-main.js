@@ -799,7 +799,7 @@ console.log('Phaser main loaded');
             // Find nearest well within interaction range
             const nearestWell = this.findNearestWell();
             if (nearestWell && distance(this.position, nearestWell.position) <= GameConfig.player.interactionThreshold) {
-                this.needs.water = GameConfig.needs.fullValue;
+                this.needs.water = Math.min(GameConfig.needs.fullValue, this.needs.water + GameConfig.wells.drinkingAmount);
                 if (window.summaryLoggingEnabled) {
                     console.log(`[Villager] ${this.name} drank from well`);
                 }
@@ -1241,6 +1241,7 @@ console.log('Phaser main loaded');
     class MainScene extends Phaser.Scene {
         constructor() {
             super('MainScene');
+            this.lastPropagationDay = -1; // Track last propagation day to prevent duplicates
         }
         preload() { }
         create() {
@@ -1360,9 +1361,7 @@ console.log('Phaser main loaded');
                 'watercress', 'wild_onion', 'chickweed', 'plantain', 'yarrow',
                 // Animals
                 'rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk',
-                'marten', 'grouse', 'woodcock', 'beaver', 'otter',
-                // Tree (wood resource)
-                'tree'
+                'marten', 'grouse', 'woodcock', 'beaver', 'otter'
             ];
             const totalResources = (cfg.villagerCount + 1) * cfg.resourcesPerVillager;
             console.log(`[World Generation] Generating ${totalResources} resources in clusters for ${cfg.villagerCount} villagers + 1 player`);
@@ -1432,7 +1431,7 @@ console.log('Phaser main loaded');
                         type: resourceType,
                         emoji,
                         collected: false,
-                        propagationChance: GameConfig.resources.propagationChance,
+                        isChild: false, // Initial resources are adults
                         clusterId: clusterIndex // Track which cluster this belongs to
                     });
 
@@ -1443,6 +1442,35 @@ console.log('Phaser main loaded');
             }
 
             console.log(`[World Generation] Generated ${totalResources} resources, total entities: ${this.entities.length}`);
+
+            // --- Generate trees separately (50 total) ---
+            console.log(`[World Generation] Generating 50 trees across the world`);
+            for (let i = 0; i < 50; i++) {
+                let attempts = 0;
+                let pos;
+                do {
+                    pos = {
+                        x: this.seededRandom.randomRange(0, cfg.width),
+                        y: this.seededRandom.randomRange(0, cfg.height)
+                    };
+                    attempts++;
+                } while (this.isTooCloseToVillage(pos) && attempts < 100);
+
+                if (attempts < 100) {
+                    const treeEntity = {
+                        position: pos,
+                        type: 'tree',
+                        emoji: '🌲',
+                        collected: false,
+                        isChild: false, // Initial trees are adults
+                        clusterId: -1 // Trees don't use cluster system
+                    };
+
+                    this.entities.push(treeEntity);
+                }
+            }
+            console.log(`[World Generation] Generated 50 trees, total entities: ${this.entities.length}`);
+
             // --- Render all entities as Phaser text objects ---
             this.worldEntities = [];
             for (const entity of this.entities) {
@@ -1493,7 +1521,7 @@ console.log('Phaser main loaded');
                             this.showTempMessage('Already fully hydrated!', 1200);
                             return;
                         }
-                        this.playerState.needs.water = GameConfig.needs.fullValue;
+                        this.playerState.needs.water = Math.min(GameConfig.needs.fullValue, this.playerState.needs.water + GameConfig.wells.drinkingAmount);
                         this.updatePhaserUI();
                         this.showTempMessage('Drank from well!', 1200);
                     });
@@ -2224,7 +2252,8 @@ console.log('Phaser main loaded');
                 case 'rabbit':
                 case 'deer':
                 case 'tree':
-                    return `${entity.type} ${entity.collected ? '(Collected)' : '(Available)'}`;
+                    const status = entity.collected ? '(Collected)' : entity.isChild ? '(Child)' : '(Adult)';
+                    return `${entity.type} ${status}`;
                 default:
                     return entity.type;
             }
@@ -2717,68 +2746,91 @@ console.log('Phaser main loaded');
         }
 
         updateResourcePropagation() {
-            const t = getCurrentTime(this.playerState);
-            const hour = t.hour;
+            // Calculate current day (reliable, frame-independent)
+            const currentDay = Math.floor(this.playerState.currentTime / GameConfig.time.secondsPerDay);
 
-            // Only propagate during night hours (22:00 - 06:00) to simulate overnight growth
-            if (hour >= 22 || hour <= 6) {
-                // Check each collected resource for propagation
+            // Check if we need to propagate (new day and not yet propagated)
+            if (currentDay > this.lastPropagationDay) {
+                this.lastPropagationDay = currentDay;
+
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Propagation] Starting propagation for day ${currentDay}`);
+                }
+
+                // Check each uncollected resource for propagation (both adults and children)
                 for (const entity of this.entities) {
-                    if (entity.collected && entity.type !== 'tree' && ALL_FOOD_TYPES.includes(entity.type)) {
-                        // Check if enough time has passed (at least 1 game day)
-                        const timeSinceCollection = this.playerState.currentTime - (entity.collectedAt || 0);
-                        if (timeSinceCollection >= GameConfig.time.secondsPerDay) {
-                            // Calculate propagation chance based on global resource count
-                            const globalCount = this.getGlobalResourceCount(entity.type);
-                            const baseChance = GameConfig.resources.propagationChance;
-                            const densityFactor = Math.max(0.1, 1 - (globalCount / GameConfig.resources.maxDensity));
-                            const finalChance = baseChance * densityFactor;
+                    if (!entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === 'tree')) {
+                        // Calculate propagation chance based on global resource count
+                        const globalCount = this.getGlobalResourceCount(entity.type);
+                        const baseChance = 0.5; // 50% base chance
+                        const maxCount = entity.type === 'tree' ? 50 : 10; // Trees cap at 50, others at 10
+                        const finalChance = Math.max(0, baseChance * (1 - globalCount / maxCount)); // Decreases to 0% at max count
 
-                            // Attempt to spawn new resource nearby
-                            if (Math.random() < finalChance) {
-                                const newPosition = this.findPropagationPosition(entity.position, entity.type);
-                                if (newPosition) {
-                                    const newEntity = {
-                                        position: newPosition,
-                                        type: entity.type,
-                                        emoji: entity.emoji,
-                                        collected: false,
-                                        propagationChance: entity.propagationChance,
-                                        clusterId: entity.clusterId
-                                    };
+                        // Attempt to spawn new resource nearby
+                        if (Math.random() < finalChance) {
+                            const newPosition = this.findPropagationPosition(entity.position, entity.type);
+                            if (newPosition) {
+                                const newEntity = {
+                                    position: newPosition,
+                                    type: entity.type,
+                                    emoji: entity.emoji,
+                                    collected: false,
+                                    isChild: true, // Mark as child
+                                    birthTime: this.playerState.currentTime, // Track when born
+                                    clusterId: entity.clusterId
+                                };
 
-                                    // Create visual representation
-                                    const fontSize = 22;
-                                    const textObj = this.add.text(newPosition.x, newPosition.y, newEntity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
-                                    newEntity._phaserText = textObj;
-                                    this.worldEntities.push(textObj);
+                                // Create visual representation (smaller for children)
+                                const fontSize = entity.isChild ? 16 : 22; // Smaller size for children
+                                const textObj = this.add.text(newPosition.x, newPosition.y, newEntity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+                                newEntity._phaserText = textObj;
+                                this.worldEntities.push(textObj);
 
-                                    // Add interaction
-                                    textObj.setInteractive({ useHandCursor: true });
-                                    textObj.on('pointerdown', () => {
-                                        if (newEntity.collected) return;
-                                        const dist = distance(this.playerState.position, newEntity.position);
-                                        assert(dist <= GameConfig.player.interactionThreshold, 'Tried to collect resource out of range');
-                                        const slot = this.playerState.inventory.findIndex(i => i === null);
-                                        if (slot === -1) {
-                                            this.showTempMessage('Inventory full!', 1500);
-                                            return;
-                                        }
-                                        newEntity.collected = true;
-                                        newEntity.collectedAt = this.playerState.currentTime;
-                                        textObj.setVisible(false);
-                                        this.playerState.inventory[slot] = { type: newEntity.type, emoji: newEntity.emoji };
-                                        this.updatePhaserUI();
-                                        this.showTempMessage(`Collected ${newEntity.type}!`, 1200);
-                                    });
-
-                                    this.entities.push(newEntity);
-
-                                    if (window.summaryLoggingEnabled) {
-                                        console.log(`[Propagation] ${entity.type} propagated at (${Math.round(newPosition.x)}, ${Math.round(newPosition.y)}) - Global count: ${globalCount + 1}`);
+                                // Add interaction
+                                textObj.setInteractive({ useHandCursor: true });
+                                textObj.on('pointerdown', () => {
+                                    if (newEntity.collected) return;
+                                    const dist = distance(this.playerState.position, newEntity.position);
+                                    assert(dist <= GameConfig.player.interactionThreshold, 'Tried to collect resource out of range');
+                                    const slot = this.playerState.inventory.findIndex(i => i === null);
+                                    if (slot === -1) {
+                                        this.showTempMessage('Inventory full!', 1500);
+                                        return;
                                     }
+                                    newEntity.collected = true;
+                                    newEntity.collectedAt = this.playerState.currentTime;
+                                    textObj.setVisible(false);
+                                    this.playerState.inventory[slot] = { type: newEntity.type, emoji: newEntity.emoji };
+                                    this.updatePhaserUI();
+                                    this.showTempMessage(`Collected ${newEntity.type}!`, 1200);
+                                });
+
+                                this.entities.push(newEntity);
+
+                                if (window.summaryLoggingEnabled) {
+                                    console.log(`[Propagation] ${entity.type} spawned child at (${Math.round(newPosition.x)}, ${Math.round(newPosition.y)}) - Global count: ${globalCount + 1}`);
                                 }
                             }
+                        }
+                    }
+                }
+
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Propagation] Day ${currentDay} propagation complete`);
+                }
+            }
+
+            // Check for children becoming adults (2 days = 2 * 86400 seconds) - happens every frame
+            for (const entity of this.entities) {
+                if (!entity.collected && entity.isChild) {
+                    const timeSinceBirth = this.playerState.currentTime - entity.birthTime;
+                    if (timeSinceBirth >= 2 * GameConfig.time.secondsPerDay) {
+                        entity.isChild = false; // Become adult
+                        if (entity._phaserText) {
+                            entity._phaserText.setFontSize('22px'); // Grow to adult size
+                        }
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Propagation] ${entity.type} child became adult at (${Math.round(entity.position.x)}, ${Math.round(entity.position.y)})`);
                         }
                     }
                 }
@@ -2796,9 +2848,9 @@ console.log('Phaser main loaded');
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 // Generate position within propagation radius
                 const angle = Math.random() * 2 * Math.PI;
-                const distance = Math.random() * propagationRadius;
-                const newX = originalPosition.x + Math.cos(angle) * distance;
-                const newY = originalPosition.y + Math.sin(angle) * distance;
+                const dist = Math.random() * propagationRadius;
+                const newX = originalPosition.x + Math.cos(angle) * dist;
+                const newY = originalPosition.y + Math.sin(angle) * dist;
 
                 // Ensure within world bounds
                 if (newX < 0 || newX > GameConfig.world.width || newY < 0 || newY > GameConfig.world.height) {

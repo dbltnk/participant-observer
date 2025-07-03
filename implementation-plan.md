@@ -1,5 +1,8 @@
 # Alpine Sustainability - Implementation Plan
 
+## Game Overview
+**Alpine Sustainability** is a resource management game where players and AI villagers must survive in an alpine environment by managing their needs (hunger, thirst, warmth, rest, health) while collecting and managing resources.
+
 ## Project Structure
 
 ```
@@ -75,7 +78,7 @@ sustain/
 - ✅ Visual feedback: health emojis, debug info, exploration radius indicators
 - ✅ Storage interaction: use personal storage first, then communal storage
 - ✅ Fire management: collect wood and add to camp fires
-- ✅ Well interaction: drink from wells to restore water
+- ✅ Well interaction: drink from wells to restore water (50 points per drink)
 - ✅ Task prioritization: water first, then food, then wood collection
 
 ### Phase 5: Game Mechanics ✅ COMPLETED - FULLY FUNCTIONAL
@@ -83,7 +86,7 @@ sustain/
 2. ✅ Add fire management (players and villagers can add wood to fires)
 3. ✅ Create storage system (players and villagers can use storage boxes)
 4. ✅ Add sleeping mechanics (players can sleep to skip night)
-5. ✅ Implement resource propagation (SMART SYSTEM - DENSITY-BASED)
+5. ✅ Implement resource propagation (SIMPLIFIED SYSTEM - CHILD/ADULT GROWTH)
 6. ✅ Add player interactions with all objects
 
 **Fully Functional Game Mechanics:**
@@ -99,9 +102,7 @@ sustain/
 - ✅ **Villager AI Integration**: Villagers use all the same mechanics as players
 - ✅ **Day/Night Lighting**: Dynamic lighting changes based on time of day
 - ✅ **Ground Texture**: Subtle ground texture using Perlin noise for better navigation
-
-**MAJOR MISSING FEATURE:**
-- ✅ **Resource Propagation**: Smart propagation system with density-based reproduction chance (prevents overpopulation while allowing die-off)
+- ✅ **Resource Propagation**: Simplified child/adult growth system with configurable caps
 
 ### Phase 6: Polish & UI ✅ COMPLETED
 1. ✅ Complete UI implementation with all elements
@@ -125,7 +126,7 @@ sustain/
 10. **Performance** - Smooth 60fps with deltaTime capping to prevent large jumps
 11. **Resource collection** - Click on resources to collect them into inventory
 12. **Inventory management** - Click slots to eat food or transfer items
-13. **Well interaction** - Click wells to drink and restore water
+13. **Well interaction** - Click wells to drink and restore water (50 points per drink)
 14. **Villager AI** - 7 AI villagers with complete daily routines and needs management
 15. **Villager memory** - Villagers remember resource locations and return to known areas
 16. **Villager exploration** - Villagers explore new areas when no known resources nearby
@@ -141,407 +142,121 @@ sustain/
 26. **Debug visualization** - See interaction distance circles and object status when debug is enabled
 27. **Day/Night cycle** - Dynamic lighting changes based on time of day
 28. **Large world** - 10x viewport size world for exploration
-
-**✅ FULLY FUNCTIONAL:**
-- ✅ **Resource Propagation**: Smart propagation system prevents overpopulation while allowing natural die-off
+29. **Tree generation** - 50 trees scattered across the world for wood supply
+30. **Resource propagation** - Resources spawn children that grow to adults over 2 days
 
 ## Core Architecture
 
 ### 1. Game State Management ✅ IMPLEMENTED
 **Approach:** Scene-local state management with Phaser 3 integration.
 
-```javascript
-// MainScene.js - State structure within Phaser scene
-class MainScene extends Phaser.Scene {
-    create() {
-        // Player state managed within scene
-        this.playerState = {
-            position: { ...this.playerStartPosition },
-            needs: {
-                temperature: GameConfig.needs.fullValue,
-                water: GameConfig.needs.fullValue,
-                calories: GameConfig.needs.fullValue,
-                vitamins: new Array(GameConfig.needs.vitaminCount).fill(GameConfig.needs.fullValue)
-            },
-            inventory: new Array(GameConfig.player.inventorySize).fill(null),
-            selectedSlot: 0,
-            currentTime: GameConfig.time.gameStartTime
-        };
-        
-        // World entities stored in scene
-        this.entities = []; // All game objects (resources, buildings, etc.)
-        this.camps = []; // Camp locations for villager AI
-        this.wells = []; // Well locations for water access
-        this.villagers = []; // AI villagers with complete behavior
-    }
-}
-```
+**✅ IMPLEMENTED:**
+- Complete state management with needs, inventory, time, and game over conditions
+- Player and villager state tracking
+- Entity management system
+- Debug mode toggle
 
 ### 2. Game Loop Architecture ✅ IMPLEMENTED
 **Approach:** Phaser 3 scene-based game loop with built-in deltaTime handling.
 
-```javascript
-// MainScene.js - Phaser game loop
-class MainScene extends Phaser.Scene {
-    update(time, delta) {
-        // Advance game time (accelerated)
-        const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
-        const gameTimeDelta = (delta / 1000) * timeAcceleration;
-        this.playerState.currentTime += gameTimeDelta;
-        
-        // Update villagers
-        this.updateVillagers(delta);
-        
-        // Update needs
-        updateNeeds(this.playerState, delta);
-        
-        // Update UI
-        this.updatePhaserUI();
-        
-        // Check game over
-        const reason = checkGameOver(this.playerState);
-        if (reason) {
-            this.showGameOverOverlay(reason);
-            this.scene.pause();
-            return;
-        }
-        
-        // Player movement
-        this.handlePlayerMovement(delta);
-    }
-}
-```
+**✅ IMPLEMENTED:**
+- 10-minute game days (600 seconds real time = 1 game day)
+- Day/night cycle with dynamic lighting
+- Needs decay system with daily variance
+- Time acceleration for sleeping
+- Reliable day tracking for propagation
 
 ### 3. World Generation System ✅ IMPLEMENTED
 **Approach:** Perlin noise-based generation with configurable parameters, integrated into Phaser scene.
 
-```javascript
-// MainScene.js - World generation
-class MainScene extends Phaser.Scene {
-    create() {
-        // Generate world using Perlin noise
-        this.noise = new PerlinNoise(currentSeed);
-        this.seededRandom = new SeededRandom(currentSeed);
-        
-        // Generate village, camps, wells, and resources
-        this.generateVillage();
-        this.generateCamps();
-        this.generateWells();
-        this.generateResources();
-        
-        // Render all entities as Phaser text objects
-        this.renderEntities();
-    }
-    
-    generateResources() {
-        const totalResources = (cfg.villagerCount + 1) * cfg.resourcesPerVillager;
-        for (let i = 0; i < totalResources; i++) {
-            const position = this.findResourcePosition();
-            const resourceType = resourceTypes[i % resourceTypes.length];
-            const emoji = this.getResourceEmoji(resourceType);
-            this.entities.push({ 
-                position, 
-                type: resourceType, 
-                emoji, 
-                collected: false, 
-                propagationChance: GameConfig.resources.propagationChance 
-            });
-        }
-    }
-}
-```
+**✅ IMPLEMENTED:**
+- Complete world generation with village center, camps, resources, wells
+- Ground texture using Perlin noise for better navigation
+- Large world (10x viewport size) for exploration
+- Random seed system with editable input
+- Collision detection for resource placement
 
 ### 4. Villager AI System ✅ IMPLEMENTED
 **Approach:** State machine with memory-based decision making.
 
-```javascript
-// Villager.js - AI system (COMPLETED)
-class Villager {
-    constructor(name, campPosition, villagerId) {
-        this.name = name;
-        this.campPosition = campPosition;
-        this.villagerId = villagerId;
-        this.state = 'SLEEPING';
-        this.memory = {
-            knownFoodLocations: [], // Array of {x, y, resourceType, lastSeen}
-            knownWoodLocations: [],
-            lastKnownPosition: null
-        };
-        this.needs = {temperature: 100, water: 100, calories: 100, vitamins: [100, 100, 100, 100, 100]};
-        this.inventory = new Array(6).fill(null);
-    }
-    
-    update(deltaTime, gameTime, entities, storageBoxes) {
-        this.updateNeeds(deltaTime, gameTime);
-        this.updateState(gameTime, deltaTime);
-        this.executeCurrentState(deltaTime, entities, storageBoxes);
-        this.updateVisuals();
-        return this.checkDeath();
-    }
-    
-    updateState(gameTime, deltaTime) {
-        const t = this.getCurrentTime(gameTime);
-        const hour = t.hour;
-        
-        if (this.state === 'SLEEPING' && hour >= this.wakeUpTime) {
-            this.state = 'FORAGING';
-        } else if (this.state === 'FORAGING' && hour >= 18) {
-            this.state = 'RETURNING';
-        } else if (this.state === 'RETURNING' && this.isAtCamp()) {
-            this.state = 'EATING';
-        } else if (this.state === 'EATING' && this.needs.calories > 80) {
-            this.state = 'SLEEPING';
-        }
-    }
-    
-    executeCurrentState(deltaTime, entities, storageBoxes) {
-        switch (this.state) {
-            case 'FORAGING':
-                this.forage(entities, deltaTime);
-                break;
-            case 'RETURNING':
-                this.moveTowards(this.campPosition, deltaTime);
-                break;
-            case 'EATING':
-                this.eatAndDrink(storageBoxes);
-                break;
-            case 'SLEEPING':
-                this.sleep();
-                break;
-        }
-    }
-    
-    forage(entities, deltaTime) {
-        // Check memory first, then explore new areas
-        const knownTarget = this.findNearestKnownFood(entities);
-        if (knownTarget) {
-            this.currentTarget = knownTarget;
-        } else {
-            const foundTarget = this.exploreNewArea(entities);
-            if (!foundTarget) {
-                this.setExplorationTarget();
-            }
-        }
-        
-        // Move towards target and collect if close enough
-        if (this.currentTarget) {
-            this.moveTowards(this.currentTarget.position, deltaTime);
-            if (distance(this.position, this.currentTarget.position) <= GameConfig.player.interactionThreshold) {
-                this.collectResource(this.currentTarget);
-            }
-        }
-    }
-}
-```
+**✅ IMPLEMENTED:**
+- Complete AI with exploration, resource collection, camp management
+- Memory system for known resource locations
+- Exploration radius with new area discovery
+- State machine for different tasks (explore, collect, return, rest)
+- Death handling with permanent corpses
+- Storage and fire management integration
 
-### 5. Resource System 🔄 PARTIALLY IMPLEMENTED
-**Approach:** Entity-based system with type-specific behavior.
+### 5. Resource System ✅ FULLY IMPLEMENTED
+**Approach:** Entity-based system with child/adult growth and configurable caps.
 
-```javascript
-// Resources.js - Resource management (PARTIALLY IMPLEMENTED)
-class Resource {
-    constructor(type, position) {
-        this.type = type;
-        this.position = position;
-        this.emoji = this.getEmoji(type);
-        this.collected = false;
-        this.propagationChance = this.getPropagationChance(type);
-    }
-    
-    static getEmoji(type) {
-        const emojis = {
-            'blackberry': '🫐',
-            'mushroom': '🍄',
-            'herb': '🌿',
-            'rabbit': '🐰',
-            'deer': '🦌',
-            'tree': '🌲',
-            'well': '💧',
-            'fireplace': '🔥',
-            'sleeping_bag': '🛏️',
-            'storage_box': '📦'
-        };
-        return emojis[type] || '❓';
-    }
-    
-    static getNutrition(type) {
-        const nutrition = {
-            'blackberry': {calories: 50, vitamins: [0, 0, 0, 1, 0]},
-            'mushroom': {calories: 30, vitamins: [0, 0, 1, 0, 0]},
-            'herb': {calories: 20, vitamins: [1, 0, 0, 0, 0]},
-            'rabbit': {calories: 200, vitamins: [0, 1, 0, 0, 0]},
-            'deer': {calories: 500, vitamins: [0, 1, 0, 0, 1]}
-        };
-        return nutrition[type] || {calories: 0, vitamins: [0, 0, 0, 0, 0]};
-    }
-}
-
-// ❌ MISSING: Resource propagation system
-// Resources should regrow over time based on propagationChance and density
-```
+**✅ IMPLEMENTED:**
+- Child/Adult System: Resources spawn as children (smaller) and grow to adults (normal size)
+- Configurable Caps: 10 for regular resources, 50 for trees
+- Daily Propagation: Once per day at midnight with reliable day tracking
+- Visual Feedback: Children are 16px, adults are 22px
+- Tree Generation: 50 trees scattered across the world initially
+- Position finding with collision avoidance
 
 ### 6. UI System ✅ COMPLETED
 **Approach:** Phaser-native UI with comprehensive functionality.
 
-```javascript
-// MainScene.js - UI management
-class MainScene extends Phaser.Scene {
-    create() {
-        // Create UI container (fixed to camera)
-        this.uiContainer = this.add.container(0, 0).setScrollFactor(0);
-        
-        // Create need bars (top left)
-        this.createNeedBars();
-        
-        // Create inventory (bottom center)
-        this.createInventory();
-        
-        // Create time display (top right)
-        this.createTimeDisplay();
-        
-        // Create seed UI (bottom right)
-        this.createSeedUI();
-        
-        // Create info box (bottom left)
-        this.createInfoBox();
-        
-        // Create debug controls
-        this.createDebugControls();
-    }
-    
-    createNeedBars() {
-        const needTypes = ['temperature', 'water', 'calories', 'vitaminA', 'vitaminB', 'vitaminC', 'vitaminD', 'vitaminE'];
-        const needLabels = ['🌡️', '💧', '🍽️', 'A', 'B', 'C', 'D', 'E'];
-        
-        for (let i = 0; i < needLabels.length; i++) {
-            const barBg = this.add.rectangle(/* position */, GameConfig.ui.barWidth, GameConfig.ui.barHeight, 0x333333);
-            const barFill = this.add.rectangle(/* position */, GameConfig.ui.barWidth, GameConfig.ui.barHeight, getPhaserBarColor(needTypes[i]));
-            const label = this.add.text(/* position */, needLabels[i], { fontSize: '16px' });
-            const value = this.add.text(/* position */, '100', { fontSize: '12px' });
-            
-            this.uiContainer.add([barBg, barFill, label, value]);
-            this.ui.needsBars.push({ barBg, barFill, label, value });
-        }
-    }
-    
-    updatePhaserUI() {
-        // Update all UI elements with current game state
-        this.updateNeedBars();
-        this.updateInventory();
-        this.updateTimeDisplay();
-    }
-}
-```
+**✅ IMPLEMENTED:**
+- Complete UI with need bars, time display, inventory, seed management
+- Real-time updates for all player and villager states
+- Debug panel with villager information and object details
+- Interaction distance visualization
+- Seed input with confirmation dialogs
 
-### 7. Configuration System ✅ COMPLETED
+### 7. Interaction System ✅ COMPLETED
+**Approach:** Click-based interactions with distance checking.
+
+**✅ IMPLEMENTED:**
+- Complete interaction system with distance checking
+- Object-specific actions (wells, fires, sleeping bags, storage)
+- UI feedback for all interactions
+- Inventory management with slot clicking
+- Food eating near burning fires only
+
+### 8. Configuration System ✅ COMPLETED
 **Approach:** Centralized config object for easy balancing.
 
-```javascript
-// config/GameConfig.js - All game parameters
-const GameConfig = {
-    // World settings
-    world: {
-        width: window.innerWidth * 10, // 10x viewport width
-        height: window.innerHeight * 10, // 10x viewport height
-        tileSize: 32,
-        villagerCount: 8, // 7 AI villagers + 1 player camp
-        resourcesPerVillager: 50,
-        maxResourcesPerType: 500
-    },
-    
-    // Time settings
-    time: {
-        realSecondsPerGameDay: 600, // 10 minutes
-        dayStartHour: 8,
-        nightStartHour: 18,
-        sleepAcceleration: 10 // 10 seconds to reach 8:00
-    },
-    
-    // Needs drain settings (in in-game hours to empty)
-    needsDrain: {
-        temperature: 8,   // 8 in-game hours to empty (only drains at night when not near fire)
-        water: 24,        // 24 in-game hours to empty
-        calories: 36,     // 36 in-game hours to empty
-        vitamins: 48      // 48 in-game hours to empty
-    },
-    
-    // Needs drain variance (applied per day, per character, per need)
-    needsVariance: 0.2, // 20% (0.2) ± variance, configurable
-    
-    // Player settings
-    player: {
-        moveSpeed: 100, // pixels per second
-        inventorySize: 6,
-        needsDecayRate: {
-            temperature: 5, // per minute
-            water: 10,
-            calories: 15,
-            vitamins: 2
-        }
-    },
-    
-    // Villager settings
-    villager: {
-        moveSpeed: 100, // Same as player speed
-        memoryCapacity: 10, // max remembered locations
-        explorationRadius: 400,
-        foragingEfficiency: 0.8
-    },
-    
-    // Resource settings
-    resources: {
-        propagationRadius: 80,
-        propagationChance: 0.15,
-        maxDensity: 8 // max resources per area
-    },
-    
-    // UI settings
-    ui: {
-        barHeight: 20,
-        barWidth: 150,
-        inventorySlotSize: 50
-    }
-};
-```
+**✅ IMPLEMENTED:**
+- All game parameters in single config file
+- Easy balancing of needs decay rates, time acceleration, resource caps
+- Configurable villager behavior and world generation
+- Debug settings and UI parameters
 
 ## Key Implementation Details
 
 ### Error Handling Strategy ✅ IMPLEMENTED
-```javascript
-// phaser-main.js - Assert system
-function assert(condition, message) {
-    if (!condition) {
-        console.error(`ASSERTION FAILED: ${message}`);
-        console.trace();
-        // In development, could throw error
-        // throw new Error(`ASSERTION FAILED: ${message}`);
-    }
-}
-
-// Usage throughout codebase
-assert(this.playerState.needs.temperature >= 0, "Temperature cannot be negative");
-assert(this.playerState.needs.temperature <= 100, "Temperature cannot exceed 100");
-```
+**✅ IMPLEMENTED:**
+- Assert system throughout codebase for debugging
+- Graceful error handling with informative messages
+- Development-friendly error reporting
+- Input validation and bounds checking
 
 ### Performance Considerations ✅ IMPLEMENTED
-- ✅ Use `requestAnimationFrame` for smooth 60fps
-- ✅ Limit DOM queries by caching element references
-- ✅ DeltaTime capping to prevent large jumps (200ms max per frame)
-- ✅ Batch DOM updates where possible
-- ✅ Efficient villager AI updates with goal persistence
+**✅ IMPLEMENTED:**
+- Smooth 60fps with requestAnimationFrame
+- DeltaTime capping to prevent large jumps (200ms max per frame)
+- Efficient villager AI updates with goal persistence
+- Optimized rendering with Phaser 3
 
 ### Memory Management ✅ IMPLEMENTED
-- ✅ Clean up event listeners on game restart
-- ✅ Clear villager memory when they die
-- ✅ Remove collected resources from world
-- ✅ Efficient memory system for villager resource locations
+**✅ IMPLEMENTED:**
+- Clean up event listeners on game restart
+- Clear villager memory when they die
+- Remove collected resources from world
+- Efficient memory system for villager resource locations
 
 ### Testing Strategy ✅ IMPLEMENTED
-- ✅ Use browser console for debugging
-- ✅ Leverage existing logging system
-- ✅ Verify seed consistency
-- ✅ Test edge cases (villager death, resource depletion)
-- ✅ Debug mode for villager behavior observation
+**✅ IMPLEMENTED:**
+- Browser console debugging
+- Leverage existing logging system
+- Verify seed consistency
+- Test edge cases (villager death, resource depletion)
+- Debug mode for villager behavior observation
 
 ## Success Criteria
 
@@ -552,76 +267,13 @@ assert(this.playerState.needs.temperature <= 100, "Temperature cannot exceed 100
 - ✅ Game ends when player dies with specific death messages
 - ✅ Seed system works with randomization and persistence
 
-### Stretch Goals 🔄 IN PROGRESS
+### Stretch Goals ✅ COMPLETED
 - ✅ Villager memory system
-- ❌ Resource propagation (NOT IMPLEMENTED - CRITICAL GAP)
+- ✅ Resource propagation 
 - ✅ Complete UI with all features
 - ✅ Basic balancing (needs decay rates, time acceleration)
 - ✅ Error handling with assert system
 - ✅ Complete object interactions
-
-## Critical Missing Feature: Resource Propagation
-
-**Status:** ❌ NOT IMPLEMENTED
-
-**Impact:** This is a critical gap that makes long-term gameplay impossible. Once all resources are collected, the game becomes unplayable.
-
-**Required Implementation:**
-```javascript
-// Resource propagation system (NOT IMPLEMENTED)
-function updateResourcePropagation(gameTime) {
-    // Check each collected resource for propagation
-    for (const entity of this.entities) {
-        if (entity.collected && entity.type !== 'tree') {
-            // Check if enough time has passed (overnight)
-            const timeSinceCollection = gameTime - entity.collectedAt;
-            if (timeSinceCollection >= GameConfig.time.secondsPerDay) {
-                // Attempt to spawn new resource nearby
-                if (Math.random() < entity.propagationChance) {
-                    const newPosition = this.findPropagationPosition(entity.position);
-                    if (newPosition) {
-                        this.entities.push({
-                            position: newPosition,
-                            type: entity.type,
-                            emoji: entity.emoji,
-                            collected: false,
-                            propagationChance: entity.propagationChance
-                        });
-                    }
-                }
-            }
-        }
-    }
-}
-```
-
-## Recent Improvements (Latest Session)
-
-### ✅ Fixed Issues:
-1. **Vitamin bars** - Now display numbers and decay visibly (reduced from 48 to 12 hours to empty)
-2. **Time system** - Fixed acceleration to use proper formula (1 real second = 144 game seconds)
-3. **Seed system** - Randomized default (1-999), editable input, confirmation dialogs
-4. **UI improvements** - Added emojis to time display, fixed seed input styling
-5. **Game start time** - Now starts at 08:00 instead of midnight
-6. **Info box** - Restored bottom-left info box with game controls
-7. **Debug logging** - Removed spam, kept essential logging
-8. **Phaser migration** - Successfully migrated from vanilla JS to Phaser 3
-9. **Resource collection** - Implemented click-to-collect with inventory management
-10. **Well interaction** - Implemented drinking from wells to restore water
-11. **Code cleanup** - Removed orphaned CSS classes and legacy config values
-12. **Documentation** - Updated design doc and implementation plan to reflect Phaser 3 architecture
-13. **Villager AI** - Complete villager system with memory, exploration, and daily routines
-14. **Villager needs** - Villagers have same needs system as player with daily variance
-15. **Villager death** - Villagers die when needs reach zero and become permanent corpses
-16. **Villager storage** - Villagers use personal and communal storage boxes
-17. **Villager fire management** - Villagers collect wood and add to camp fires
-18. **Debug system** - Toggle debug mode to see villager states, tasks, and exploration radius
-19. **Ground texture** - Subtle ground texture using Perlin noise for better navigation
-20. **Large world** - Expanded world to 10x viewport size for better exploration
-21. **Day/Night cycle** - Dynamic lighting changes based on time of day
-22. **Food eating system** - Players and villagers can only eat food near burning fires
-23. **Storage system** - Complete storage interface with transfer functionality
-24. **Sleeping system** - Sleep until 8:00 AM with time acceleration
 
 ### ✅ Game Complete: All Features Implemented
 The game is now fully functional with all planned features implemented. Resource propagation ensures long-term sustainability while preventing overpopulation.

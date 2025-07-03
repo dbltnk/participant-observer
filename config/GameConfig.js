@@ -146,37 +146,37 @@ window.GameConfig = {
         // All food/resource types with complete data (easier to maintain)
         foodData: {
             // Plants
-            'blackberry': { calories: 90, vitamins: [0, 0, 0, 2, 0], water: 5, emoji: '🫐' },
-            'mushroom': { calories: 80, vitamins: [0, 0, 2, 0, 0], water: 0, emoji: '🍄' },
-            'herb': { calories: 60, vitamins: [2, 0, 0, 0, 0], water: 0, emoji: '🌿' },
-            'blueberry': { calories: 85, vitamins: [0, 0, 0, 2, 0], water: 5, emoji: '🫐' },
-            'raspberry': { calories: 90, vitamins: [0, 0, 0, 2, 0], water: 5, emoji: '🍓' },
-            'elderberry': { calories: 80, vitamins: [0, 0, 0, 2, 1], water: 0, emoji: '🫐' },
-            'wild_garlic': { calories: 70, vitamins: [1, 2, 0, 0, 0], water: 0, emoji: '🧄' },
-            'dandelion': { calories: 60, vitamins: [0, 2, 0, 0, 1], water: 0, emoji: '🌼' },
-            'nettle': { calories: 70, vitamins: [2, 0, 1, 0, 0], water: 0, emoji: '🌿' },
-            'sorrel': { calories: 65, vitamins: [0, 1, 2, 0, 0], water: 0, emoji: '🌿' },
-            'watercress': { calories: 60, vitamins: [0, 0, 2, 1, 0], water: 5, emoji: '🌿' },
-            'wild_onion': { calories: 75, vitamins: [1, 1, 0, 1, 0], water: 0, emoji: '🧅' },
-            'chickweed': { calories: 60, vitamins: [0, 2, 0, 1, 0], water: 0, emoji: '🌱' },
-            'plantain': { calories: 70, vitamins: [2, 0, 0, 1, 0], water: 0, emoji: '🌿' },
-            'yarrow': { calories: 60, vitamins: [0, 0, 1, 2, 0], water: 5, emoji: '🌸' },
+            'blackberry': { calories: 25, vitamins: [0, 0, 0, 20, 0], water: 5, emoji: '🫐' },
+            'mushroom': { calories: 20, vitamins: [0, 0, 20, 0, 0], water: 0, emoji: '🍄' },
+            'herb': { calories: 15, vitamins: [20, 0, 0, 0, 0], water: 0, emoji: '🌿' },
+            'blueberry': { calories: 25, vitamins: [0, 0, 0, 20, 0], water: 5, emoji: '🫐' },
+            'raspberry': { calories: 25, vitamins: [0, 0, 0, 20, 0], water: 5, emoji: '🍓' },
+            'elderberry': { calories: 20, vitamins: [0, 0, 0, 20, 10], water: 0, emoji: '🫐' },
+            'wild_garlic': { calories: 20, vitamins: [10, 20, 0, 0, 0], water: 0, emoji: '🧄' },
+            'dandelion': { calories: 15, vitamins: [0, 20, 0, 0, 10], water: 0, emoji: '🌼' },
+            'nettle': { calories: 20, vitamins: [20, 0, 10, 0, 0], water: 0, emoji: '🌿' },
+            'sorrel': { calories: 18, vitamins: [0, 10, 20, 0, 0], water: 0, emoji: '🌿' },
+            'watercress': { calories: 15, vitamins: [0, 0, 20, 10, 0], water: 5, emoji: '🌿' },
+            'wild_onion': { calories: 20, vitamins: [10, 10, 0, 10, 0], water: 0, emoji: '🧅' },
+            'chickweed': { calories: 15, vitamins: [0, 20, 0, 10, 0], water: 0, emoji: '🌱' },
+            'plantain': { calories: 20, vitamins: [20, 0, 0, 10, 0], water: 0, emoji: '🌿' },
+            'yarrow': { calories: 15, vitamins: [0, 0, 10, 20, 0], water: 5, emoji: '🌸' },
             // Animals
-            'rabbit': { calories: 200, vitamins: [0, 2, 0, 0, 0], water: 0, emoji: '🐰' },
-            'deer': { calories: 300, vitamins: [0, 2, 0, 0, 2], water: 0, emoji: '🦌' },
-            'squirrel': { calories: 120, vitamins: [1, 1, 0, 0, 0], water: 0, emoji: '🐿️' },
-            'pheasant': { calories: 140, vitamins: [0, 2, 1, 0, 0], water: 0, emoji: '🦃' },
-            'duck': { calories: 130, vitamins: [0, 1, 2, 0, 0], water: 0, emoji: '🦆' },
-            'goose': { calories: 150, vitamins: [0, 1, 1, 1, 0], water: 0, emoji: '🦢' },
-            'hare': { calories: 180, vitamins: [0, 2, 0, 1, 0], water: 0, emoji: '🐰' },
-            'fox': { calories: 110, vitamins: [1, 0, 2, 0, 0], water: 0, emoji: '🦊' },
-            'boar': { calories: 220, vitamins: [0, 2, 0, 2, 0], water: 0, emoji: '🐗' },
-            'elk': { calories: 250, vitamins: [0, 2, 0, 0, 2], water: 0, emoji: '🦌' },
-            'marten': { calories: 100, vitamins: [1, 0, 1, 1, 0], water: 0, emoji: '🦦' },
-            'grouse': { calories: 120, vitamins: [0, 1, 2, 0, 0], water: 0, emoji: '🦃' },
-            'woodcock': { calories: 110, vitamins: [0, 1, 1, 1, 0], water: 0, emoji: '🦅' },
-            'beaver': { calories: 160, vitamins: [1, 1, 0, 1, 0], water: 0, emoji: '🦫' },
-            'otter': { calories: 130, vitamins: [1, 0, 1, 1, 0], water: 0, emoji: '🦦' },
+            'rabbit': { calories: 35, vitamins: [0, 20, 0, 0, 0], water: 0, emoji: '🐰' },
+            'deer': { calories: 40, vitamins: [0, 20, 0, 0, 20], water: 0, emoji: '🦌' },
+            'squirrel': { calories: 30, vitamins: [10, 10, 0, 0, 0], water: 0, emoji: '🐿️' },
+            'pheasant': { calories: 32, vitamins: [0, 20, 10, 0, 0], water: 0, emoji: '🦃' },
+            'duck': { calories: 30, vitamins: [0, 10, 20, 0, 0], water: 0, emoji: '🦆' },
+            'goose': { calories: 32, vitamins: [0, 10, 10, 10, 0], water: 0, emoji: '🦢' },
+            'hare': { calories: 35, vitamins: [0, 20, 0, 10, 0], water: 0, emoji: '🐰' },
+            'fox': { calories: 28, vitamins: [10, 0, 20, 0, 0], water: 0, emoji: '🦊' },
+            'boar': { calories: 38, vitamins: [0, 20, 0, 20, 0], water: 0, emoji: '🐗' },
+            'elk': { calories: 40, vitamins: [0, 20, 0, 0, 20], water: 0, emoji: '🦌' },
+            'marten': { calories: 25, vitamins: [10, 0, 10, 10, 0], water: 0, emoji: '🦦' },
+            'grouse': { calories: 28, vitamins: [0, 10, 20, 0, 0], water: 0, emoji: '🦃' },
+            'woodcock': { calories: 25, vitamins: [0, 10, 10, 10, 0], water: 0, emoji: '🦅' },
+            'beaver': { calories: 30, vitamins: [10, 10, 0, 10, 0], water: 0, emoji: '🦫' },
+            'otter': { calories: 28, vitamins: [10, 0, 10, 10, 0], water: 0, emoji: '🦦' },
             // Resources (non-food)
             'tree': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, emoji: '🌲' }
         }
@@ -215,7 +215,8 @@ window.GameConfig = {
     // Well settings
     wells: {
         initialWaterLevel: 10, // Starting water level for wells
-        dailyRefill: 4 // Water refilled per day
+        dailyRefill: 4, // Water refilled per day
+        drinkingAmount: 50 // Amount of water restored when drinking from well
     },
 
     // Fire settings
