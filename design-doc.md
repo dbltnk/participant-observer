@@ -4,7 +4,9 @@
 
 ### I. Core Concept
 
-The game centers on **sustainability** in a low-fantasy world inspired by the Alps. Players must manage their needs (temperature, water, calories, vitamins) while interacting with a shared, finite world. The core dynamic explores the tension between personal survival and the well-being of other inhabitants, with the implicit goal of not driving the environment out of balance. The game world is not small; it takes at least 5 minutes of walking to reach an edge.
+**V1 (Current):** The game centers on **sustainability** in a low-fantasy world inspired by the Alps. Players must manage their needs (temperature, water, calories, vitamins) while interacting with a shared, finite world. The core dynamic explores the tension between personal survival and the well-being of other inhabitants, with the implicit goal of not driving the environment out of balance. The game world is not small; it takes at least 5 minutes of walking to reach an edge.
+
+**V2 (Future):** The game evolves into a **mystery of survival** where players must learn through observation and experimentation. Every seed generates a unique world with different nutritional properties, poisonous plants, and survival strategies. The core gameplay becomes about **following your neighbors to learn from them** - observing what they eat, when they get sick, and why certain resources thrive or die out. Players must replay each seed multiple times to discover the secrets of survival and help their community thrive.
 
 ---
 
@@ -118,8 +120,11 @@ The game centers on **sustainability** in a low-fantasy world inspired by the Al
 
 ### VIII. Game Dynamic & Vibe
 
-* **Expected Dynamic:** The player attempts to survive by any means, which can inadvertently lead to the demise of other villagers (through resource depletion from communal/personal boxes or over-harvesting of plants and animals).
-* **Vibe:** Slightly eerie, somber. More purgatory than a full-on fight for survival or a happy fantasy adventure.
+* **V1 Expected Dynamic:** The player attempts to survive by any means, which can inadvertently lead to the demise of other villagers (through resource depletion from communal/personal boxes or over-harvesting of plants and animals).
+* **V1 Vibe:** Slightly eerie, somber. More purgatory than a full-on fight for survival or a happy fantasy adventure.
+
+* **V2 Expected Dynamic:** The player becomes a **detective of survival**, observing patterns in villager behavior, resource growth, and environmental changes. Each seed presents unique challenges that require multiple playthroughs to understand. The goal shifts from simple survival to **community sustainability through knowledge**.
+* **V2 Vibe:** Mysterious, contemplative. A puzzle game disguised as a survival game, where the real challenge is understanding the world's hidden rules.
 
 ---
 
@@ -134,12 +139,62 @@ The game centers on **sustainability** in a low-fantasy world inspired by the Al
 
 ### X. Future Enhancements (V2)
 
+#### Core V2 Concept: "Learning Through Observation"
+
+**The Mystery of Survival:**
+* **Procedural Nutrition:** Every seed generates different nutritional properties for all resources. What's healthy in one world might be poisonous in another.
+* **Villager Behavior Patterns:** Villagers develop unique eating habits and survival strategies based on what works in their world. Players must observe these patterns to learn.
+* **Environmental Clues:** Resource growth rates, animal behavior, and seasonal changes provide hints about what's safe to eat and when.
+* **Multiple Playthroughs Required:** Each seed requires 3-5 playthroughs to fully understand the survival mechanics of that specific world.
+
+**Enhanced Villager AI:**
+* **Learning Villagers:** Villagers remember what made them sick and what kept them healthy, developing preferences over time.
+* **Behavioral Clues:** Villagers show visible symptoms when eating poisonous food, helping players identify dangerous resources.
+* **Social Learning:** Villagers can learn from each other's successes and failures, creating emergent survival strategies.
+* **Personality Traits:** Each villager has unique risk tolerance and learning speed, affecting their survival strategies.
+
+**Advanced Resource System:**
+* **Dynamic Nutrition:** Food properties change based on season, location, and preparation method.
+* **Poisonous Variants:** Some resources have poisonous variants that look identical to safe ones.
+* **Growth Patterns:** Resources grow and die based on complex environmental factors that players must learn to predict.
+* **Seasonal Changes:** Different resources become available or dangerous based on the time of year.
+
+**Knowledge System:**
+* **Observation Journal:** Players can record observations about villager behavior and resource properties.
+* **Hypothesis Testing:** Players can test theories about what's safe to eat by observing villager reactions.
+* **Community Knowledge:** Successful strategies can be shared with villagers through specific actions.
+* **Discovery Rewards:** Finding the optimal survival strategy for a seed unlocks special insights.
+
+**Technical Enhancements:**
 * Ability to load a game from a specific random seed.
 * Pixel art visuals and refined color palettes.
 * Music and SFX.
 * Collision detection for movement.
 * Basic pathfinding for villagers.
-* Biomes.
+* Biomes with unique environmental rules.
 * Expanded map size (20+ screens in any direction).
+* Advanced UI for observation and note-taking.
+* Replay system to review past attempts at the same seed.
+
+**V2 Success Metrics:**
+* Players willingly replay the same seed multiple times to discover its secrets.
+* Emergent storytelling through villager behavior and community survival.
+* Each seed feels like a unique puzzle to solve rather than a generic survival challenge.
+* Players develop genuine attachment to their villagers and community.
+
+---
+
+### XI. V1 vs V2 Comparison
+
+| Aspect | V1 (Current) | V2 (Future) |
+|--------|--------------|-------------|
+| **Core Goal** | Survive and manage resources | Learn the world's secrets through observation |
+| **Replayability** | Different seeds = different layouts | Same seed = multiple playthroughs to understand |
+| **Villager Role** | Resource competition and community management | Teachers and subjects of observation |
+| **Resource System** | Fixed nutritional properties | Procedurally generated properties per seed |
+| **Player Agency** | Direct survival actions | Detective work and hypothesis testing |
+| **Success Condition** | Survive as long as possible | Discover optimal survival strategy for the community |
+| **Learning Curve** | Learn game mechanics once | Learn unique world rules for each seed |
+| **Emotional Investment** | Resource management tension | Community building and discovery satisfaction |
 
 ---

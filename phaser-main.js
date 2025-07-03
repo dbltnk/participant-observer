@@ -308,8 +308,9 @@ console.log('Phaser main loaded');
         }
 
         update(deltaTime, gameTime, entities, storageBoxes) {
-            // Store reference to game entities
+            // Store reference to game entities and current game time
             this.gameEntities = entities;
+            this.currentGameTime = gameTime;
 
             // Update needs
             this.updateNeeds(deltaTime, gameTime);
@@ -470,7 +471,7 @@ console.log('Phaser main loaded');
 
                 // Check if we're close enough to collect
                 if (distance(this.position, this.currentTarget.position) <= GameConfig.player.interactionThreshold) {
-                    this.collectResource(this.currentTarget);
+                    this.collectResource(this.currentTarget, this.currentGameTime);
                     this.currentTarget = null;
                     this.goalTimer = 0; // Reset timer after collecting
                 }
@@ -637,7 +638,7 @@ console.log('Phaser main loaded');
             }
         }
 
-        collectResource(entity) {
+        collectResource(entity, gameTime) {
             // Check if we can carry it
             const slot = this.inventory.findIndex(i => i === null);
             if (slot === -1) {
@@ -651,6 +652,7 @@ console.log('Phaser main loaded');
             if (Math.random() < GameConfig.villager.foragingEfficiency) {
                 this.inventory[slot] = { type: entity.type, emoji: entity.emoji };
                 entity.collected = true;
+                entity.collectedAt = gameTime || 0; // Track when collected for propagation
                 if (entity._phaserText) entity._phaserText.setVisible(false);
 
                 if (window.summaryLoggingEnabled) {
@@ -1526,6 +1528,7 @@ console.log('Phaser main loaded');
                         }
                         // Mark as collected, hide emoji, add to inventory
                         entity.collected = true;
+                        entity.collectedAt = this.playerState.currentTime; // Track when collected for propagation
                         textObj.setVisible(false);
                         this.playerState.inventory[slot] = { type: entity.type, emoji: entity.emoji };
                         this.updatePhaserUI();
@@ -1873,6 +1876,12 @@ console.log('Phaser main loaded');
             // Update villagers (with sleep acceleration if sleeping)
             const effectiveDelta = this.isSleeping ? delta * this.sleepTimeAcceleration : delta;
             this.updateVillagers(effectiveDelta);
+
+            // Update resource propagation (overnight)
+            this.updateResourcePropagation();
+
+            // Update animal fleeing behavior
+            this.updateAnimalFleeing();
 
             // Needs (with sleep acceleration if sleeping)
             updateNeeds(this.playerState, effectiveDelta);
@@ -2299,6 +2308,142 @@ console.log('Phaser main loaded');
                     }
                 }
             }
+
+            // Update resource count debug display
+            this.updateResourceCountDisplay();
+        }
+
+        updateResourceCountDisplay() {
+            if (!window.villagerDebugEnabled) {
+                if (this.resourceCountText) {
+                    this.resourceCountText.setVisible(false);
+                }
+                return;
+            }
+
+            // Create resource count text if it doesn't exist
+            if (!this.resourceCountText) {
+                this.resourceCountText = this.add.text(20, 275, '', {
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
+                    color: '#fff',
+                    backgroundColor: '#000',
+                    padding: { left: 5, right: 5, top: 2, bottom: 2 }
+                }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000);
+                this.uiContainer.add(this.resourceCountText);
+            }
+
+            // Count resources by type (in the wild)
+            const wildCounts = {};
+            for (const entity of this.entities) {
+                if (ALL_FOOD_TYPES.includes(entity.type) && !entity.collected) {
+                    wildCounts[entity.type] = (wildCounts[entity.type] || 0) + 1;
+                }
+            }
+
+            // Count resources in inventories and storage
+            const storedCounts = {};
+
+            // Player inventory
+            for (const item of this.playerState.inventory) {
+                if (item && ALL_FOOD_TYPES.includes(item.type)) {
+                    storedCounts[item.type] = (storedCounts[item.type] || 0) + 1;
+                }
+            }
+
+            // Villager inventories
+            for (const villager of this.villagers) {
+                if (villager && !villager.isDead) {
+                    for (const item of villager.inventory) {
+                        if (item && ALL_FOOD_TYPES.includes(item.type)) {
+                            storedCounts[item.type] = (storedCounts[item.type] || 0) + 1;
+                        }
+                    }
+                }
+            }
+
+            // Storage boxes
+            for (const entity of this.entities) {
+                if (entity.type === 'storage_box' && entity.items) {
+                    for (const item of entity.items) {
+                        if (item && ALL_FOOD_TYPES.includes(item.type)) {
+                            storedCounts[item.type] = (storedCounts[item.type] || 0) + 1;
+                        }
+                    }
+                }
+            }
+
+            // Build display text with color coding - show ALL food types
+            let displayText = 'Resource Counts:\n';
+            const sortedTypes = ALL_FOOD_TYPES.sort();
+
+            for (const type of sortedTypes) {
+                const emoji = this.getResourceEmoji(type);
+                const wildCount = wildCounts[type] || 0;
+                const storedCount = storedCounts[type] || 0;
+
+                // Use grey text for extinct resources (wild count = 0)
+                if (wildCount === 0) {
+                    displayText += `%c${emoji} ${type}: ${wildCount}+${storedCount}\n`;
+                } else {
+                    displayText += `${emoji} ${type}: ${wildCount}+${storedCount}\n`;
+                }
+            }
+
+            // Add total
+            const totalWild = Object.values(wildCounts).reduce((sum, count) => sum + count, 0);
+            const totalStored = Object.values(storedCounts).reduce((sum, count) => sum + count, 0);
+            displayText += `\nTotal: ${totalWild}+${totalStored}`;
+
+            // Split text by color markers and create multiple text objects
+            this.updateResourceCountTextWithColors(displayText);
+        }
+
+        updateResourceCountTextWithColors(displayText) {
+            // Remove existing resource count text
+            if (this.resourceCountText) {
+                this.resourceCountText.destroy();
+                this.resourceCountText = null;
+            }
+
+            // Split text by color markers
+            const parts = displayText.split(/(%c)/);
+            let currentY = 275;
+            const lineHeight = 12;
+
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                if (part === '%c') {
+                    // This is a color marker, next part should be grey
+                    continue;
+                }
+
+                if (part.trim() === '') continue;
+
+                // Determine color based on whether this part follows a color marker
+                const isGrey = i > 0 && parts[i - 1] === '%c';
+                const color = isGrey ? '#888888' : '#ffffff';
+
+                // Create text object for this part
+                const textObj = this.add.text(20, currentY, part, {
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
+                    color: color,
+                    backgroundColor: '#000',
+                    padding: { left: 5, right: 5, top: 2, bottom: 2 }
+                }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000);
+
+                this.uiContainer.add(textObj);
+
+                // Store reference to main text object for visibility control
+                if (!this.resourceCountText) {
+                    this.resourceCountText = textObj;
+                }
+
+                // Calculate next Y position based on number of lines in this part
+                const lines = part.split('\n').length;
+                currentY += (lines - 1) * lineHeight;
+            }
         }
 
         cookFoodNearFire(fireEntity) {
@@ -2655,6 +2800,241 @@ console.log('Phaser main loaded');
 
                         this.playerState.needs.temperature = Math.min(GameConfig.needs.fullValue, this.playerState.needs.temperature + temperatureGain);
                         break; // Only apply from one fire
+                    }
+                }
+            }
+        }
+
+        updateResourcePropagation() {
+            const t = getCurrentTime(this.playerState);
+            const hour = t.hour;
+
+            // Only propagate during night hours (22:00 - 06:00) to simulate overnight growth
+            if (hour >= 22 || hour <= 6) {
+                // Check each collected resource for propagation
+                for (const entity of this.entities) {
+                    if (entity.collected && entity.type !== 'tree' && ALL_FOOD_TYPES.includes(entity.type)) {
+                        // Check if enough time has passed (at least 1 game day)
+                        const timeSinceCollection = this.playerState.currentTime - (entity.collectedAt || 0);
+                        if (timeSinceCollection >= GameConfig.time.secondsPerDay) {
+                            // Calculate propagation chance based on global resource count
+                            const globalCount = this.getGlobalResourceCount(entity.type);
+                            const baseChance = GameConfig.resources.propagationChance;
+                            const densityFactor = Math.max(0.1, 1 - (globalCount / GameConfig.resources.maxDensity));
+                            const finalChance = baseChance * densityFactor;
+
+                            // Attempt to spawn new resource nearby
+                            if (Math.random() < finalChance) {
+                                const newPosition = this.findPropagationPosition(entity.position, entity.type);
+                                if (newPosition) {
+                                    const newEntity = {
+                                        position: newPosition,
+                                        type: entity.type,
+                                        emoji: entity.emoji,
+                                        collected: false,
+                                        propagationChance: entity.propagationChance,
+                                        clusterId: entity.clusterId
+                                    };
+
+                                    // Create visual representation
+                                    const fontSize = 22;
+                                    const textObj = this.add.text(newPosition.x, newPosition.y, newEntity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+                                    newEntity._phaserText = textObj;
+                                    this.worldEntities.push(textObj);
+
+                                    // Add interaction
+                                    textObj.setInteractive({ useHandCursor: true });
+                                    textObj.on('pointerdown', () => {
+                                        if (newEntity.collected) return;
+                                        const dist = distance(this.playerState.position, newEntity.position);
+                                        assert(dist <= GameConfig.player.interactionThreshold, 'Tried to collect resource out of range');
+                                        const slot = this.playerState.inventory.findIndex(i => i === null);
+                                        if (slot === -1) {
+                                            this.showTempMessage('Inventory full!', 1500);
+                                            return;
+                                        }
+                                        newEntity.collected = true;
+                                        newEntity.collectedAt = this.playerState.currentTime;
+                                        textObj.setVisible(false);
+                                        this.playerState.inventory[slot] = { type: newEntity.type, emoji: newEntity.emoji };
+                                        this.updatePhaserUI();
+                                        this.showTempMessage(`Collected ${newEntity.type}!`, 1200);
+                                    });
+
+                                    this.entities.push(newEntity);
+
+                                    if (window.summaryLoggingEnabled) {
+                                        console.log(`[Propagation] ${entity.type} propagated at (${Math.round(newPosition.x)}, ${Math.round(newPosition.y)}) - Global count: ${globalCount + 1}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        getGlobalResourceCount(resourceType) {
+            return this.entities.filter(e => e.type === resourceType && !e.collected).length;
+        }
+
+        findPropagationPosition(originalPosition, resourceType) {
+            const maxAttempts = 20;
+            const propagationRadius = GameConfig.resources.propagationRadius;
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                // Generate position within propagation radius
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = Math.random() * propagationRadius;
+                const newX = originalPosition.x + Math.cos(angle) * distance;
+                const newY = originalPosition.y + Math.sin(angle) * distance;
+
+                // Ensure within world bounds
+                if (newX < 0 || newX > GameConfig.world.width || newY < 0 || newY > GameConfig.world.height) {
+                    continue;
+                }
+
+                // Check if too close to village
+                if (this.isTooCloseToVillage({ x: newX, y: newY })) {
+                    continue;
+                }
+
+                // Check if position is already occupied
+                const tooClose = this.entities.some(e =>
+                    !e.collected &&
+                    distance({ x: newX, y: newY }, e.position) < 20
+                );
+
+                if (!tooClose) {
+                    return { x: newX, y: newY };
+                }
+            }
+
+            return null; // Could not find suitable position
+        }
+
+        updateAnimalFleeing() {
+            // Get all animal entities (rabbit, deer, etc.)
+            const animals = this.entities.filter(e =>
+                !e.collected &&
+                ['rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk', 'marten', 'grouse', 'woodcock', 'beaver', 'otter'].includes(e.type)
+            );
+
+            for (const animal of animals) {
+                let isFleeing = false;
+
+                // Check distance to player
+                const distToPlayer = distance(this.playerState.position, animal.position);
+                if (distToPlayer < 100) { // Flee if player is within 100 pixels
+                    this.fleeFromTarget(animal, this.playerState.position);
+                    isFleeing = true;
+                }
+
+                // Check distance to villagers
+                for (const villager of this.villagers) {
+                    if (villager && !villager.isDead) {
+                        const distToVillager = distance(villager.position, animal.position);
+                        if (distToVillager < 100) { // Flee if villager is within 100 pixels
+                            this.fleeFromTarget(animal, villager.position);
+                            isFleeing = true;
+                            break; // Only flee from one threat at a time
+                        }
+                    }
+                }
+
+                // Wander if not fleeing
+                if (!isFleeing) {
+                    this.updateAnimalWandering(animal);
+                }
+            }
+        }
+
+        fleeFromTarget(animal, targetPosition) {
+            // Calculate direction away from target
+            const dx = animal.position.x - targetPosition.x;
+            const dy = animal.position.y - targetPosition.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 0) {
+                // Move away at 80% speed
+                const fleeSpeed = GameConfig.player.moveSpeed * 0.8 * (16 / 1000); // 80% speed, 16ms delta
+                const moveX = (dx / dist) * fleeSpeed;
+                const moveY = (dy / dist) * fleeSpeed;
+
+                // Update animal position
+                animal.position.x += moveX;
+                animal.position.y += moveY;
+
+                // Keep within world bounds
+                animal.position.x = Math.max(0, Math.min(GameConfig.world.width, animal.position.x));
+                animal.position.y = Math.max(0, Math.min(GameConfig.world.height, animal.position.y));
+
+                // Update visual position
+                if (animal._phaserText) {
+                    animal._phaserText.setPosition(animal.position.x, animal.position.y);
+                }
+            }
+        }
+
+        updateAnimalWandering(animal) {
+            // Initialize wandering state if not exists
+            if (!animal.wanderState) {
+                animal.wanderState = {
+                    targetPosition: null,
+                    wanderSpeed: GameConfig.player.moveSpeed * (0.3 + Math.random() * 0.2), // 30-50% speed
+                    changeDirectionTimer: 0,
+                    changeDirectionInterval: 2000 + Math.random() * 3000 // 2-5 seconds
+                };
+            }
+
+            const wander = animal.wanderState;
+            wander.changeDirectionTimer += 16; // 16ms per frame
+
+            // Change direction periodically or if reached target
+            if (wander.changeDirectionTimer >= wander.changeDirectionInterval ||
+                (wander.targetPosition && distance(animal.position, wander.targetPosition) < 20)) {
+
+                // Pick new random direction
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = 50 + Math.random() * 100; // 50-150 pixels away
+                wander.targetPosition = {
+                    x: animal.position.x + Math.cos(angle) * distance,
+                    y: animal.position.y + Math.sin(angle) * distance
+                };
+
+                // Keep within world bounds
+                wander.targetPosition.x = Math.max(0, Math.min(GameConfig.world.width, wander.targetPosition.x));
+                wander.targetPosition.y = Math.max(0, Math.min(GameConfig.world.height, wander.targetPosition.y));
+
+                // Reset timer and pick new random speed
+                wander.changeDirectionTimer = 0;
+                wander.wanderSpeed = GameConfig.player.moveSpeed * (0.3 + Math.random() * 0.2); // 30-50% speed
+                wander.changeDirectionInterval = 2000 + Math.random() * 3000; // 2-5 seconds
+            }
+
+            // Move towards target if we have one
+            if (wander.targetPosition) {
+                const dx = wander.targetPosition.x - animal.position.x;
+                const dy = wander.targetPosition.y - animal.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 0) {
+                    // Move at wandering speed
+                    const moveSpeed = wander.wanderSpeed * (16 / 1000); // Convert to per-frame movement
+                    const moveX = (dx / dist) * moveSpeed;
+                    const moveY = (dy / dist) * moveSpeed;
+
+                    // Update animal position
+                    animal.position.x += moveX;
+                    animal.position.y += moveY;
+
+                    // Keep within world bounds
+                    animal.position.x = Math.max(0, Math.min(GameConfig.world.width, animal.position.x));
+                    animal.position.y = Math.max(0, Math.min(GameConfig.world.height, animal.position.y));
+
+                    // Update visual position
+                    if (animal._phaserText) {
+                        animal._phaserText.setPosition(animal.position.x, animal.position.y);
                     }
                 }
             }
