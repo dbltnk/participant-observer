@@ -256,6 +256,25 @@ console.log('Phaser main loaded');
             this.randomDirection = Math.random() * 2 * Math.PI; // Random direction for exploration
             this.explorationTarget = null; // Current exploration target position
 
+            // Camp leaving system
+            this.isLeavingCamp = false;
+            this.leaveCampTarget = null;
+
+            // Daily routine system
+            this.wakeUpTime = 8 + Math.random(); // Random wake up between 8:00-9:00
+            this.dailyTasks = {
+                woodTrips: Math.floor(Math.random() * 2) + 1, // 1-2 wood trips per day
+                foodTrips: Math.floor(Math.random() * 2) + 3, // 3-4 food trips per day
+                waterTrips: Math.floor(Math.random() * 2) + 1  // 1-2 water trips per day
+            };
+            this.completedTasks = {
+                woodTrips: 0,
+                foodTrips: 0,
+                waterTrips: 0
+            };
+            this.currentTask = null; // 'wood', 'food', 'water', or null
+            this.lastTaskReset = 0; // Track when we last reset daily tasks
+
             console.log(`[Villager] Created villager ${name} at camp ${villagerId}`);
         }
 
@@ -318,23 +337,34 @@ console.log('Phaser main loaded');
             const t = this.getCurrentTime(gameTime);
             const hour = t.hour;
 
-            // State transitions based on time
-            if (hour >= GameConfig.time.dayStartHour && hour < GameConfig.time.nightStartHour) {
-                if (this.state === 'SLEEPING') {
-                    this.state = 'FORAGING';
-                    this.stateTimer = 0; // Reset timer
-                    console.log(`[Villager] ${this.name} woke up and started foraging`);
-                }
-            } else if (hour >= GameConfig.time.nightStartHour) {
-                if (this.state === 'FORAGING') {
-                    this.state = 'RETURNING';
-                    this.stateTimer = 0; // Reset timer
-                    console.log(`[Villager] ${this.name} returning to camp for the night`);
-                }
+            // Reset daily tasks at 8 AM each day
+            if (hour >= 8 && this.lastTaskReset < 8) {
+                this.resetDailyTasks();
+                this.lastTaskReset = hour;
             }
 
-            // State-specific transitions with cooldowns
-            if (this.state === 'RETURNING' && this.isAtCamp()) {
+            // State transitions based on time and needs
+            if (this.state === 'SLEEPING') {
+                // Wake up at individual wake up time
+                if (hour >= this.wakeUpTime) {
+                    this.state = 'FORAGING';
+                    this.stateTimer = 0; // Reset timer
+                    console.log(`[Villager] ${this.name} woke up at ${this.wakeUpTime.toFixed(1)} and started foraging`);
+                }
+            } else if (this.state === 'FORAGING') {
+                // Return to camp if needs are critical, inventory is full, or it's after 18:00
+                const shouldReturn = hour >= 18 ||
+                    this.needs.calories < 50 ||
+                    this.needs.water < 50 ||
+                    this.needs.temperature < 50 ||
+                    this.isInventoryFull();
+
+                if (shouldReturn) {
+                    this.state = 'RETURNING';
+                    this.stateTimer = 0; // Reset timer
+                    console.log(`[Villager] ${this.name} returning to camp (time: ${hour}, needs: ${this.needs.calories.toFixed(0)}/${this.needs.water.toFixed(0)}/${this.needs.temperature.toFixed(0)}, inventory full: ${this.isInventoryFull()})`);
+                }
+            } else if (this.state === 'RETURNING' && this.isAtCamp()) {
                 this.state = 'EATING';
                 this.stateTimer = 0; // Reset timer
                 console.log(`[Villager] ${this.name} arrived at camp and is eating`);
@@ -357,8 +387,12 @@ console.log('Phaser main loaded');
             switch (this.state) {
                 case 'FORAGING':
                     // First, move away from camp if we're too close
-                    if (this.isAtCamp()) {
-                        this.leaveCamp(deltaTime);
+                    if (this.isAtCamp() && !this.isLeavingCamp) {
+                        this.startLeavingCamp();
+                    }
+
+                    if (this.isLeavingCamp) {
+                        this.continueLeavingCamp(deltaTime);
                     } else {
                         this.forage(entities, deltaTime);
                     }
@@ -378,6 +412,11 @@ console.log('Phaser main loaded');
         forage(entities, deltaTime) {
             // Increment goal timer
             this.goalTimer += deltaTime;
+
+            // Debug logging for forage method entry
+            if (window.summaryLoggingEnabled && Math.random() < 0.02) { // 2% chance per frame when spam enabled
+                console.log(`[Villager] ${this.name} forage: currentTarget=${this.currentTarget ? this.currentTarget.type : 'none'}, explorationTarget=${this.explorationTarget ? 'set' : 'none'}, goalTimer=${Math.round(this.goalTimer)}`);
+            }
 
             // Check if we have a current target and stick with it for goalPersistenceTime
             if (this.currentTarget && !this.currentTarget.collected && this.goalTimer < this.goalPersistenceTime) {
@@ -421,11 +460,17 @@ console.log('Phaser main loaded');
             // Reset goal timer when finding new target
             this.goalTimer = 0;
 
+            // Debug logging
+            if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance per frame when spam enabled
+                console.log(`[Villager] ${this.name} findNewForagingTarget: checking ${entities.length} entities`);
+            }
+
             // First check memory for known locations
             const knownTarget = this.findNearestKnownFood(entities);
             if (knownTarget) {
                 this.currentTarget = knownTarget;
                 this.explorationTarget = null; // Clear exploration target
+                console.log(`[Villager] ${this.name} using known target: ${knownTarget.type}`);
                 return;
             }
 
@@ -434,6 +479,9 @@ console.log('Phaser main loaded');
             if (!foundTarget) {
                 // No resources found, set exploration target in random direction
                 this.setExplorationTarget();
+                if (window.summaryLoggingEnabled && Math.random() < 0.05) { // 5% chance per frame when spam enabled
+                    console.log(`[Villager] ${this.name} no targets found, setting exploration target`);
+                }
             }
         }
 
@@ -466,9 +514,11 @@ console.log('Phaser main loaded');
             // Find nearest uncollected resource within exploration radius
             let nearest = null;
             let nearestDistance = Infinity;
+            let validEntitiesFound = 0;
 
             for (const entity of entities) {
                 if (this.isValidForagingTarget(entity)) {
+                    validEntitiesFound++;
                     const dist = distance(this.position, entity.position);
                     if (dist < nearestDistance && dist <= GameConfig.villager.explorationRadius) {
                         nearest = entity;
@@ -477,15 +527,24 @@ console.log('Phaser main loaded');
                 }
             }
 
+            // Debug logging
+            if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance per frame when spam enabled
+                console.log(`[Villager] ${this.name} exploreNewArea: found ${validEntitiesFound} valid entities, nearest at ${nearestDistance ? Math.round(nearestDistance) : 'none'} distance, exploration radius: ${GameConfig.villager.explorationRadius}`);
+            }
+
             if (nearest) {
                 this.currentTarget = nearest;
                 this.explorationTarget = null; // Clear exploration target
                 // Add to memory
                 this.addToMemory(nearest);
+                console.log(`[Villager] ${this.name} found target: ${nearest.type} at distance ${Math.round(nearestDistance)}`);
                 return true; // Found a target
             } else {
                 // No targets found, increment attempts
                 this.foragingAttempts++;
+                if (window.summaryLoggingEnabled && Math.random() < 0.05) { // 5% chance per frame when spam enabled
+                    console.log(`[Villager] ${this.name} no targets found, attempts: ${this.foragingAttempts}`);
+                }
                 return false; // No target found
             }
         }
@@ -712,18 +771,45 @@ console.log('Phaser main loaded');
             }
         }
 
-        leaveCamp(deltaTime) {
-            // Move in a random direction away from camp
+        startLeavingCamp() {
+            // Set a target 100 pixels away from camp in a random direction
             const angle = Math.random() * 2 * Math.PI;
             const targetX = this.campPosition.x + Math.cos(angle) * 100;
             const targetY = this.campPosition.y + Math.sin(angle) * 100;
 
-            this.moveTowards({ x: targetX, y: targetY }, deltaTime);
+            this.leaveCampTarget = { x: targetX, y: targetY };
+            this.isLeavingCamp = true;
 
-            // Debug: Log leaving camp (behind log spam gate)
-            if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance per frame when spam enabled
-                console.log(`[Villager] ${this.name} leaving camp, moving to (${Math.round(targetX)}, ${Math.round(targetY)})`);
+            console.log(`[Villager] ${this.name} starting to leave camp, target: (${Math.round(targetX)}, ${Math.round(targetY)})`);
+        }
+
+        continueLeavingCamp(deltaTime) {
+            if (!this.leaveCampTarget) {
+                this.isLeavingCamp = false;
+                return;
             }
+
+            // Move towards the leave camp target
+            this.moveTowards(this.leaveCampTarget, deltaTime);
+
+            // Check if we've reached the target or are far enough from camp
+            const distanceToTarget = distance(this.position, this.leaveCampTarget);
+            const distanceFromCamp = distance(this.position, this.campPosition);
+
+            if (distanceToTarget < 20 || distanceFromCamp > 80) {
+                // We've successfully left camp
+                this.isLeavingCamp = false;
+                this.leaveCampTarget = null;
+                console.log(`[Villager] ${this.name} successfully left camp, now at (${Math.round(this.position.x)}, ${Math.round(this.position.y)})`);
+            }
+        }
+
+        leaveCamp(deltaTime) {
+            // Legacy method - now handled by startLeavingCamp and continueLeavingCamp
+            if (!this.isLeavingCamp) {
+                this.startLeavingCamp();
+            }
+            this.continueLeavingCamp(deltaTime);
         }
 
         isInventoryFull() {
@@ -742,6 +828,11 @@ console.log('Phaser main loaded');
         }
 
         updateVisuals() {
+            // Update positions for all visual elements
+            if (this.phaserText) {
+                this.phaserText.setPosition(this.position.x, this.position.y);
+            }
+
             // Update health emoji based on needs
             const avgNeeds = (this.needs.temperature + this.needs.water + this.needs.calories +
                 this.needs.vitamins.reduce((a, b) => a + b, 0) / this.needs.vitamins.length) / 4;
@@ -752,12 +843,47 @@ console.log('Phaser main loaded');
             else this.healthEmoji = '😵';
 
             if (this.nameText) {
+                this.nameText.setPosition(this.position.x, this.position.y - 30);
                 this.nameText.setText(`${this.name} ${this.healthEmoji}`);
             }
 
-            // Update state text
+            // Update state text with action and task emojis (only show if debug enabled)
             if (this.stateText) {
-                this.stateText.setText(this.state);
+                this.stateText.setPosition(this.position.x, this.position.y + 30);
+                if (window.villagerDebugEnabled) {
+                    // Select next task if we don't have one
+                    if (!this.currentTask && this.state === 'FORAGING') {
+                        this.selectNextTask();
+                    }
+
+                    const taskEmoji = this.currentTask ? this.getTaskEmoji(this.currentTask) : '🔍';
+                    const actionEmoji = this.state === 'FORAGING' ? '🏃' :
+                        this.state === 'RETURNING' ? '🏠' :
+                            this.state === 'EATING' ? '🍽️' : '😴';
+
+                    this.stateText.setText(`${actionEmoji} ${this.state} ${taskEmoji}`);
+                    this.stateText.setVisible(true);
+                } else {
+                    this.stateText.setVisible(false);
+                }
+            }
+
+            // Update inventory display if debug enabled
+            if (this.inventoryText) {
+                this.inventoryText.setPosition(this.position.x, this.position.y + 45);
+                if (window.villagerDebugEnabled) {
+                    const inventory = this.getInventoryDisplay();
+                    this.inventoryText.setText(inventory || '∅');
+                    this.inventoryText.setVisible(true);
+                } else {
+                    this.inventoryText.setVisible(false);
+                }
+            }
+
+            // Update range indicator
+            if (this.rangeIndicator) {
+                this.rangeIndicator.setPosition(this.position.x, this.position.y);
+                this.rangeIndicator.setVisible(window.villagerDebugEnabled || false);
             }
         }
 
@@ -803,6 +929,14 @@ console.log('Phaser main loaded');
                 { fontSize: '10px', fontFamily: 'monospace', color: '#aaa', backgroundColor: '#000', padding: { left: 2, right: 2, top: 1, bottom: 1 } }
             ).setOrigin(0.5);
 
+            // Add inventory display
+            this.inventoryText = scene.add.text(
+                this.position.x,
+                this.position.y + 45,
+                '∅',
+                { fontSize: '8px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#000', padding: { left: 2, right: 2, top: 1, bottom: 1 } }
+            ).setOrigin(0.5);
+
             // Add exploration radius indicator (semi-transparent circle)
             this.rangeIndicator = scene.add.circle(
                 this.position.x,
@@ -812,13 +946,79 @@ console.log('Phaser main loaded');
                 0.1 // Very transparent
             ).setOrigin(0.5);
 
-            return [this.phaserText, this.nameText, this.stateText, this.rangeIndicator];
+            return [this.phaserText, this.nameText, this.stateText, this.inventoryText, this.rangeIndicator];
+        }
+
+        resetDailyTasks() {
+            this.dailyTasks = {
+                woodTrips: Math.floor(Math.random() * 2) + 1, // 1-2 wood trips per day
+                foodTrips: Math.floor(Math.random() * 2) + 3, // 3-4 food trips per day
+                waterTrips: Math.floor(Math.random() * 2) + 1  // 1-2 water trips per day
+            };
+            this.completedTasks = {
+                woodTrips: 0,
+                foodTrips: 0,
+                waterTrips: 0
+            };
+            this.currentTask = null;
+            console.log(`[Villager] ${this.name} daily tasks reset: ${this.dailyTasks.woodTrips} wood, ${this.dailyTasks.foodTrips} food, ${this.dailyTasks.waterTrips} water`);
+        }
+
+        selectNextTask() {
+            // Priority: water if low, then food, then wood
+            if (this.needs.water < 70 && this.completedTasks.waterTrips < this.dailyTasks.waterTrips) {
+                this.currentTask = 'water';
+                return;
+            }
+
+            if (this.completedTasks.foodTrips < this.dailyTasks.foodTrips) {
+                this.currentTask = 'food';
+                return;
+            }
+
+            if (this.completedTasks.woodTrips < this.dailyTasks.woodTrips) {
+                this.currentTask = 'wood';
+                return;
+            }
+
+            // All tasks completed, just forage for food
+            this.currentTask = 'food';
+        }
+
+        getTaskEmoji(task) {
+            const emojis = {
+                'wood': '🪵',
+                'food': '🍎',
+                'water': '💧'
+            };
+            return emojis[task] || '❓';
+        }
+
+        getInventoryDisplay() {
+            return this.inventory.filter(item => item !== null).map(item => {
+                // Extract the emoji from the item object (item.emoji) or fall back to type-based emojis
+                if (item.emoji) {
+                    return item.emoji;
+                }
+
+                // Fallback to type-based emojis if no emoji property
+                const emojis = {
+                    'blackberry': '🫐',
+                    'mushroom': '🍄',
+                    'herb': '🌿',
+                    'rabbit': '🐰',
+                    'deer': '🦌',
+                    'tree': '🌲'
+                };
+                return emojis[item.type || item] || '❓'; // Return emoji for type or fallback
+            }).join('');
         }
 
         destroy() {
             if (this.phaserText) this.phaserText.destroy();
             if (this.nameText) this.nameText.destroy();
             if (this.stateText) this.stateText.destroy();
+            if (this.inventoryText) this.inventoryText.destroy();
             if (this.rangeIndicator) this.rangeIndicator.destroy();
         }
     }
@@ -954,6 +1154,8 @@ console.log('Phaser main loaded');
             // --- Resources (Perlin noise placement) ---
             const resourceTypes = ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'];
             const totalResources = (cfg.villagerCount + 1) * cfg.resourcesPerVillager;
+            console.log(`[World Generation] Generating ${totalResources} resources for ${cfg.villagerCount} villagers + 1 player`);
+
             for (let i = 0; i < totalResources; i++) {
                 let attempts = 0, pos;
                 do {
@@ -969,6 +1171,8 @@ console.log('Phaser main loaded');
                 const emoji = this.getResourceEmoji(resourceType);
                 this.entities.push({ position: pos, type: resourceType, emoji, collected: false, propagationChance: GameConfig.resources.propagationChance });
             }
+
+            console.log(`[World Generation] Generated ${totalResources} resources, total entities: ${this.entities.length}`);
             // --- Render all entities as Phaser text objects ---
             this.worldEntities = [];
             for (const entity of this.entities) {
@@ -1129,6 +1333,26 @@ console.log('Phaser main loaded');
             // Info box (bottom left)
             this.ui.infoBox = this.add.text(margin, GameConfig.world.height - margin, 'Alpine Sustainability v1.0\nControls: WASD to move\nClick inventory slots to select', { fontSize: '13px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#222', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1);
             this.uiContainer.add(this.ui.infoBox);
+            // Debug toggle (bottom left, above log spam button)
+            this.ui.debugBtn = this.add.text(margin, GameConfig.world.height - margin - 120, '⚪ Debug: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive();
+            this.ui.debugBtn.on('pointerdown', () => {
+                window.villagerDebugEnabled = !window.villagerDebugEnabled;
+                updateDebugBtn.call(this);
+            });
+            function updateDebugBtn() {
+                if (window.villagerDebugEnabled) {
+                    this.ui.debugBtn.setText('🟢 Debug: ON').setColor('#fff').setBackgroundColor('#228B22');
+                } else {
+                    this.ui.debugBtn.setText('⚪ Debug: OFF').setColor('#ccc').setBackgroundColor('#444');
+                }
+            }
+            // Initialize debug state (default to OFF)
+            if (typeof window.villagerDebugEnabled === 'undefined') {
+                window.villagerDebugEnabled = false;
+            }
+            updateDebugBtn.call(this);
+            this.uiContainer.add(this.ui.debugBtn);
+
             // Log spam toggle (bottom left, above info box)
             this.ui.logSpamBtn = this.add.text(margin, GameConfig.world.height - margin - 90, '⚪ Log Spam: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive();
             this.ui.logSpamBtn.on('pointerdown', () => {
@@ -1269,6 +1493,13 @@ console.log('Phaser main loaded');
 
             // Get storage boxes for villager interactions
             const storageBoxes = this.entities.filter(e => e.type === 'storage_box');
+
+            // Debug: Log entity count occasionally (behind log spam gate)
+            if (window.summaryLoggingEnabled && Math.random() < 0.01) { // 1% chance per frame when spam enabled
+                const resourceEntities = this.entities.filter(e => ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'].includes(e.type));
+                const uncollectedResources = resourceEntities.filter(e => !e.collected);
+                console.log(`[MainScene] Total entities: ${this.entities.length}, Resources: ${resourceEntities.length}, Uncollected: ${uncollectedResources.length}`);
+            }
 
             // Update each villager
             for (let i = this.villagers.length - 1; i >= 0; i--) {
