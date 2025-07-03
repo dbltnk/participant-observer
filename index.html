@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Imprinted Assembly - Debug Mode</title>
+    <title>Alpine Sustainability - Debug Mode</title>
 
     <!-- Early console capture - must be first! -->
     <script>
@@ -75,41 +75,60 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Add any custom CSS here */
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #2d3748;
+            font-family: 'Courier New', monospace;
+        }
+
+        #game-area {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+            overflow: hidden;
+        }
+
+        .entity {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .player {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Debug info */
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 1000;
+        }
     </style>
 </head>
 
-<body class="bg-gray-100 p-8">
-    <div class="max-w-4xl mx-auto">
-        <h1 class="text-3xl font-bold text-gray-800 mb-8">Imprinted Assembly</h1>
-
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 class="text-xl font-semibold mb-4">Debug Interface</h2>
-            <p class="text-gray-600 mb-4">This page has automatic logging enabled. Check the logs/ directory for output
-                files.</p>
-
-            <div class="space-y-4">
-                <button id="test-log" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded">
-                    Test Console Log
-                </button>
-                <button id="test-warn" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">
-                    Test Console Warn
-                </button>
-                <button id="test-error" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">
-                    Test Console Error
-                </button>
-                <button id="add-element" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
-                    Add Test Element
-                </button>
-            </div>
-        </div>
-
-        <div id="dynamic-content" class="bg-white rounded-lg shadow-md p-6">
-            <h3 class="text-lg font-semibold mb-4">Dynamic Content Area</h3>
-            <p class="text-gray-600">Elements added here will be captured in DOM snapshots.</p>
-        </div>
+<body>
+    <div id="game-area">
+        <!-- Game content will be rendered here -->
     </div>
 
+    <!-- Game Scripts -->
+    <script src="config/GameConfig.js"></script>
+    <script src="game/Utils.js"></script>
+    <script src="game/World.js"></script>
+    <script src="game/Player.js"></script>
+    <script src="game/UI.js"></script>
+    <script src="game/Game.js"></script>
     <script src="app.js"></script>
 </body>
 

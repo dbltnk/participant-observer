@@ -1,6 +1,11 @@
+// Alpine Sustainability - Game Entry Point
 // Browser Logging System for LLM Debugging
 // Captures console output and DOM state with minimal performance impact
 
+// Global game instance
+window.game = null;
+
+// Browser Logging System
 class BrowserLogger {
     constructor() {
         this.logBuffer = [];
@@ -310,40 +315,89 @@ class BrowserLogger {
     }
 
     updateDebugPanel() {
-        // Debug panel removed - no longer needed
+        // Debug panel removed - no longer needed for game
     }
 
     setupEventListeners() {
-        // Test buttons
-        document.getElementById('test-log')?.addEventListener('click', () => {
-            console.log('Test log message from button click');
-        });
-
-        document.getElementById('test-warn')?.addEventListener('click', () => {
-            console.warn('Test warning message from button click');
-        });
-
-        document.getElementById('test-error')?.addEventListener('click', () => {
-            console.error('Test error message from button click');
-        });
-
-        document.getElementById('add-element')?.addEventListener('click', () => {
-            const container = document.getElementById('dynamic-content');
-            const newElement = document.createElement('div');
-            newElement.className = 'bg-yellow-100 border border-yellow-300 p-4 rounded mb-4';
-            newElement.innerHTML = `
-                <h4 class="font-semibold text-yellow-800">Dynamic Element ${Date.now()}</h4>
-                <p class="text-yellow-700">This element was added dynamically and will be captured in DOM snapshots.</p>
-            `;
-            container.appendChild(newElement);
-            console.log('Added dynamic element to DOM');
-        });
+        // No test buttons needed for game - logging runs automatically
     }
 }
 
 // Initialize logging system when DOM is ready
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => new BrowserLogger());
+    document.addEventListener('DOMContentLoaded', () => {
+        new BrowserLogger();
+        initGame();
+    });
 } else {
     new BrowserLogger();
-} 
+    initGame();
+}
+
+// Game initialization function
+function initGame() {
+    console.log('Initializing Alpine Sustainability...');
+
+    // Get seed from URL parameter or use default
+    const urlParams = new URLSearchParams(window.location.search);
+    const seedParam = urlParams.get('seed');
+    const seed = seedParam ? parseInt(seedParam) : 1;
+
+    // Create and start game
+    window.game = new Game(seed);
+    window.game.start();
+
+    // Add debug info
+    addDebugInfo();
+
+    console.log('Game initialization complete');
+}
+
+function addDebugInfo() {
+    const debugInfo = document.createElement('div');
+    debugInfo.className = 'debug-info';
+    debugInfo.innerHTML = `
+        <div>Alpine Sustainability v1.0</div>
+        <div>Seed: ${window.game.gameState.seed}</div>
+        <div>Controls: WASD to move</div>
+        <div>Click inventory slots to select</div>
+        <div>Logging: Active</div>
+    `;
+    document.body.appendChild(debugInfo);
+}
+
+// Handle window resize
+window.addEventListener('resize', () => {
+    if (window.game && window.game.ui) {
+        // UI will handle resize automatically with CSS
+        console.log('Window resized');
+    }
+});
+
+// Handle page visibility changes (pause/resume)
+document.addEventListener('visibilitychange', () => {
+    if (window.game) {
+        if (document.hidden) {
+            console.log('Game paused (page hidden)');
+            // Could implement pause functionality here
+        } else {
+            console.log('Game resumed (page visible)');
+        }
+    }
+});
+
+// Global error handler
+window.addEventListener('error', (event) => {
+    console.error('Global error:', event.error);
+    if (window.game) {
+        window.game.showMessage('An error occurred. Check console for details.');
+    }
+});
+
+// Unhandled promise rejection handler
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    if (window.game) {
+        window.game.showMessage('An error occurred. Check console for details.');
+    }
+}); 
