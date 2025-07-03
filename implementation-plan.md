@@ -50,19 +50,55 @@ sustain/
 4. ✅ Implement complete UI (need bars, inventory, time, seed)
 5. ✅ Add time system with proper acceleration
 
-### Phase 4: Villager AI 🔄 NOT STARTED
-1. 🔄 Create villager class
-2. 🔄 Implement state machine
-3. 🔄 Add memory system
-4. 🔄 Create foraging behavior
-5. 🔄 Implement basic pathfinding
+### Phase 4: Villager AI ✅ COMPLETED - FULLY FUNCTIONAL
+1. ✅ Create villager class with complete state machine
+2. ✅ Implement memory system for resource locations
+3. ✅ Add foraging behavior with exploration and goal persistence
+4. ✅ Create daily routine system (wake up, forage, return, eat, sleep)
+5. ✅ Implement needs system for villagers (same as player)
+6. ✅ Add visual representation with health emojis and debug info
+7. ✅ Implement death system with corpses
+8. ✅ Add camp leaving/returning logic
+9. ✅ Create task-based foraging (wood, food, water priorities)
+10. ✅ Add storage interaction system (personal and communal)
+11. ✅ Implement fire management and wood collection
+12. ✅ Add well interaction for water needs
 
-### Phase 5: Game Mechanics 🔄 NOT STARTED
-1. 🔄 Implement cooking system
-2. 🔄 Add fire management
-3. 🔄 Create storage system
-4. 🔄 Add sleeping mechanics
-5. 🔄 Implement resource propagation
+**Fully Functional Villager Features:**
+- ✅ 7 AI villagers with unique names and personalities
+- ✅ Complete daily routine: wake up at 8:00, forage until 18:00, return to camp
+- ✅ Memory system: villagers remember resource locations and return to known areas
+- ✅ Exploration system: villagers explore new areas when no known resources nearby
+- ✅ Needs management: temperature, water, calories, vitamins (same as player)
+- ✅ Death system: villagers die when needs reach zero, become permanent corpses
+- ✅ Visual feedback: health emojis, debug info, exploration radius indicators
+- ✅ Storage interaction: use personal storage first, then communal storage
+- ✅ Fire management: collect wood and add to camp fires
+- ✅ Well interaction: drink from wells to restore water
+- ✅ Task prioritization: water first, then food, then wood collection
+
+### Phase 5: Game Mechanics ✅ COMPLETED - FULLY FUNCTIONAL
+1. ✅ Implement cooking system (players and villagers can cook food near fires)
+2. ✅ Add fire management (players and villagers can add wood to fires)
+3. ✅ Create storage system (players and villagers can use storage boxes)
+4. ✅ Add sleeping mechanics (players can sleep to skip night)
+5. 🔄 Implement resource propagation (not implemented yet)
+6. ✅ Add player interactions with all objects
+
+**Fully Functional Game Mechanics:**
+- ✅ **Cooking System**: Players and villagers can cook food near burning fires
+- ✅ **Fire Management**: Add wood to fires, fires burn and provide warmth
+- ✅ **Storage System**: Personal and communal storage boxes with transfer interface
+- ✅ **Sleeping System**: Sleep until 8:00 AM with time acceleration
+- ✅ **Food Nutrition**: Different foods provide different calories and vitamins
+- ✅ **Raw vs Cooked Food**: Raw food provides half nutrition, cooked food provides full nutrition
+- ✅ **Debug System**: Toggle debug mode to see interaction circles and object info
+- ✅ **Object Interactions**: All objects (wells, fires, sleeping bags, storage) are interactive
+- ✅ **Inventory Management**: Right-click to eat food or remove items
+- ✅ **Villager AI Integration**: Villagers use all the same mechanics as players
+
+**Known limitations:**
+- Resource propagation not implemented yet (resources don't regrow)
 
 ### Phase 6: Polish & UI ✅ COMPLETED
 1. ✅ Complete UI implementation with all elements
@@ -71,7 +107,7 @@ sustain/
 4. ✅ Add comprehensive error handling
 5. ✅ Test and balance core systems
 
-## Current Status: PHASE 3 COMPLETE - READY FOR PHASE 4 (VILLAGER AI)
+## Current Status: PHASE 5 COMPLETE - READY FOR PHASE 6 (POLISH & RESOURCE PROPAGATION)
 
 **What you can test right now:**
 1. **Game loads** - Open index.html, game initializes with random seed
@@ -85,14 +121,24 @@ sustain/
 9. **Logging** - Browser console and server logs capture everything
 10. **Performance** - Smooth 60fps with deltaTime capping to prevent large jumps
 11. **Resource collection** - Click on resources to collect them into inventory
-12. **Inventory management** - Click slots to select, right-click to remove items
+12. **Inventory management** - Click slots to select, right-click to eat food or remove items
 13. **Well interaction** - Click wells to drink and restore water
+14. **Villager AI** - 7 AI villagers with complete daily routines and needs management
+15. **Villager memory** - Villagers remember resource locations and return to known areas
+16. **Villager exploration** - Villagers explore new areas when no known resources nearby
+17. **Villager death** - Villagers die when needs reach zero and become permanent corpses
+18. **Villager storage** - Villagers use personal and communal storage boxes
+19. **Villager fire management** - Villagers collect wood and add to camp fires
+20. **Debug system** - Toggle debug mode to see villager states, tasks, exploration radius, and object info
+21. **Ground texture** - Subtle ground texture using Perlin noise for better navigation
+22. **Fire interaction** - Add wood to fires, cook food near burning fires
+23. **Sleeping system** - Sleep at sleeping bags to skip night and restore needs
+24. **Storage system** - Transfer items between inventory and storage boxes
+25. **Cooking mechanics** - Cook food for better nutrition, eat raw food for half nutrition
+26. **Debug visualization** - See interaction distance circles and object status when debug is enabled
 
 **Known limitations for current test:**
-- No villager AI yet (villagers don't exist)
-- No cooking, fires, or storage system yet
-- No sleeping mechanics yet
-- Resource propagation not implemented yet
+- Resource propagation not implemented yet (resources don't regrow over time)
 
 ## Core Architecture
 
@@ -121,6 +167,7 @@ class MainScene extends Phaser.Scene {
         this.entities = []; // All game objects (resources, buildings, etc.)
         this.camps = []; // Camp locations for villager AI
         this.wells = []; // Well locations for water access
+        this.villagers = []; // AI villagers with complete behavior
     }
 }
 ```
@@ -136,6 +183,9 @@ class MainScene extends Phaser.Scene {
         const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
         const gameTimeDelta = (delta / 1000) * timeAcceleration;
         this.playerState.currentTime += gameTimeDelta;
+        
+        // Update villagers
+        this.updateVillagers(delta);
         
         // Update needs
         updateNeeds(this.playerState, delta);
@@ -196,18 +246,19 @@ class MainScene extends Phaser.Scene {
 }
 ```
 
-### 4. Villager AI System 🔄 NOT IMPLEMENTED
+### 4. Villager AI System ✅ IMPLEMENTED
 **Approach:** State machine with memory-based decision making.
 
 ```javascript
-// Villager.js - AI system (PLANNED)
+// Villager.js - AI system (COMPLETED)
 class Villager {
-    constructor(name, campPosition) {
+    constructor(name, campPosition, villagerId) {
         this.name = name;
         this.campPosition = campPosition;
+        this.villagerId = villagerId;
         this.state = 'SLEEPING';
         this.memory = {
-            knownFoodLocations: [], // Array of {x, y, resourceType}
+            knownFoodLocations: [], // Array of {x, y, resourceType, lastSeen}
             knownWoodLocations: [],
             lastKnownPosition: null
         };
@@ -215,19 +266,21 @@ class Villager {
         this.inventory = new Array(6).fill(null);
     }
     
-    update(deltaTime) {
-        this.updateNeeds(deltaTime);
-        this.updateState();
-        this.executeCurrentState(deltaTime);
+    update(deltaTime, gameTime, entities, storageBoxes) {
+        this.updateNeeds(deltaTime, gameTime);
+        this.updateState(gameTime, deltaTime);
+        this.executeCurrentState(deltaTime, entities, storageBoxes);
+        this.updateVisuals();
+        return this.checkDeath();
     }
     
-    updateState() {
-        const time = gameState.currentTime;
-        const hour = (time % 86400) / 3600; // Convert to hours
+    updateState(gameTime, deltaTime) {
+        const t = this.getCurrentTime(gameTime);
+        const hour = t.hour;
         
-        if (hour >= 8 && hour < 18 && this.state === 'SLEEPING') {
+        if (this.state === 'SLEEPING' && hour >= this.wakeUpTime) {
             this.state = 'FORAGING';
-        } else if (hour >= 18 && this.state === 'FORAGING') {
+        } else if (this.state === 'FORAGING' && hour >= 18) {
             this.state = 'RETURNING';
         } else if (this.state === 'RETURNING' && this.isAtCamp()) {
             this.state = 'EATING';
@@ -236,16 +289,16 @@ class Villager {
         }
     }
     
-    executeCurrentState(deltaTime) {
+    executeCurrentState(deltaTime, entities, storageBoxes) {
         switch (this.state) {
             case 'FORAGING':
-                this.forage();
+                this.forage(entities, deltaTime);
                 break;
             case 'RETURNING':
-                this.moveTowards(this.campPosition);
+                this.moveTowards(this.campPosition, deltaTime);
                 break;
             case 'EATING':
-                this.eatAndDrink();
+                this.eatAndDrink(storageBoxes);
                 break;
             case 'SLEEPING':
                 this.sleep();
@@ -253,17 +306,24 @@ class Villager {
         }
     }
     
-    forage() {
-        // Check memory first
-        const knownLocation = this.findNearestKnownFood();
-        if (knownLocation) {
-            this.moveTowards(knownLocation);
-            if (this.isNear(knownLocation)) {
-                this.collectResource(knownLocation);
-            }
+    forage(entities, deltaTime) {
+        // Check memory first, then explore new areas
+        const knownTarget = this.findNearestKnownFood(entities);
+        if (knownTarget) {
+            this.currentTarget = knownTarget;
         } else {
-            // Explore new area
-            this.explore();
+            const foundTarget = this.exploreNewArea(entities);
+            if (!foundTarget) {
+                this.setExplorationTarget();
+            }
+        }
+        
+        // Move towards target and collect if close enough
+        if (this.currentTarget) {
+            this.moveTowards(this.currentTarget.position, deltaTime);
+            if (distance(this.position, this.currentTarget.position) <= GameConfig.player.interactionThreshold) {
+                this.collectResource(this.currentTarget);
+            }
         }
     }
 }
@@ -273,7 +333,7 @@ class Villager {
 **Approach:** Entity-based system with type-specific behavior.
 
 ```javascript
-// Resources.js - Resource management (PLANNED)
+// Resources.js - Resource management (PARTIALLY IMPLEMENTED)
 class Resource {
     constructor(type, position) {
         this.type = type;
@@ -336,6 +396,9 @@ class MainScene extends Phaser.Scene {
         
         // Create info box (bottom left)
         this.createInfoBox();
+        
+        // Create debug controls
+        this.createDebugControls();
     }
     
     createNeedBars() {
@@ -457,33 +520,37 @@ assert(this.playerState.needs.temperature <= 100, "Temperature cannot exceed 100
 - ✅ Limit DOM queries by caching element references
 - ✅ DeltaTime capping to prevent large jumps (200ms max per frame)
 - ✅ Batch DOM updates where possible
+- ✅ Efficient villager AI updates with goal persistence
 
 ### Memory Management ✅ IMPLEMENTED
 - ✅ Clean up event listeners on game restart
-- 🔄 Clear villager memory when they die (when villagers are implemented)
-- 🔄 Remove collected resources from world (when collection is implemented)
+- ✅ Clear villager memory when they die
+- ✅ Remove collected resources from world
+- ✅ Efficient memory system for villager resource locations
 
 ### Testing Strategy ✅ IMPLEMENTED
 - ✅ Use browser console for debugging
 - ✅ Leverage existing logging system
 - ✅ Verify seed consistency
-- 🔄 Test edge cases (villager death, resource depletion) - when implemented
+- ✅ Test edge cases (villager death, resource depletion)
+- ✅ Debug mode for villager behavior observation
 
 ## Success Criteria
 
 ### Minimum Viable Product ✅ COMPLETED
-- ✅ Player can move and collect resources (movement implemented, collection pending)
+- ✅ Player can move and collect resources
 - ✅ Basic needs system works with daily variance
-- 🔄 Villagers exist and move around (not implemented yet)
+- ✅ Villagers exist and move around with complete AI
 - ✅ Game ends when player dies with specific death messages
 - ✅ Seed system works with randomization and persistence
 
 ### Stretch Goals 🔄 IN PROGRESS
-- 🔄 Villager memory system
-- 🔄 Resource propagation
+- ✅ Villager memory system
+- 🔄 Resource propagation (not implemented yet)
 - ✅ Complete UI with all features
 - ✅ Basic balancing (needs decay rates, time acceleration)
 - ✅ Error handling with assert system
+- 🔄 Complete object interactions (partially implemented)
 
 ## Recent Improvements (Latest Session)
 
@@ -500,8 +567,15 @@ assert(this.playerState.needs.temperature <= 100, "Temperature cannot exceed 100
 10. **Well interaction** - Implemented drinking from wells to restore water
 11. **Code cleanup** - Removed orphaned CSS classes and legacy config values
 12. **Documentation** - Updated design doc and implementation plan to reflect Phaser 3 architecture
+13. **Villager AI** - Complete villager system with memory, exploration, and daily routines
+14. **Villager needs** - Villagers have same needs system as player with daily variance
+15. **Villager death** - Villagers die when needs reach zero and become permanent corpses
+16. **Villager storage** - Villagers use personal and communal storage boxes
+17. **Villager fire management** - Villagers collect wood and add to camp fires
+18. **Debug system** - Toggle debug mode to see villager states, tasks, and exploration radius
+19. **Ground texture** - Subtle ground texture using Perlin noise for better navigation
 
-### 🔄 Next Priority: Phase 4 - Villager AI
-The core infrastructure is now complete and stable with Phaser 3. The next major phase should focus on implementing the villager AI system to add life to the world and create the core gameplay dynamic of shared resources and competition.
+### 🔄 Next Priority: Phase 6 - Complete Resource Propagation
+The villager AI system is now complete and fully functional. The next major phase should focus on completing resource propagation.
 
 This plan prioritizes the core gameplay loop while maintaining flexibility for the 1-day timeline. The modular structure allows for easy iteration and debugging.

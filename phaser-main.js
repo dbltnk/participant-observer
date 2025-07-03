@@ -275,6 +275,9 @@ console.log('Phaser main loaded');
             this.currentTask = null; // 'wood', 'food', 'water', or null
             this.lastTaskReset = 0; // Track when we last reset daily tasks
 
+            // Game entities reference (will be set by update method)
+            this.gameEntities = null;
+
             console.log(`[Villager] Created villager ${name} at camp ${villagerId}`);
         }
 
@@ -290,6 +293,9 @@ console.log('Phaser main loaded');
         }
 
         update(deltaTime, gameTime, entities, storageBoxes) {
+            // Store reference to game entities
+            this.gameEntities = entities;
+
             // Update needs
             this.updateNeeds(deltaTime, gameTime);
 
@@ -349,7 +355,9 @@ console.log('Phaser main loaded');
                 if (hour >= this.wakeUpTime) {
                     this.state = 'FORAGING';
                     this.stateTimer = 0; // Reset timer
-                    console.log(`[Villager] ${this.name} woke up at ${this.wakeUpTime.toFixed(1)} and started foraging`);
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[Villager] ${this.name} woke up at ${this.wakeUpTime.toFixed(1)} and started foraging`);
+                    }
                 }
             } else if (this.state === 'FORAGING') {
                 // Return to camp if needs are critical, inventory is full, or it's after 18:00
@@ -362,16 +370,22 @@ console.log('Phaser main loaded');
                 if (shouldReturn) {
                     this.state = 'RETURNING';
                     this.stateTimer = 0; // Reset timer
-                    console.log(`[Villager] ${this.name} returning to camp (time: ${hour}, needs: ${this.needs.calories.toFixed(0)}/${this.needs.water.toFixed(0)}/${this.needs.temperature.toFixed(0)}, inventory full: ${this.isInventoryFull()})`);
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[Villager] ${this.name} returning to camp (time: ${hour}, needs: ${this.needs.calories.toFixed(0)}/${this.needs.water.toFixed(0)}/${this.needs.temperature.toFixed(0)}, inventory full: ${this.isInventoryFull()})`);
+                    }
                 }
             } else if (this.state === 'RETURNING' && this.isAtCamp()) {
                 this.state = 'EATING';
                 this.stateTimer = 0; // Reset timer
-                console.log(`[Villager] ${this.name} arrived at camp and is eating`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} arrived at camp and is eating`);
+                }
             } else if (this.state === 'EATING' && this.needs.calories > 80 && this.stateTimer > 5000) { // 5 second cooldown
                 this.state = 'SLEEPING';
                 this.stateTimer = 0; // Reset timer
-                console.log(`[Villager] ${this.name} finished eating and went to sleep`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} finished eating and went to sleep`);
+                }
             }
 
             // Increment state timer
@@ -470,7 +484,9 @@ console.log('Phaser main loaded');
             if (knownTarget) {
                 this.currentTarget = knownTarget;
                 this.explorationTarget = null; // Clear exploration target
-                console.log(`[Villager] ${this.name} using known target: ${knownTarget.type}`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} using known target: ${knownTarget.type}`);
+                }
                 return;
             }
 
@@ -537,7 +553,9 @@ console.log('Phaser main loaded');
                 this.explorationTarget = null; // Clear exploration target
                 // Add to memory
                 this.addToMemory(nearest);
-                console.log(`[Villager] ${this.name} found target: ${nearest.type} at distance ${Math.round(nearestDistance)}`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} found target: ${nearest.type} at distance ${Math.round(nearestDistance)}`);
+                }
                 return true; // Found a target
             } else {
                 // No targets found, increment attempts
@@ -593,7 +611,9 @@ console.log('Phaser main loaded');
             // Check if we can carry it
             const slot = this.inventory.findIndex(i => i === null);
             if (slot === -1) {
-                console.log(`[Villager] ${this.name} inventory full, can't collect ${entity.type}`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} inventory full, can't collect ${entity.type}`);
+                }
                 return false;
             }
 
@@ -603,10 +623,14 @@ console.log('Phaser main loaded');
                 entity.collected = true;
                 if (entity._phaserText) entity._phaserText.setVisible(false);
 
-                console.log(`[Villager] ${this.name} collected ${entity.type}`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} collected ${entity.type}`);
+                }
                 return true;
             } else {
-                console.log(`[Villager] ${this.name} failed to collect ${entity.type}`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} failed to collect ${entity.type}`);
+                }
                 return false;
             }
         }
@@ -677,32 +701,151 @@ console.log('Phaser main loaded');
             for (let i = 0; i < this.inventory.length; i++) {
                 const item = this.inventory[i];
                 if (item && this.isFood(item.type)) {
-                    // Apply nutrition (simplified)
-                    this.needs.calories = Math.min(GameConfig.needs.fullValue, this.needs.calories + 50);
-                    this.inventory[i] = null;
-                    console.log(`[Villager] ${this.name} ate ${item.type}`);
-                    break;
+                    // Check if we need to cook the food first
+                    if (item.type.startsWith('cooked_')) {
+                        // Already cooked, apply nutrition
+                        this.applyNutrition(item.type);
+                        this.inventory[i] = null;
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.name} ate cooked ${item.type.replace('cooked_', '')}`);
+                        }
+                        break;
+                    } else {
+                        // Raw food - try to cook it first
+                        const cookedFood = this.cookFood(item.type);
+                        if (cookedFood) {
+                            this.inventory[i] = cookedFood;
+                            this.applyNutrition(cookedFood.type);
+                            this.inventory[i] = null;
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Villager] ${this.name} cooked and ate ${item.type}`);
+                            }
+                            break;
+                        } else {
+                            // Can't cook, eat raw (less nutrition)
+                            this.applyNutrition(item.type, 0.5); // Half nutrition for raw food
+                            this.inventory[i] = null;
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Villager] ${this.name} ate raw ${item.type}`);
+                            }
+                            break;
+                        }
+                    }
                 }
             }
+        }
+
+        cookFood(foodType) {
+            // Find a burning fire nearby
+            const nearbyFire = this.findNearbyBurningFire();
+            if (nearbyFire) {
+                const cookedEmojis = {
+                    'blackberry': '🍇',
+                    'mushroom': '🍄',
+                    'herb': '🌿',
+                    'rabbit': '🍖',
+                    'deer': '🥩'
+                };
+                return { type: `cooked_${foodType}`, emoji: cookedEmojis[foodType] || '🍽️' };
+            }
+            return null; // Can't cook without fire
+        }
+
+        findNearbyBurningFire() {
+            // Find a burning fire within interaction range
+            const fires = this.gameEntities ? this.gameEntities.filter(e => e.type === 'fireplace' && e.isBurning) : [];
+            for (const fire of fires) {
+                if (distance(this.position, fire.position) <= GameConfig.player.interactionThreshold) {
+                    return fire;
+                }
+            }
+            return null;
+        }
+
+        applyNutrition(foodType, multiplier = 1.0) {
+            const nutrition = this.getNutrition(foodType);
+            this.needs.calories = Math.min(GameConfig.needs.fullValue, this.needs.calories + nutrition.calories * multiplier);
+
+            // Apply vitamins
+            for (let i = 0; i < this.needs.vitamins.length; i++) {
+                this.needs.vitamins[i] = Math.min(GameConfig.needs.fullValue, this.needs.vitamins[i] + nutrition.vitamins[i] * multiplier);
+            }
+        }
+
+        getNutrition(foodType) {
+            const baseType = foodType.replace('cooked_', '');
+            const nutrition = {
+                'blackberry': { calories: 50, vitamins: [0, 0, 0, 1, 0] },
+                'mushroom': { calories: 30, vitamins: [0, 0, 1, 0, 0] },
+                'herb': { calories: 20, vitamins: [1, 0, 0, 0, 0] },
+                'rabbit': { calories: 200, vitamins: [0, 1, 0, 0, 0] },
+                'deer': { calories: 500, vitamins: [0, 1, 0, 0, 1] }
+            };
+            return nutrition[baseType] || { calories: 0, vitamins: [0, 0, 0, 0, 0] };
         }
 
         eatFromStorage(storageBox) {
             for (let i = 0; i < storageBox.items.length; i++) {
                 const item = storageBox.items[i];
                 if (item && this.isFood(item.type)) {
-                    this.needs.calories = Math.min(GameConfig.needs.fullValue, this.needs.calories + 50);
-                    storageBox.items.splice(i, 1);
-                    console.log(`[Villager] ${this.name} ate ${item.type} from storage`);
-                    break;
+                    if (item.type.startsWith('cooked_')) {
+                        this.applyNutrition(item.type);
+                        storageBox.items.splice(i, 1);
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.name} ate cooked ${item.type.replace('cooked_', '')} from storage`);
+                        }
+                        break;
+                    } else {
+                        // Try to cook raw food
+                        const cookedFood = this.cookFood(item.type);
+                        if (cookedFood) {
+                            storageBox.items[i] = cookedFood;
+                            this.applyNutrition(cookedFood.type);
+                            storageBox.items.splice(i, 1);
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Villager] ${this.name} cooked and ate ${item.type} from storage`);
+                            }
+                            break;
+                        } else {
+                            // Eat raw
+                            this.applyNutrition(item.type, 0.5);
+                            storageBox.items.splice(i, 1);
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Villager] ${this.name} ate raw ${item.type} from storage`);
+                            }
+                            break;
+                        }
+                    }
                 }
             }
         }
 
         drinkFromWells() {
-            // Find nearest well and drink
-            // This is simplified - in full implementation, would check well positions
-            this.needs.water = GameConfig.needs.fullValue;
-            console.log(`[Villager] ${this.name} drank from well`);
+            // Find nearest well within interaction range
+            const nearestWell = this.findNearestWell();
+            if (nearestWell && distance(this.position, nearestWell.position) <= GameConfig.player.interactionThreshold) {
+                this.needs.water = GameConfig.needs.fullValue;
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} drank from well`);
+                }
+            }
+        }
+
+        findNearestWell() {
+            // Find nearest well within interaction range
+            const wells = this.gameEntities ? this.gameEntities.filter(e => e.type === 'well') : [];
+            let nearestWell = null;
+            let nearestDistance = Infinity;
+
+            for (const well of wells) {
+                const dist = distance(this.position, well.position);
+                if (dist < nearestDistance && dist <= GameConfig.player.interactionThreshold) {
+                    nearestWell = well;
+                    nearestDistance = dist;
+                }
+            }
+
+            return nearestWell;
         }
 
         restockFire() {
@@ -710,10 +853,27 @@ console.log('Phaser main loaded');
             const woodSlot = this.inventory.findIndex(item => item && item.type === 'tree');
             if (woodSlot !== -1) {
                 // Find fireplace at this camp
-                // Simplified - would need to find actual fireplace entity
-                this.inventory[woodSlot] = null;
-                console.log(`[Villager] ${this.name} added wood to fire`);
+                const campFire = this.findCampFire();
+                if (campFire && campFire.wood < campFire.maxWood) {
+                    campFire.wood++;
+                    campFire.isBurning = true;
+                    this.inventory[woodSlot] = null;
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[Villager] ${this.name} added wood to fire`);
+                    }
+                }
             }
+        }
+
+        findCampFire() {
+            // Find fireplace at this camp
+            const fires = this.gameEntities ? this.gameEntities.filter(e => e.type === 'fireplace') : [];
+            for (const fire of fires) {
+                if (distance(this.campPosition, fire.position) < 50) { // Within camp radius
+                    return fire;
+                }
+            }
+            return null;
         }
 
         storeExcessResources(storageBoxes) {
@@ -728,7 +888,9 @@ console.log('Phaser main loaded');
                 if (item && personalStorage && personalStorage.items.length < personalStorage.capacity) {
                     personalStorage.items.push(item);
                     this.inventory[i] = null;
-                    console.log(`[Villager] ${this.name} stored ${item.type} in personal storage`);
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[Villager] ${this.name} stored ${item.type} in personal storage`);
+                    }
                 }
             }
 
@@ -739,7 +901,9 @@ console.log('Phaser main loaded');
                 if (item && communalStorage && communalStorage.items.length < communalStorage.capacity) {
                     communalStorage.items.push(item);
                     this.inventory[i] = null;
-                    console.log(`[Villager] ${this.name} stored ${item.type} in communal storage`);
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[Villager] ${this.name} stored ${item.type} in communal storage`);
+                    }
                 }
             }
         }
@@ -780,7 +944,9 @@ console.log('Phaser main loaded');
             this.leaveCampTarget = { x: targetX, y: targetY };
             this.isLeavingCamp = true;
 
-            console.log(`[Villager] ${this.name} starting to leave camp, target: (${Math.round(targetX)}, ${Math.round(targetY)})`);
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Villager] ${this.name} starting to leave camp, target: (${Math.round(targetX)}, ${Math.round(targetY)})`);
+            }
         }
 
         continueLeavingCamp(deltaTime) {
@@ -800,7 +966,9 @@ console.log('Phaser main loaded');
                 // We've successfully left camp
                 this.isLeavingCamp = false;
                 this.leaveCampTarget = null;
-                console.log(`[Villager] ${this.name} successfully left camp, now at (${Math.round(this.position.x)}, ${Math.round(this.position.y)})`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} successfully left camp, now at (${Math.round(this.position.x)}, ${Math.round(this.position.y)})`);
+                }
             }
         }
 
@@ -961,7 +1129,9 @@ console.log('Phaser main loaded');
                 waterTrips: 0
             };
             this.currentTask = null;
-            console.log(`[Villager] ${this.name} daily tasks reset: ${this.dailyTasks.woodTrips} wood, ${this.dailyTasks.foodTrips} food, ${this.dailyTasks.waterTrips} water`);
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Villager] ${this.name} daily tasks reset: ${this.dailyTasks.woodTrips} wood, ${this.dailyTasks.foodTrips} food, ${this.dailyTasks.waterTrips} water`);
+            }
         }
 
         selectNextTask() {
@@ -1244,6 +1414,10 @@ console.log('Phaser main loaded');
                 const textObj = this.add.text(entity.position.x, entity.position.y, entity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
                 entity._phaserText = textObj;
                 this.worldEntities.push(textObj);
+
+                // Add debug text and interaction circle for all objects
+                this.addDebugElements(entity);
+
                 // --- Resource collection: make resources interactive ---
                 if (["blackberry", "mushroom", "herb", "rabbit", "deer", "tree"].includes(entity.type)) {
                     textObj.setInteractive({ useHandCursor: true });
@@ -1282,31 +1456,57 @@ console.log('Phaser main loaded');
                         this.showTempMessage('Drank from well!', 1200);
                     });
                 }
-                // --- Fire interaction: click to interact if near (stub) ---
+                // --- Fire interaction: click to interact if near ---
                 if (entity.type === 'fireplace') {
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         const dist = distance(this.playerState.position, entity.position);
                         assert(dist <= GameConfig.player.interactionThreshold, 'Tried to interact with fire out of range');
-                        this.showTempMessage('TODO: Fire interaction (cook, warm up)', 1200);
+
+                        // Check if player has wood to add
+                        const woodSlot = this.playerState.inventory.findIndex(item => item && item.type === 'tree');
+                        if (woodSlot !== -1 && entity.wood < entity.maxWood) {
+                            // Add wood to fire
+                            entity.wood++;
+                            this.playerState.inventory[woodSlot] = null;
+                            entity.isBurning = true;
+                            textObj.setText('🔥'); // Burning fire emoji
+                            this.updatePhaserUI();
+                            this.showTempMessage('Added wood to fire!', 1200);
+                        } else if (entity.isBurning && entity.wood > 0) {
+                            // Cook food if fire is burning
+                            this.cookFoodNearFire(entity);
+                        } else if (woodSlot !== -1) {
+                            this.showTempMessage('Fire is full of wood!', 1200);
+                        } else {
+                            this.showTempMessage('Need wood to fuel fire!', 1200);
+                        }
                     });
                 }
-                // --- Sleeping bag interaction: click to interact if near (stub) ---
+                // --- Sleeping bag interaction: click to sleep if near ---
                 if (entity.type === 'sleeping_bag') {
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         const dist = distance(this.playerState.position, entity.position);
                         assert(dist <= GameConfig.player.interactionThreshold, 'Tried to interact with sleeping bag out of range');
-                        this.showTempMessage('TODO: Sleeping (skip night)', 1200);
+
+                        if (entity.isOccupied) {
+                            this.showTempMessage('Sleeping bag is occupied!', 1200);
+                            return;
+                        }
+
+                        // Sleep until 8:00 AM
+                        this.sleepUntilMorning(entity);
                     });
                 }
-                // --- Storage box interaction: click to interact if near (stub) ---
+                // --- Storage box interaction: click to interact if near ---
                 if (entity.type === 'storage_box') {
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         const dist = distance(this.playerState.position, entity.position);
                         assert(dist <= GameConfig.player.interactionThreshold, 'Tried to interact with storage box out of range');
-                        this.showTempMessage('TODO: Storage interaction', 1200);
+
+                        this.showStorageInterface(entity);
                     });
                 }
             }
@@ -1366,32 +1566,59 @@ console.log('Phaser main loaded');
                 const emoji = this.add.text(inventoryStartX + i * 56, inventoryY, '', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setScrollFactor(0);
                 this.uiContainer.add([slot, emoji]);
                 this.ui.inventorySlots.push({ slot, emoji });
-                // --- Inventory slot selection: click to select ---
+                // --- Inventory slot click: move to storage, eat, or add to fire ---
                 slot.setInteractive({ useHandCursor: true });
                 slot.on('pointerdown', () => {
-                    this.playerState.selectedSlot = i;
-                    this.updatePhaserUI();
-                });
-                // --- Inventory slot right-click: remove item ---
-                slot.on('pointerup', (pointer) => {
-                    if (pointer.rightButtonDown()) {
-                        if (this.playerState.inventory[i]) {
-                            const removed = this.playerState.inventory[i];
-                            this.playerState.inventory[i] = null;
-                            this.updatePhaserUI();
-                            this.showTempMessage(`Removed ${removed.type}`, 1200);
+                    if (this.playerState.inventory[i]) {
+                        const item = this.playerState.inventory[i];
+                        console.log(`[Inventory] Clicked on ${item.type} in slot ${i}`);
+
+                        // First priority: move to storage if storage window is open
+                        console.log('[Inventory] Storage dialog check:', this._storageDialog ? 'open' : 'closed');
+                        if (this._storageDialog) {
+                            console.log('[Inventory] Storage dialog open, transferring to storage');
+                            this.transferItemToStorage(this._storageDialog.storageBox, i);
+                            return;
                         }
+
+                        // Second priority: eat food if near a fire
+                        if (this.isFood(item.type)) {
+                            const nearbyFire = this.findNearbyFire();
+                            console.log(`[Inventory] Food item ${item.type}, nearby fire:`, nearbyFire ? 'found' : 'not found');
+                            if (nearbyFire) {
+                                console.log('[Inventory] Eating food near fire');
+                                this.eatFoodFromInventory(i, item);
+                                return;
+                            }
+                        }
+
+                        // Third priority: add wood to fire if near a fire
+                        if (item.type === 'tree') {
+                            const nearbyFire = this.findNearbyFire();
+                            console.log(`[Inventory] Wood item, nearby fire:`, nearbyFire ? 'found' : 'not found');
+                            if (nearbyFire && nearbyFire.wood < nearbyFire.maxWood) {
+                                nearbyFire.wood++;
+                                nearbyFire.isBurning = true;
+                                this.playerState.inventory[i] = null;
+                                this.updatePhaserUI();
+                                this.showTempMessage('Added wood to fire!', 1200);
+                                return;
+                            }
+                        }
+
+                        // If none of the above conditions are met, do nothing
+                        console.log('[Inventory] No action taken for item');
                     }
                 });
             }
-            // --- Inventory slot selection: 1-6 keys ---
-            this.input.keyboard.on('keydown', (event) => {
-                const idx = parseInt(event.key, 10) - 1;
-                if (idx >= 0 && idx < GameConfig.player.inventorySize) {
-                    this.playerState.selectedSlot = idx;
-                    this.updatePhaserUI();
-                }
-            });
+            // --- Inventory slot selection: 1-6 keys (disabled - no longer using selection) ---
+            // this.input.keyboard.on('keydown', (event) => {
+            //     const idx = parseInt(event.key, 10) - 1;
+            //     if (idx >= 0 && idx < GameConfig.player.inventorySize) {
+            //         this.playerState.selectedSlot = idx;
+            //         this.updatePhaserUI();
+            //     }
+            // });
             // Time display (top right) - fixed to camera viewport
             this.ui.timeText = this.add.text(window.innerWidth - margin, margin, '', { fontSize: '18px', fontFamily: 'monospace', color: '#fff' }).setOrigin(1, 0).setScrollFactor(0);
             this.uiContainer.add(this.ui.timeText);
@@ -1403,12 +1630,20 @@ console.log('Phaser main loaded');
             this.ui.debugBtn.on('pointerdown', () => {
                 window.villagerDebugEnabled = !window.villagerDebugEnabled;
                 updateDebugBtn.call(this);
+                // Update all debug elements immediately
+                this.updateDebugElements();
             });
             function updateDebugBtn() {
                 if (window.villagerDebugEnabled) {
                     this.ui.debugBtn.setText('🟢 Debug: ON').setColor('#fff').setBackgroundColor('#228B22');
+                    if (this.ui.fpsCounter) {
+                        this.ui.fpsCounter.setVisible(true);
+                    }
                 } else {
                     this.ui.debugBtn.setText('⚪ Debug: OFF').setColor('#ccc').setBackgroundColor('#444');
+                    if (this.ui.fpsCounter) {
+                        this.ui.fpsCounter.setVisible(false);
+                    }
                 }
             }
             // Initialize debug state (default to OFF)
@@ -1477,18 +1712,73 @@ console.log('Phaser main loaded');
 
             // Initialize current seed value
             this.currentSeedValue = getCurrentSeed();
+
+            // FPS counter (above debug button) - fixed to camera viewport
+            this.ui.fpsCounter = this.add.text(margin, window.innerHeight - margin - 150, 'FPS: 60', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setScrollFactor(0);
+            this.uiContainer.add(this.ui.fpsCounter);
+
+            // Debug toggle (bottom left, above log spam button) - fixed to camera viewport
+            this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - 120, '⚪ Debug: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.debugBtn.on('pointerdown', () => {
+                window.villagerDebugEnabled = !window.villagerDebugEnabled;
+                updateDebugBtn.call(this);
+                // Update all debug elements immediately
+                this.updateDebugElements();
+            });
+            // Initialize debug state (default to OFF)
+            if (typeof window.villagerDebugEnabled === 'undefined') {
+                window.villagerDebugEnabled = false;
+            }
+            updateDebugBtn.call(this);
+            this.uiContainer.add(this.ui.debugBtn);
         }
         update(time, delta) {
-            // Advance game time
-            const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
-            const gameTimeDelta = (delta / 1000) * timeAcceleration;
-            this.playerState.currentTime += gameTimeDelta;
+            // Check if player is sleeping
+            if (this.isSleeping && this.sleepingBag) {
+                // Check if player moved away from sleeping bag
+                const dist = distance(this.playerState.position, this.sleepingBag.position);
+                if (dist > GameConfig.player.interactionThreshold) {
+                    // Player moved away, stop sleeping
+                    this.stopSleeping();
+                } else {
+                    // Use accelerated time while sleeping
+                    const gameTimeDelta = (delta / 1000) * this.sleepTimeAcceleration;
+                    this.playerState.currentTime += gameTimeDelta;
+
+                    // Restore needs while sleeping
+                    this.playerState.needs.temperature = Math.min(GameConfig.needs.fullValue, this.playerState.needs.temperature + 0.5);
+                    this.playerState.needs.calories = Math.min(GameConfig.needs.fullValue, this.playerState.needs.calories + 0.2);
+
+                    // Check if it's morning (8:00 AM)
+                    const t = getCurrentTime(this.playerState);
+                    if (t.hour >= 8) {
+                        this.stopSleeping();
+                        this.showTempMessage('Woke up at 8:00 AM!', 2000);
+                    }
+                }
+            } else {
+                // Normal time progression
+                const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
+                const gameTimeDelta = (delta / 1000) * timeAcceleration;
+                this.playerState.currentTime += gameTimeDelta;
+            }
+
+            // Check if player moved away from storage box
+            if (this._storageDialog) {
+                const dist = distance(this.playerState.position, this._storageDialog.storageBox.position);
+                if (dist > GameConfig.player.interactionThreshold) {
+                    this.closeStorageInterface();
+                }
+            }
 
             // Update villagers
             this.updateVillagers(delta);
 
             // Needs
             updateNeeds(this.playerState, delta);
+
+            // Apply fire temperature effects
+            this.applyFireTemperatureEffects(delta);
 
             // UI update
             this.updatePhaserUI();
@@ -1542,7 +1832,7 @@ console.log('Phaser main loaded');
             for (let i = 0; i < GameConfig.player.inventorySize; i++) {
                 const item = this.playerState.inventory[i];
                 this.ui.inventorySlots[i].emoji.setText(item && item.emoji ? item.emoji : '');
-                this.ui.inventorySlots[i].slot.setStrokeStyle(this.playerState.selectedSlot === i ? 3 : 2, this.playerState.selectedSlot === i ? 0xffffff : 0x666666);
+                this.ui.inventorySlots[i].slot.setStrokeStyle(2, 0x666666); // No selection frame
             }
             // Time display
             const t = getCurrentTime(this.playerState);
@@ -1558,6 +1848,15 @@ console.log('Phaser main loaded');
             // Seed UI
             const currentSeed = this.currentSeedValue || getCurrentSeed();
             this.ui.seedInputText.setText(currentSeed.toString());
+
+            // Update debug elements
+            this.updateDebugElements();
+
+            // Update FPS counter
+            if (window.villagerDebugEnabled && this.ui.fpsCounter) {
+                const fps = Math.round(1000 / this.game.loop.delta);
+                this.ui.fpsCounter.setText(`FPS: ${fps}`);
+            }
         }
 
         updateVillagers(delta) {
@@ -1580,7 +1879,7 @@ console.log('Phaser main loaded');
                 // Skip if already dead
                 if (villager.isDead) continue;
 
-                // Update villager
+                // Update villager with access to entities and storage boxes
                 const isDead = villager.update(delta, this.playerState.currentTime, this.entities, storageBoxes);
 
                 if (isDead) {
@@ -1799,6 +2098,412 @@ console.log('Phaser main loaded');
             });
 
             this._confirmDialog = [bg, title, message, yesBtn, noBtn];
+        }
+
+        addDebugElements(entity) {
+            // Add debug text above entity
+            const debugText = this.add.text(
+                entity.position.x,
+                entity.position.y - 40,
+                this.getDebugText(entity),
+                { fontSize: '10px', fontFamily: 'monospace', color: '#00ff00', backgroundColor: '#000', padding: { left: 2, right: 2, top: 1, bottom: 1 } }
+            ).setOrigin(0.5).setVisible(false);
+
+            // Add interaction distance circle
+            const interactionCircle = this.add.circle(
+                entity.position.x,
+                entity.position.y,
+                GameConfig.player.interactionThreshold,
+                0x00ff00,
+                0.1 // Very transparent
+            ).setOrigin(0.5).setVisible(false);
+
+            // Add fire warmth range circle for fireplaces
+            let warmthCircle = null;
+            if (entity.type === 'fireplace') {
+                warmthCircle = this.add.circle(
+                    entity.position.x,
+                    entity.position.y,
+                    GameConfig.player.interactionThreshold * 3, // Triple the range
+                    0xff6600, // Orange color for warmth
+                    0.05 // Very transparent
+                ).setOrigin(0.5).setVisible(false);
+            }
+
+            // Store references for toggling
+            entity._debugText = debugText;
+            entity._interactionCircle = interactionCircle;
+            entity._warmthCircle = warmthCircle;
+        }
+
+        getDebugText(entity) {
+            switch (entity.type) {
+                case 'well':
+                    return `Well (${entity.waterLevel} water)`;
+                case 'fireplace':
+                    return `Fire (${entity.wood}/${entity.maxWood} wood) ${entity.isBurning ? '🔥' : '❄️'}`;
+                case 'sleeping_bag':
+                    return `Sleeping Bag ${entity.isOccupied ? '(Occupied)' : '(Free)'}`;
+                case 'storage_box':
+                    const capacity = entity.isPersonal ? GameConfig.storage.personalCapacity : GameConfig.storage.communalCapacity;
+                    return `${entity.isPersonal ? 'Personal' : 'Communal'} Storage (${entity.items.length}/${capacity})`;
+                case 'blackberry':
+                case 'mushroom':
+                case 'herb':
+                case 'rabbit':
+                case 'deer':
+                case 'tree':
+                    return `${entity.type} ${entity.collected ? '(Collected)' : '(Available)'}`;
+                default:
+                    return entity.type;
+            }
+        }
+
+        updateDebugElements() {
+            // Update all entity debug elements based on debug state
+            for (const entity of this.entities) {
+                if (entity._debugText) {
+                    entity._debugText.setVisible(window.villagerDebugEnabled);
+                    if (window.villagerDebugEnabled) {
+                        entity._debugText.setText(this.getDebugText(entity));
+                        entity._debugText.setPosition(entity.position.x, entity.position.y - 40);
+                    }
+                }
+                if (entity._interactionCircle) {
+                    entity._interactionCircle.setVisible(window.villagerDebugEnabled);
+                    if (window.villagerDebugEnabled) {
+                        entity._interactionCircle.setPosition(entity.position.x, entity.position.y);
+                    }
+                }
+                if (entity._warmthCircle) {
+                    entity._warmthCircle.setVisible(window.villagerDebugEnabled);
+                    if (window.villagerDebugEnabled) {
+                        entity._warmthCircle.setPosition(entity.position.x, entity.position.y);
+                    }
+                }
+            }
+        }
+
+        cookFoodNearFire(fireEntity) {
+            // Find food items in player inventory
+            const foodSlots = [];
+            for (let i = 0; i < this.playerState.inventory.length; i++) {
+                const item = this.playerState.inventory[i];
+                if (item && this.isFood(item.type)) {
+                    foodSlots.push(i);
+                }
+            }
+
+            if (foodSlots.length === 0) {
+                this.showTempMessage('No food to cook!', 1200);
+                return;
+            }
+
+            // Cook the first food item found
+            const slot = foodSlots[0];
+            const food = this.playerState.inventory[slot];
+
+            // Convert to cooked version
+            const cookedFood = this.getCookedVersion(food.type);
+            this.playerState.inventory[slot] = cookedFood;
+
+            this.updatePhaserUI();
+            this.showTempMessage(`Cooked ${food.type}!`, 1200);
+        }
+
+        isFood(type) {
+            return ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer'].includes(type);
+        }
+
+        getCookedVersion(type) {
+            const cookedEmojis = {
+                'blackberry': '🍇', // Cooked berries
+                'mushroom': '🍄', // Mushrooms stay same when cooked
+                'herb': '🌿', // Herbs stay same when cooked
+                'rabbit': '🍖', // Cooked meat
+                'deer': '🥩' // Cooked venison
+            };
+            return { type: `cooked_${type}`, emoji: cookedEmojis[type] || '🍽️' };
+        }
+
+        sleepUntilMorning(sleepingBag) {
+            if (sleepingBag.isOccupied) {
+                this.showTempMessage('Sleeping bag is occupied!', 1200);
+                return;
+            }
+
+            // Mark as occupied
+            sleepingBag.isOccupied = true;
+
+            // Enable sleeping mode with time acceleration
+            this.isSleeping = true;
+            this.sleepingBag = sleepingBag;
+            this.normalTimeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
+            this.sleepTimeAcceleration = this.normalTimeAcceleration * 50; // 50x faster
+
+            this.showTempMessage('Sleeping... (time accelerated)', 2000);
+        }
+
+        stopSleeping() {
+            if (this.isSleeping && this.sleepingBag) {
+                this.isSleeping = false;
+                this.sleepingBag.isOccupied = false;
+                this.sleepingBag = null;
+                console.log('[Sleep] Player stopped sleeping');
+            }
+        }
+
+        showStorageInterface(storageBox) {
+            if (this._storageDialog) return;
+
+            const w = this.cameras.main.width;
+            const h = this.cameras.main.height;
+
+            // Background overlay - make it larger for communal storage
+            const isCommunal = !storageBox.isPersonal;
+            const bgHeight = isCommunal ? 450 : 300;
+            const bg = this.add.rectangle(w / 2, h / 2, 400, bgHeight, 0x222222, 0.95).setOrigin(0.5).setDepth(1000).setScrollFactor(0);
+
+            // Title
+            const title = this.add.text(w / 2, h / 2 - (bgHeight / 2) + 30, `${storageBox.isPersonal ? 'Personal' : 'Communal'} Storage`, { fontSize: '20px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
+
+            // Storage slots
+            const capacity = storageBox.isPersonal ? GameConfig.storage.personalCapacity : GameConfig.storage.communalCapacity;
+            const storageSlots = [];
+            const storageEmojis = [];
+
+            for (let i = 0; i < capacity; i++) {
+                const slotX = w / 2 - 150 + (i % 5) * 60;
+                const slotY = h / 2 - (bgHeight / 2) + 80 + Math.floor(i / 5) * 60;
+
+                const slot = this.add.rectangle(slotX, slotY, 50, 50, 0x333333).setOrigin(0.5).setStrokeStyle(2, 0x666666).setDepth(1001).setScrollFactor(0);
+                const emoji = this.add.text(slotX, slotY, storageBox.items[i] ? storageBox.items[i].emoji : '', { fontSize: '20px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
+
+                storageSlots.push(slot);
+                storageEmojis.push(emoji);
+
+                // Make slots interactive
+                slot.setInteractive({ useHandCursor: true });
+                slot.on('pointerdown', () => {
+                    this.transferItemFromStorage(i, storageBox);
+                });
+            }
+
+            // Instructions - position below the slots
+            const instructions = this.add.text(w / 2, h / 2 + (bgHeight / 2) - 60, 'Click items to transfer to your inventory\nMove away to close', { fontSize: '12px', fontFamily: 'monospace', color: '#ccc', align: 'center' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
+
+            // Close button - position at the bottom
+            const closeBtn = this.add.text(w / 2, h / 2 + (bgHeight / 2) - 20, 'Close', { fontSize: '16px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 12, right: 12, top: 6, bottom: 6 } })
+                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1001).setScrollFactor(0);
+
+            closeBtn.on('pointerdown', () => {
+                this.closeStorageInterface();
+            });
+
+            // Store references for cleanup and tracking
+            this._storageDialog = {
+                bg, title, storageSlots, storageEmojis, instructions, closeBtn,
+                storageBox, updateSlots: () => this.updateStorageSlots(storageSlots, storageEmojis, storageBox)
+            };
+
+            // Initial update
+            this._storageDialog.updateSlots();
+        }
+
+        updateStorageSlots(storageSlots, storageEmojis, storageBox) {
+            // Update storage slots
+            for (let i = 0; i < storageSlots.length; i++) {
+                const item = storageBox.items[i];
+                storageEmojis[i].setText(item ? item.emoji : '');
+            }
+        }
+
+        transferItemFromStorage(storageSlot, storageBox) {
+            // Check if there's an item in this slot
+            if (!storageBox.items[storageSlot]) return;
+
+            // Find first empty slot in player inventory
+            const playerSlot = this.playerState.inventory.findIndex(item => item === null);
+            if (playerSlot === -1) {
+                this.showTempMessage('Inventory full!', 1200);
+                return;
+            }
+
+            // Transfer item
+            this.playerState.inventory[playerSlot] = storageBox.items[storageSlot];
+            storageBox.items.splice(storageSlot, 1); // Remove item from storage
+
+            // Update UI
+            this.updatePhaserUI();
+            if (this._storageDialog) {
+                this._storageDialog.updateSlots();
+            }
+        }
+
+        transferItemToStorage(storageBox, specificSlot = null) {
+            // If specific slot is provided, use that item
+            let playerSlot = specificSlot;
+            if (playerSlot === null) {
+                // Find first item in player inventory
+                playerSlot = this.playerState.inventory.findIndex(item => item !== null);
+            }
+
+            if (playerSlot === -1 || !this.playerState.inventory[playerSlot]) {
+                this.showTempMessage('No items to transfer!', 1200);
+                return;
+            }
+
+            // Check if storage has capacity
+            const capacity = storageBox.isPersonal ? GameConfig.storage.personalCapacity : GameConfig.storage.communalCapacity;
+            if (storageBox.items.length >= capacity) {
+                this.showTempMessage('Storage full!', 1200);
+                return;
+            }
+
+            // Transfer item (add to end of array)
+            storageBox.items.push(this.playerState.inventory[playerSlot]);
+            this.playerState.inventory[playerSlot] = null;
+
+            // Update UI
+            this.updatePhaserUI();
+            if (this._storageDialog) {
+                this._storageDialog.updateSlots();
+            }
+        }
+
+        closeStorageInterface() {
+            if (this._storageDialog) {
+                // Destroy all UI elements properly
+                const elements = [
+                    this._storageDialog.bg,
+                    this._storageDialog.title,
+                    ...this._storageDialog.storageSlots,
+                    ...this._storageDialog.storageEmojis,
+                    this._storageDialog.instructions,
+                    this._storageDialog.closeBtn
+                ];
+
+                elements.forEach(element => {
+                    if (element && typeof element.destroy === 'function') {
+                        element.destroy();
+                    }
+                });
+
+                this._storageDialog = null;
+            }
+        }
+
+        isFood(type) {
+            return ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer'].includes(type);
+        }
+
+        eatFoodFromInventory(slot, item) {
+            // Check if food needs to be cooked
+            if (item.type.startsWith('cooked_')) {
+                // Already cooked, apply nutrition
+                this.applyNutrition(item.type);
+                this.playerState.inventory[slot] = null;
+                this.updatePhaserUI();
+                this.showTempMessage(`Ate cooked ${item.type.replace('cooked_', '')}!`, 1200);
+            } else {
+                // Raw food - try to cook it first
+                const nearbyFire = this.findNearbyFire();
+                if (nearbyFire) {
+                    // Cook the food
+                    const cookedFood = this.getCookedVersion(item.type);
+                    this.playerState.inventory[slot] = cookedFood;
+                    this.applyNutrition(cookedFood.type);
+                    this.playerState.inventory[slot] = null;
+                    this.updatePhaserUI();
+                    this.showTempMessage(`Cooked and ate ${item.type}!`, 1200);
+                } else {
+                    // Eat raw (less nutrition)
+                    this.applyNutrition(item.type, 0.5);
+                    this.playerState.inventory[slot] = null;
+                    this.updatePhaserUI();
+                    this.showTempMessage(`Ate raw ${item.type} (half nutrition)!`, 1200);
+                }
+            }
+        }
+
+        findNearbyBurningFire() {
+            // Find a burning fire within interaction range
+            for (const entity of this.entities) {
+                if (entity.type === 'fireplace' && entity.isBurning) {
+                    const dist = distance(this.playerState.position, entity.position);
+                    if (dist <= GameConfig.player.interactionThreshold) {
+                        return entity;
+                    }
+                }
+            }
+            return null;
+        }
+
+        findNearbyFire() {
+            // Find any fire within interaction range (burning or not)
+            for (const entity of this.entities) {
+                if (entity.type === 'fireplace') {
+                    const dist = distance(this.playerState.position, entity.position);
+                    console.log(`[Fire] Found fireplace at distance ${Math.round(dist)}, interaction threshold: ${GameConfig.player.interactionThreshold}`);
+                    if (dist <= GameConfig.player.interactionThreshold) {
+                        console.log(`[Fire] Returning nearby fire at distance ${Math.round(dist)}`);
+                        return entity;
+                    }
+                }
+            }
+            console.log('[Fire] No nearby fires found');
+            return null;
+        }
+
+        applyNutrition(foodType, multiplier = 1.0) {
+            const nutrition = this.getNutrition(foodType);
+            this.playerState.needs.calories = Math.min(GameConfig.needs.fullValue, this.playerState.needs.calories + nutrition.calories * multiplier);
+
+            // Apply vitamins
+            for (let i = 0; i < this.playerState.needs.vitamins.length; i++) {
+                this.playerState.needs.vitamins[i] = Math.min(GameConfig.needs.fullValue, this.playerState.needs.vitamins[i] + nutrition.vitamins[i] * multiplier);
+            }
+        }
+
+        getNutrition(foodType) {
+            const baseType = foodType.replace('cooked_', '');
+            const nutrition = {
+                'blackberry': { calories: 50, vitamins: [0, 0, 0, 1, 0] },
+                'mushroom': { calories: 30, vitamins: [0, 0, 1, 0, 0] },
+                'herb': { calories: 20, vitamins: [1, 0, 0, 0, 0] },
+                'rabbit': { calories: 200, vitamins: [0, 1, 0, 0, 0] },
+                'deer': { calories: 500, vitamins: [0, 1, 0, 0, 1] }
+            };
+            return nutrition[baseType] || { calories: 0, vitamins: [0, 0, 0, 0, 0] };
+        }
+
+        applyFireTemperatureEffects(delta) {
+            const t = getCurrentTime(this.playerState);
+            const isNight = (t.hour < GameConfig.time.gameStartHour || t.hour >= GameConfig.time.nightStartHour);
+
+            // Only apply fire effects at night when temperature would normally decrease
+            if (!isNight) return;
+
+            // Find nearby burning fires
+            for (const entity of this.entities) {
+                if (entity.type === 'fireplace' && entity.isBurning) {
+                    const dist = distance(this.playerState.position, entity.position);
+                    const fireRange = GameConfig.player.interactionThreshold * 3; // Triple the range
+
+                    if (dist <= fireRange) {
+                        // Calculate temperature gain (same rate as night decay)
+                        const realSecondsPerGameDay = GameConfig.time.realSecondsPerGameDay;
+                        const inGameMinutesPerMs = (24 * 60) / (realSecondsPerGameDay * 1000);
+                        const inGameMinutes = delta * inGameMinutesPerMs;
+
+                        const decayRate = GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.temperature * GameConfig.needs.minutesPerHour);
+                        const temperatureGain = decayRate * inGameMinutes;
+
+                        this.playerState.needs.temperature = Math.min(GameConfig.needs.fullValue, this.playerState.needs.temperature + temperatureGain);
+                        break; // Only apply from one fire
+                    }
+                }
+            }
         }
     }
     function getPhaserBarColor(type) {
