@@ -733,55 +733,21 @@ console.log('Phaser main loaded');
             for (let i = 0; i < this.inventory.length; i++) {
                 const item = this.inventory[i];
                 if (item && this.isFood(item.type)) {
-                    // Check if we need to cook the food first
-                    if (item.type.startsWith('cooked_')) {
-                        // Already cooked, apply nutrition
+                    // Only eat if near a burning fire
+                    const nearbyFire = this.findNearbyBurningFire();
+                    if (nearbyFire) {
                         this.applyNutrition(item.type);
                         this.inventory[i] = null;
                         if (window.summaryLoggingEnabled) {
-                            console.log(`[Villager] ${this.name} ate cooked ${item.type.replace('cooked_', '')}`);
+                            console.log(`[Villager] ${this.name} ate ${item.type}`);
                         }
                         break;
-                    } else {
-                        // Raw food - try to cook it first
-                        const cookedFood = this.cookFood(item.type);
-                        if (cookedFood) {
-                            this.inventory[i] = cookedFood;
-                            this.applyNutrition(cookedFood.type);
-                            this.inventory[i] = null;
-                            if (window.summaryLoggingEnabled) {
-                                console.log(`[Villager] ${this.name} cooked and ate ${item.type}`);
-                            }
-                            break;
-                        } else {
-                            // Can't cook, eat raw (less nutrition)
-                            this.applyNutrition(item.type, 0.5); // Half nutrition for raw food
-                            this.inventory[i] = null;
-                            if (window.summaryLoggingEnabled) {
-                                console.log(`[Villager] ${this.name} ate raw ${item.type}`);
-                            }
-                            break;
-                        }
                     }
                 }
             }
         }
 
-        cookFood(foodType) {
-            // Find a burning fire nearby
-            const nearbyFire = this.findNearbyBurningFire();
-            if (nearbyFire) {
-                const cookedEmojis = {
-                    'blackberry': '🍇',
-                    'mushroom': '🍄',
-                    'herb': '🌿',
-                    'rabbit': '🍖',
-                    'deer': '🥩'
-                };
-                return { type: `cooked_${foodType}`, emoji: cookedEmojis[foodType] || '🍽️' };
-            }
-            return null; // Can't cook without fire
-        }
+
 
         findNearbyBurningFire() {
             // Find a burning fire within interaction range
@@ -794,13 +760,13 @@ console.log('Phaser main loaded');
             return null;
         }
 
-        applyNutrition(foodType, multiplier = 1.0) {
+        applyNutrition(foodType) {
             const nutrition = this.getNutrition(foodType);
-            this.needs.calories = Math.min(GameConfig.needs.fullValue, this.needs.calories + nutrition.calories * multiplier);
+            this.needs.calories = Math.min(GameConfig.needs.fullValue, this.needs.calories + nutrition.calories);
 
             // Apply vitamins
             for (let i = 0; i < this.needs.vitamins.length; i++) {
-                this.needs.vitamins[i] = Math.min(GameConfig.needs.fullValue, this.needs.vitamins[i] + nutrition.vitamins[i] * multiplier);
+                this.needs.vitamins[i] = Math.min(GameConfig.needs.fullValue, this.needs.vitamins[i] + nutrition.vitamins[i]);
             }
         }
 
@@ -815,33 +781,15 @@ console.log('Phaser main loaded');
             for (let i = 0; i < storageBox.items.length; i++) {
                 const item = storageBox.items[i];
                 if (item && this.isFood(item.type)) {
-                    if (item.type.startsWith('cooked_')) {
+                    // Only eat if near a burning fire
+                    const nearbyFire = this.findNearbyBurningFire();
+                    if (nearbyFire) {
                         this.applyNutrition(item.type);
                         storageBox.items.splice(i, 1);
                         if (window.summaryLoggingEnabled) {
-                            console.log(`[Villager] ${this.name} ate cooked ${item.type.replace('cooked_', '')} from storage`);
+                            console.log(`[Villager] ${this.name} ate ${item.type} from storage`);
                         }
                         break;
-                    } else {
-                        // Try to cook raw food
-                        const cookedFood = this.cookFood(item.type);
-                        if (cookedFood) {
-                            storageBox.items[i] = cookedFood;
-                            this.applyNutrition(cookedFood.type);
-                            storageBox.items.splice(i, 1);
-                            if (window.summaryLoggingEnabled) {
-                                console.log(`[Villager] ${this.name} cooked and ate ${item.type} from storage`);
-                            }
-                            break;
-                        } else {
-                            // Eat raw
-                            this.applyNutrition(item.type, 0.5);
-                            storageBox.items.splice(i, 1);
-                            if (window.summaryLoggingEnabled) {
-                                console.log(`[Villager] ${this.name} ate raw ${item.type} from storage`);
-                            }
-                            break;
-                        }
                     }
                 }
             }
@@ -1567,9 +1515,6 @@ console.log('Phaser main loaded');
                             textObj.setText('🔥'); // Burning fire emoji
                             this.updatePhaserUI();
                             this.showTempMessage('Added wood to fire!', 1200);
-                        } else if (entity.isBurning && entity.wood > 0) {
-                            // Cook food if fire is burning
-                            this.cookFoodNearFire(entity);
                         } else if (woodSlot !== -1) {
                             this.showTempMessage('Fire is full of wood!', 1200);
                         } else {
@@ -2446,47 +2391,13 @@ console.log('Phaser main loaded');
             }
         }
 
-        cookFoodNearFire(fireEntity) {
-            // Find food items in player inventory
-            const foodSlots = [];
-            for (let i = 0; i < this.playerState.inventory.length; i++) {
-                const item = this.playerState.inventory[i];
-                if (item && this.isFood(item.type)) {
-                    foodSlots.push(i);
-                }
-            }
 
-            if (foodSlots.length === 0) {
-                this.showTempMessage('No food to cook!', 1200);
-                return;
-            }
-
-            // Cook the first food item found
-            const slot = foodSlots[0];
-            const food = this.playerState.inventory[slot];
-
-            // Convert to cooked version
-            const cookedFood = this.getCookedVersion(food.type);
-            this.playerState.inventory[slot] = cookedFood;
-
-            this.updatePhaserUI();
-            this.showTempMessage(`Cooked ${food.type}!`, 1200);
-        }
 
         isFood(type) {
             return ALL_FOOD_TYPES.includes(type);
         }
 
-        getCookedVersion(type) {
-            const cookedEmojis = {
-                'blackberry': '🍇', // Cooked berries
-                'mushroom': '🍄', // Mushrooms stay same when cooked
-                'herb': '🌿', // Herbs stay same when cooked
-                'rabbit': '🍖', // Cooked meat
-                'deer': '🥩' // Cooked venison
-            };
-            return { type: `cooked_${type}`, emoji: cookedEmojis[type] || '🍽️' };
-        }
+
 
         sleepUntilMorning(sleepingBag) {
             if (sleepingBag.isOccupied) {
@@ -2676,7 +2587,7 @@ console.log('Phaser main loaded');
             // Only allow eating if near a burning fire
             const nearbyFire = this.findNearbyFire();
             if (nearbyFire) {
-                this.applyNutrition(item.type, 1.0);
+                this.applyNutrition(item.type);
                 this.playerState.inventory[slot] = null;
                 this.updatePhaserUI();
                 this.showTempMessage(`Ate ${item.type}!`, 1200);
@@ -2714,13 +2625,13 @@ console.log('Phaser main loaded');
             return null;
         }
 
-        applyNutrition(foodType, multiplier = 1.0) {
+        applyNutrition(foodType) {
             const nutrition = this.getNutrition(foodType);
-            this.playerState.needs.calories = Math.min(GameConfig.needs.fullValue, this.playerState.needs.calories + nutrition.calories * multiplier);
+            this.playerState.needs.calories = Math.min(GameConfig.needs.fullValue, this.playerState.needs.calories + nutrition.calories);
 
             // Apply vitamins
             for (let i = 0; i < this.playerState.needs.vitamins.length; i++) {
-                this.playerState.needs.vitamins[i] = Math.min(GameConfig.needs.fullValue, this.playerState.needs.vitamins[i] + nutrition.vitamins[i] * multiplier);
+                this.playerState.needs.vitamins[i] = Math.min(GameConfig.needs.fullValue, this.playerState.needs.vitamins[i] + nutrition.vitamins[i]);
             }
         }
 

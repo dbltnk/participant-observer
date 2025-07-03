@@ -79,7 +79,7 @@ sustain/
 - ✅ Task prioritization: water first, then food, then wood collection
 
 ### Phase 5: Game Mechanics ✅ COMPLETED - FULLY FUNCTIONAL
-1. ✅ Implement cooking system (players and villagers can cook food near fires)
+1. ✅ Implement food eating system (players and villagers can only eat food near burning fires)
 2. ✅ Add fire management (players and villagers can add wood to fires)
 3. ✅ Create storage system (players and villagers can use storage boxes)
 4. ✅ Add sleeping mechanics (players can sleep to skip night)
@@ -87,12 +87,12 @@ sustain/
 6. ✅ Add player interactions with all objects
 
 **Fully Functional Game Mechanics:**
-- ✅ **Cooking System**: Players and villagers can cook food near burning fires
+- ✅ **Food Eating System**: Players and villagers can only eat food near burning fires
 - ✅ **Fire Management**: Add wood to fires, fires burn and provide warmth
 - ✅ **Storage System**: Personal and communal storage boxes with transfer interface
 - ✅ **Sleeping System**: Sleep until 8:00 AM with time acceleration
 - ✅ **Food Nutrition**: Different foods provide different calories and vitamins
-- ✅ **Raw vs Cooked Food**: Raw food provides half nutrition, cooked food provides full nutrition
+- ✅ **Food Nutrition**: All food provides full nutrition when eaten near a burning fire
 - ✅ **Debug System**: Toggle debug mode to see interaction circles and object info
 - ✅ **Object Interactions**: All objects (wells, fires, sleeping bags, storage) are interactive
 - ✅ **Inventory Management**: Click slots to eat food or transfer items
@@ -134,10 +134,10 @@ sustain/
 19. **Villager fire management** - Villagers collect wood and add to camp fires
 20. **Debug system** - Toggle debug mode to see villager states, tasks, exploration radius, and object info
 21. **Ground texture** - Subtle ground texture using Perlin noise for better navigation
-22. **Fire interaction** - Add wood to fires, cook food near burning fires
+22. **Fire interaction** - Add wood to fires, eat food near burning fires
 23. **Sleeping system** - Sleep at sleeping bags to skip night and restore needs
 24. **Storage system** - Transfer items between inventory and storage boxes
-25. **Cooking mechanics** - Cook food for better nutrition, eat raw food for half nutrition
+25. **Food mechanics** - Eat food for full nutrition when near a burning fire
 26. **Debug visualization** - See interaction distance circles and object status when debug is enabled
 27. **Day/Night cycle** - Dynamic lighting changes based on time of day
 28. **Large world** - 10x viewport size world for exploration
@@ -619,7 +619,7 @@ function updateResourcePropagation(gameTime) {
 19. **Ground texture** - Subtle ground texture using Perlin noise for better navigation
 20. **Large world** - Expanded world to 10x viewport size for better exploration
 21. **Day/Night cycle** - Dynamic lighting changes based on time of day
-22. **Cooking system** - Players and villagers can cook food near fires
+22. **Food eating system** - Players and villagers can only eat food near burning fires
 23. **Storage system** - Complete storage interface with transfer functionality
 24. **Sleeping system** - Sleep until 8:00 AM with time acceleration
 

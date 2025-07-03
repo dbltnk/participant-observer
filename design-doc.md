@@ -73,7 +73,7 @@
 * **Resources:**
     * **Food:** 10 categories of food, including specific examples like Blackberries and Rabbits.
     * Animals run away from players and other villagers at 80% movement speed.
-    * Food cannot be eaten raw; it must be cooked. Cooking is instantaneous when near a burning fire. You cannot eat if too far away from a burning fire.
+    * Food can only be eaten when near a burning fire. You cannot eat if too far away from a burning fire.
     * **Wood:** Harvested from trees, works like any other plant resource. Used to fuel fires.
 * **Fires:**
     * Require wood to burn (1 wood per day).
