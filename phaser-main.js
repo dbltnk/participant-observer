@@ -353,6 +353,12 @@ console.log('Phaser main loaded');
             if (this.state === 'SLEEPING') {
                 // Wake up at individual wake up time
                 if (hour >= this.wakeUpTime) {
+                    // Free the sleeping bag
+                    if (this.sleepingBag) {
+                        this.sleepingBag.isOccupied = false;
+                        this.sleepingBag = null;
+                    }
+
                     this.state = 'FORAGING';
                     this.stateTimer = 0; // Reset timer
                     if (window.summaryLoggingEnabled) {
@@ -381,6 +387,11 @@ console.log('Phaser main loaded');
                     console.log(`[Villager] ${this.name} arrived at camp and is eating`);
                 }
             } else if (this.state === 'EATING' && this.needs.calories > 80 && this.stateTimer > 5000) { // 5 second cooldown
+                // Ensure villager is hydrated before going to sleep
+                if (this.needs.water < 70) {
+                    this.drinkFromWells();
+                }
+
                 this.state = 'SLEEPING';
                 this.stateTimer = 0; // Reset timer
                 if (window.summaryLoggingEnabled) {
@@ -426,6 +437,11 @@ console.log('Phaser main loaded');
         forage(entities, deltaTime) {
             // Increment goal timer
             this.goalTimer += deltaTime;
+
+            // Check for wells while foraging and drink if thirsty
+            if (this.needs.water < 70) {
+                this.drinkFromWells();
+            }
 
             // Debug logging for forage method entry
             if (window.summaryLoggingEnabled && Math.random() < 0.02) { // 2% chance per frame when spam enabled
@@ -685,8 +701,8 @@ console.log('Phaser main loaded');
                 this.eatFromStorage(personalStorage);
             }
 
-            // Drink from wells if needed
-            if (this.needs.water < 80) {
+            // Drink from wells if needed (lower threshold for better hydration)
+            if (this.needs.water < 70) {
                 this.drinkFromWells();
             }
 
@@ -909,8 +925,37 @@ console.log('Phaser main loaded');
         }
 
         sleep() {
+            // Find and move to sleeping bag at this camp
+            const sleepingBag = this.findCampSleepingBag();
+            if (sleepingBag && !sleepingBag.isOccupied) {
+                // Move towards sleeping bag
+                this.moveTowards(sleepingBag.position, 16); // Use small deltaTime for smooth movement
+
+                // If we're close enough to the sleeping bag, occupy it
+                if (distance(this.position, sleepingBag.position) <= 10) {
+                    sleepingBag.isOccupied = true;
+                    this.sleepingBag = sleepingBag;
+                }
+            }
+
             // Restore some needs while sleeping
             this.needs.temperature = Math.min(GameConfig.needs.fullValue, this.needs.temperature + 10);
+
+            // Emergency drinking if critically thirsty while sleeping
+            if (this.needs.water < 30) {
+                this.drinkFromWells();
+            }
+        }
+
+        findCampSleepingBag() {
+            // Find sleeping bag at this camp
+            const sleepingBags = this.gameEntities ? this.gameEntities.filter(e => e.type === 'sleeping_bag') : [];
+            for (const bag of sleepingBags) {
+                if (distance(this.campPosition, bag.position) < 50) { // Within camp radius
+                    return bag;
+                }
+            }
+            return null;
         }
 
         isAtCamp() {
@@ -1057,14 +1102,27 @@ console.log('Phaser main loaded');
 
         checkDeath() {
             const n = this.needs;
-            if (n.temperature <= 0 || n.water <= 0 || n.calories <= 0) {
-                console.log(`[Villager] ${this.name} died!`);
+
+            // Check for death conditions and log specific cause
+            if (n.temperature <= 0) {
+                console.log(`[Villager] ${this.name} died from cold! Final stats: T${Math.round(n.temperature)} W${Math.round(n.water)} C${Math.round(n.calories)} V[${n.vitamins.map(v => Math.round(v)).join(',')}]`);
+                return true;
+            }
+
+            if (n.water <= 0) {
+                console.log(`[Villager] ${this.name} died from dehydration! Final stats: T${Math.round(n.temperature)} W${Math.round(n.water)} C${Math.round(n.calories)} V[${n.vitamins.map(v => Math.round(v)).join(',')}]`);
+                return true;
+            }
+
+            if (n.calories <= 0) {
+                console.log(`[Villager] ${this.name} died from starvation! Final stats: T${Math.round(n.temperature)} W${Math.round(n.water)} C${Math.round(n.calories)} V[${n.vitamins.map(v => Math.round(v)).join(',')}]`);
                 return true;
             }
 
             for (let i = 0; i < n.vitamins.length; i++) {
                 if (n.vitamins[i] <= 0) {
-                    console.log(`[Villager] ${this.name} died from vitamin deficiency!`);
+                    const vitaminName = String.fromCharCode(65 + i); // A, B, C, D, E
+                    console.log(`[Villager] ${this.name} died from vitamin ${vitaminName} deficiency! Final stats: T${Math.round(n.temperature)} W${Math.round(n.water)} C${Math.round(n.calories)} V[${n.vitamins.map(v => Math.round(v)).join(',')}]`);
                     return true;
                 }
             }
@@ -1185,6 +1243,12 @@ console.log('Phaser main loaded');
         }
 
         destroy() {
+            // Free sleeping bag if occupied
+            if (this.sleepingBag) {
+                this.sleepingBag.isOccupied = false;
+                this.sleepingBag = null;
+            }
+
             if (this.phaserText) this.phaserText.destroy();
             if (this.nameText) this.nameText.destroy();
             if (this.stateText) this.stateText.destroy();
@@ -1276,11 +1340,11 @@ console.log('Phaser main loaded');
                 // Personal storage
                 this.entities.push({ position: { x: x, y: y + cfg.campSpacing.y }, type: 'storage_box', emoji: '📦', capacity: GameConfig.storage.personalCapacity, items: [], isPersonal: true, villagerId: i });
             }
-            // --- Player start position (near camp 0) ---
+            // --- Player start position (center of camp 0) ---
             const playerCamp = this.camps[0];
             this.playerStartPosition = {
-                x: playerCamp.position.x + cfg.playerStartOffset.x,
-                y: playerCamp.position.y + cfg.playerStartOffset.y
+                x: playerCamp.position.x,
+                y: playerCamp.position.y
             };
 
             // --- Create villagers (skip camp 0 since player takes that role) ---
@@ -1290,10 +1354,10 @@ console.log('Phaser main loaded');
                 const camp = this.camps[i];
                 const villagerName = generateVillagerName();
 
-                // Spawn villager next to camp, not inside it
+                // Spawn villager at camp center
                 const villagerSpawnPosition = {
-                    x: camp.position.x + cfg.playerStartOffset.x,
-                    y: camp.position.y + cfg.playerStartOffset.y
+                    x: camp.position.x,
+                    y: camp.position.y
                 };
 
                 const villager = new Villager(villagerName, villagerSpawnPosition, i);
@@ -1733,6 +1797,9 @@ console.log('Phaser main loaded');
             this.uiContainer.add(this.ui.debugBtn);
         }
         update(time, delta) {
+            // Update day/night lighting
+            this.updateDayNightLighting();
+
             // Check if player is sleeping
             if (this.isSleeping && this.sleepingBag) {
                 // Check if player moved away from sleeping bag
@@ -1742,16 +1809,21 @@ console.log('Phaser main loaded');
                     this.stopSleeping();
                 } else {
                     // Use accelerated time while sleeping
-                    const gameTimeDelta = (delta / 1000) * this.sleepTimeAcceleration;
+                    const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
+                    const gameTimeDelta = (delta / 1000) * timeAcceleration * this.sleepTimeAcceleration;
                     this.playerState.currentTime += gameTimeDelta;
 
-                    // Restore needs while sleeping
-                    this.playerState.needs.temperature = Math.min(GameConfig.needs.fullValue, this.playerState.needs.temperature + 0.5);
-                    this.playerState.needs.calories = Math.min(GameConfig.needs.fullValue, this.playerState.needs.calories + 0.2);
+                    // Update ZZZ position
+                    if (this.sleepZZZ) {
+                        this.sleepZZZ.setPosition(this.player.x, this.player.y - 60);
+                    }
 
-                    // Check if it's morning (8:00 AM)
+                    // Restore temperature while sleeping (calories should still decay naturally)
+                    this.playerState.needs.temperature = Math.min(GameConfig.needs.fullValue, this.playerState.needs.temperature + 0.5);
+
+                    // Check if it's exactly 8:00 AM (wake up during 8:00-8:01 minute)
                     const t = getCurrentTime(this.playerState);
-                    if (t.hour >= 8) {
+                    if (t.hour === 8 && t.minute === 0) {
                         this.stopSleeping();
                         this.showTempMessage('Woke up at 8:00 AM!', 2000);
                     }
@@ -1771,14 +1843,15 @@ console.log('Phaser main loaded');
                 }
             }
 
-            // Update villagers
-            this.updateVillagers(delta);
+            // Update villagers (with sleep acceleration if sleeping)
+            const effectiveDelta = this.isSleeping ? delta * this.sleepTimeAcceleration : delta;
+            this.updateVillagers(effectiveDelta);
 
-            // Needs
-            updateNeeds(this.playerState, delta);
+            // Needs (with sleep acceleration if sleeping)
+            updateNeeds(this.playerState, effectiveDelta);
 
-            // Apply fire temperature effects
-            this.applyFireTemperatureEffects(delta);
+            // Apply fire temperature effects (with sleep acceleration if sleeping)
+            this.applyFireTemperatureEffects(effectiveDelta);
 
             // UI update
             this.updatePhaserUI();
@@ -1791,7 +1864,7 @@ console.log('Phaser main loaded');
                 return;
             }
 
-            // Player movement
+            // Player movement (with sleep acceleration if sleeping)
             let vx = 0, vy = 0;
             if (this.cursors.left.isDown) vx -= 1;
             if (this.cursors.right.isDown) vx += 1;
@@ -1802,8 +1875,8 @@ console.log('Phaser main loaded');
                 vy *= GameConfig.player.diagonalMovementFactor;
             }
             const moveSpeed = GameConfig.player.moveSpeed;
-            this.playerState.position.x += vx * moveSpeed * (delta / 1000);
-            this.playerState.position.y += vy * moveSpeed * (delta / 1000);
+            this.playerState.position.x += vx * moveSpeed * (effectiveDelta / 1000);
+            this.playerState.position.y += vy * moveSpeed * (effectiveDelta / 1000);
 
             // Allow player to move freely within the large world bounds
             // Only clamp to prevent going outside the actual world boundaries
@@ -1886,6 +1959,12 @@ console.log('Phaser main loaded');
                     // Mark as dead and create corpse
                     villager.isDead = true;
                     villager.state = 'DEAD';
+
+                    // Free sleeping bag if occupied
+                    if (villager.sleepingBag) {
+                        villager.sleepingBag.isOccupied = false;
+                        villager.sleepingBag = null;
+                    }
 
                     // Change visual to corpse
                     if (villager.phaserText) {
@@ -2232,14 +2311,20 @@ console.log('Phaser main loaded');
                 return;
             }
 
+            // Check current time before starting sleep
+            const currentTime = getCurrentTime(this.playerState);
+            console.log(`[Sleep] Starting sleep at ${currentTime.hour}:${currentTime.minute}`);
+
             // Mark as occupied
             sleepingBag.isOccupied = true;
 
             // Enable sleeping mode with time acceleration
             this.isSleeping = true;
             this.sleepingBag = sleepingBag;
-            this.normalTimeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
-            this.sleepTimeAcceleration = this.normalTimeAcceleration * 50; // 50x faster
+            this.sleepTimeAcceleration = 25; // 25x faster
+
+            // Show ZZZ above player
+            this.sleepZZZ = this.add.text(this.player.x, this.player.y - 60, '💤', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setDepth(1000);
 
             this.showTempMessage('Sleeping... (time accelerated)', 2000);
         }
@@ -2249,6 +2334,13 @@ console.log('Phaser main loaded');
                 this.isSleeping = false;
                 this.sleepingBag.isOccupied = false;
                 this.sleepingBag = null;
+
+                // Remove ZZZ
+                if (this.sleepZZZ) {
+                    this.sleepZZZ.destroy();
+                    this.sleepZZZ = null;
+                }
+
                 console.log('[Sleep] Player stopped sleeping');
             }
         }
@@ -2475,6 +2567,51 @@ console.log('Phaser main loaded');
                 'deer': { calories: 500, vitamins: [0, 1, 0, 0, 1] }
             };
             return nutrition[baseType] || { calories: 0, vitamins: [0, 0, 0, 0, 0] };
+        }
+
+        updateDayNightLighting() {
+            const t = getCurrentTime(this.playerState);
+            const hour = t.hour;
+
+            // Calculate lighting intensity based on time
+            let nightIntensity = 0;
+
+            // Dark from 6-9 PM (18-21)
+            if (hour >= 18 && hour <= 21) {
+                nightIntensity = (hour - 18) / 3; // 0 to 1 over 3 hours
+            }
+            // Dark from 9 PM to 5 AM (21-5)
+            else if (hour >= 21 || hour <= 5) {
+                nightIntensity = 1; // Full darkness
+            }
+            // Light from 5-8 AM (5-8)
+            else if (hour >= 5 && hour <= 8) {
+                nightIntensity = 1 - ((hour - 5) / 3); // 1 to 0 over 3 hours
+            }
+            // Day from 8-6 PM (8-18)
+            else {
+                nightIntensity = 0; // Full daylight
+            }
+
+            // Day color: original #2d3748 (dark gray)
+            // Night color: darker and more blue
+            if (nightIntensity === 0) {
+                // Full daylight - use original color
+                this.cameras.main.setBackgroundColor(0x2d3748);
+            } else {
+                // Night - use darker blue color
+                // Day: #2d3748 (45, 55, 72) -> Night: #1a1f2e (26, 31, 46)
+                const dayR = 45, dayG = 55, dayB = 72;
+                const nightR = 26, nightG = 31, nightB = 46;
+
+                // Simple linear interpolation
+                const r = Math.round(dayR + (nightR - dayR) * nightIntensity);
+                const g = Math.round(dayG + (nightG - dayG) * nightIntensity);
+                const b = Math.round(dayB + (nightB - dayB) * nightIntensity);
+
+                const nightColor = (r << 16) | (g << 8) | b;
+                this.cameras.main.setBackgroundColor(nightColor);
+            }
         }
 
         applyFireTemperatureEffects(delta) {
