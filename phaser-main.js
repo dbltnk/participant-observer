@@ -27,6 +27,11 @@ console.log('Phaser main loaded');
     // Extract all food types from GameConfig for easy access
     const ALL_FOOD_TYPES = Object.keys(GameConfig.resources.foodData).filter(type => GameConfig.resources.foodData[type].calories > 0);
 
+    // Utility function to check if an item type is food
+    function isFood(type) {
+        return ALL_FOOD_TYPES.includes(type);
+    }
+
     // Initialize logging system
     function initLogging() {
         console.log('[Logging] Initializing browser logging system...');
@@ -243,7 +248,6 @@ console.log('Phaser main loaded');
 
             // Inventory (same as player)
             this.inventory = new Array(GameConfig.player.inventorySize).fill(null);
-            this.selectedSlot = 0;
 
             // Memory system for resource locations
             this.memory = {
@@ -844,7 +848,7 @@ console.log('Phaser main loaded');
         eatFromInventory() {
             for (let i = 0; i < this.inventory.length; i++) {
                 const item = this.inventory[i];
-                if (item && this.isFood(item.type)) {
+                if (item && isFood(item.type)) {
                     // Only eat if near a burning fire
                     const nearbyFire = this.findNearbyBurningFire();
 
@@ -905,7 +909,7 @@ console.log('Phaser main loaded');
         eatFromStorage(storageBox) {
             for (let i = 0; i < storageBox.items.length; i++) {
                 const item = storageBox.items[i];
-                if (item && this.isFood(item.type)) {
+                if (item && isFood(item.type)) {
                     // Only eat if near a burning fire
                     const nearbyFire = this.findNearbyBurningFire();
                     if (nearbyFire) {
@@ -1146,20 +1150,10 @@ console.log('Phaser main loaded');
             }
         }
 
-        leaveCamp(deltaTime) {
-            // Legacy method - now handled by startLeavingCamp and continueLeavingCamp
-            if (!this.isLeavingCamp) {
-                this.startLeavingCamp();
-            }
-            this.continueLeavingCamp(deltaTime);
-        }
+
 
         isInventoryFull() {
             return this.inventory.every(item => item !== null);
-        }
-
-        isFood(type) {
-            return ALL_FOOD_TYPES.includes(type);
         }
 
         getCurrentTime(gameTime) {
@@ -1809,7 +1803,6 @@ console.log('Phaser main loaded');
                     vitamins: new Array(GameConfig.needs.vitaminCount).fill(GameConfig.needs.fullValue)
                 },
                 inventory: new Array(GameConfig.player.inventorySize).fill(null),
-                selectedSlot: 0,
                 currentTime: GameConfig.time.gameStartTime
             };
             this.player = this.add.text(this.playerState.position.x, this.playerState.position.y, '👤', { fontSize: GameConfig.player.fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
@@ -1871,7 +1864,7 @@ console.log('Phaser main loaded');
                         }
 
                         // Second priority: eat food if near a burning fire
-                        if (this.isFood(item.type)) {
+                        if (isFood(item.type)) {
                             const nearbyFire = this.findNearbyFire();
                             if (nearbyFire) {
                                 this.eatFoodFromInventory(i, item);
@@ -1904,14 +1897,7 @@ console.log('Phaser main loaded');
                     }
                 });
             }
-            // --- Inventory slot selection: 1-6 keys (disabled - no longer using selection) ---
-            // this.input.keyboard.on('keydown', (event) => {
-            //     const idx = parseInt(event.key, 10) - 1;
-            //     if (idx >= 0 && idx < GameConfig.player.inventorySize) {
-            //         this.playerState.selectedSlot = idx;
-            //         this.updatePhaserUI();
-            //     }
-            // });
+
             // Time display (top right) - fixed to camera viewport
             this.ui.timeText = this.add.text(window.innerWidth - margin, margin, '', { fontSize: GameConfig.ui.fontSizes.time, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(1, 0).setScrollFactor(0);
             this.uiContainer.add(this.ui.timeText);
@@ -2686,12 +2672,6 @@ console.log('Phaser main loaded');
 
 
 
-        isFood(type) {
-            return ALL_FOOD_TYPES.includes(type);
-        }
-
-
-
         sleepUntilMorning(sleepingBag) {
             if (sleepingBag.isOccupied) {
                 this.showTempMessage('Sleeping bag is occupied!', 1200);
@@ -2872,10 +2852,6 @@ console.log('Phaser main loaded');
             }
         }
 
-        isFood(type) {
-            return ALL_FOOD_TYPES.includes(type);
-        }
-
         eatFoodFromInventory(slot, item) {
             // Only allow eating if near a burning fire
             const nearbyFire = this.findNearbyFire();
@@ -2890,31 +2866,15 @@ console.log('Phaser main loaded');
         }
 
         findNearbyFire() {
-            // Only return burning fires within interaction range
+            // Find burning fires with wood within interaction range
             for (const entity of this.entities) {
-                if (entity.type === 'fireplace' && entity.isBurning) {
+                if (entity.type === 'fireplace' && entity.isBurning && entity.wood > 0) {
                     const dist = distance(this.playerState.position, entity.position);
                     if (dist <= GameConfig.player.interactionThreshold) {
                         return entity;
                     }
                 }
             }
-            return null;
-        }
-
-        findNearbyFire() {
-            // Find any fire within interaction range (burning or not)
-            for (const entity of this.entities) {
-                if (entity.type === 'fireplace') {
-                    const dist = distance(this.playerState.position, entity.position);
-                    console.log(`[Fire] Found fireplace at distance ${Math.round(dist)}, interaction threshold: ${GameConfig.player.interactionThreshold}`);
-                    if (dist <= GameConfig.player.interactionThreshold) {
-                        console.log(`[Fire] Returning nearby fire at distance ${Math.round(dist)}`);
-                        return entity;
-                    }
-                }
-            }
-            console.log('[Fire] No nearby fires found');
             return null;
         }
 
@@ -3224,6 +3184,7 @@ console.log('Phaser main loaded');
 
         fleeFromTarget(animal, targetPosition) {
             // Calculate direction away from target
+            // This means animals run faster if multiple people chase them, happy accident and I love it!
             const dx = animal.position.x - targetPosition.x;
             const dy = animal.position.y - targetPosition.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -3532,4 +3493,4 @@ console.log('Phaser main loaded');
             fps: { target: 60, forceSetTimeOut: true }
         });
     }
-})(); 
+})();
