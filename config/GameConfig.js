@@ -635,7 +635,26 @@ window.GameConfig = {
         'Elm', 'Fern', 'Grove', 'Hazel', 'Ivy', 'Juniper', 'Kestrel', 'Linden',
         'Maple', 'Nettle', 'Oak', 'Poppy', 'Quince', 'Rowan', 'Sage', 'Thistle',
         'Umber', 'Violet', 'Wisteria', 'Yew', 'Zinnia', 'Alder', 'Bramble', 'Clover'
-    ]
+    ],
+
+    // Visual temperature display settings (purely cosmetic)
+    visualTemperature: {
+        states: ['freezing', 'cold', 'moderate', 'warm', 'hot'],
+        labels: {
+            freezing: 'Freezing',
+            cold: 'Cold',
+            moderate: 'Moderate',
+            warm: 'Warm',
+            hot: 'Hot'
+        },
+        // Time ranges (24h format)
+        day: { start: 9, end: 17 }, // 09:00 to 17:59 is day
+        dusk: { start: 18, end: 19 }, // 18:00 to 19:59 is dusk
+        dawn: { start: 7, end: 8 },  // 07:00 to 08:59 is dawn
+        night: { start: 20, end: 6 }, // 20:00 to 06:59 is night (wraps around)
+        // Chance for day temp to change per hour (0.25 = 25%)
+        dayChangeChance: 0.25
+    }
 };
 
 // Assert world is much larger than viewport

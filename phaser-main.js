@@ -1864,6 +1864,11 @@ console.log('Phaser main loaded');
             // Time display (top right) - fixed to camera viewport
             this.ui.timeText = this.add.text(window.innerWidth - margin, margin, '', { fontSize: GameConfig.ui.fontSizes.time, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(1, 0).setScrollFactor(0);
             this.uiContainer.add(this.ui.timeText);
+            // --- Visual Temperature State Tracking ---
+            this._visualTempState = null; // Track current state
+            this._visualTempDayState = null; // Track current day state ("moderate" or "warm")
+            this._visualTempLastHour = null; // Track last hour for update
+            this._visualTempSeededRandom = new SeededRandom(getCurrentSeed() + 12345); // Offset for temp randomness
             // Info box (bottom left) - fixed to camera viewport
             this.ui.infoBox = this.add.text(margin, window.innerHeight - margin, 'Alpine Sustainability v1.0\nControls: WASD to move\nClick inventory slots to select', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.infoBox);
@@ -2071,6 +2076,12 @@ console.log('Phaser main loaded');
             this.playerState.position.y = Math.max(0, Math.min(GameConfig.world.height, this.playerState.position.y));
 
             this.player.setPosition(this.playerState.position.x, this.playerState.position.y);
+            // --- Visual Temperature State Update ---
+            const t = getCurrentTime(this.playerState);
+            if (this._visualTempLastHour !== t.hour) {
+                this._visualTempLastHour = t.hour;
+                this._visualTempState = this._calculateVisualTemperatureState(t);
+            }
         }
         updatePhaserUI() {
             // Needs bars
@@ -2102,9 +2113,26 @@ console.log('Phaser main loaded');
             else if (t.hour >= GameConfig.time.nightStartHour && t.hour < 22) timeEmoji = '🌆';
             else timeEmoji = '🌙';
 
+            // Visual temperature display
+            let tempState = this._visualTempState || 'moderate';
+            let tempEmoji = '❄️';
+
+            // Override: If near a burning fire, always show "hot"
+            const nearbyFire = this.findNearbyFire();
+            if (nearbyFire && nearbyFire.isBurning && nearbyFire.wood > 0) {
+                tempState = 'hot';
+            }
+
+            const tempLabel = GameConfig.visualTemperature.labels[tempState] || 'Moderate';
+            if (tempState === 'freezing') tempEmoji = '🥶';
+            else if (tempState === 'cold') tempEmoji = '🧊';
+            else if (tempState === 'warm') tempEmoji = '🌤️';
+            else if (tempState === 'hot') tempEmoji = '🔥';
+            else tempEmoji = '🌡️';
+
             // Count living villagers
             const livingVillagers = this.villagers ? this.villagers.filter(v => !v.isDead).length : 0;
-            this.ui.timeText.setText(`📅 Day ${t.day}\n${timeEmoji} ${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}\n👥 Neighbours: ${livingVillagers}`);
+            this.ui.timeText.setText(`📅 Day ${t.day}\n${timeEmoji} ${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}\n${tempEmoji} ${tempLabel}\n👥 Neighbours: ${livingVillagers}`);
             // Seed UI
             const currentSeed = this.currentSeedValue || getCurrentSeed();
             this.ui.seedInputText.setText(currentSeed.toString());
@@ -2117,6 +2145,7 @@ console.log('Phaser main loaded');
                 const fps = Math.round(1000 / this.game.loop.delta);
                 this.ui.fpsCounter.setText(`FPS: ${fps}`);
             }
+
         }
 
         updateVillagers(delta) {
@@ -3225,6 +3254,37 @@ console.log('Phaser main loaded');
                     }
                 }
             }
+        }
+        _calculateVisualTemperatureState(t) {
+            // Use config for all thresholds
+            const cfg = GameConfig.visualTemperature;
+            assert(cfg, 'Missing visualTemperature config');
+            // Helper to check hour in range (handles wrap)
+            function inRange(hour, range) {
+                if (range.start <= range.end) return hour >= range.start && hour <= range.end;
+                return hour >= range.start || hour <= range.end;
+            }
+            // Night: always freezing
+            if (inRange(t.hour, cfg.night)) return 'freezing';
+            // Dusk/dawn: always cold
+            if (inRange(t.hour, cfg.dusk) || inRange(t.hour, cfg.dawn)) return 'cold';
+            // Day: moderate/warm, 25% chance to change each hour
+            if (inRange(t.hour, cfg.day)) {
+                // Only change at hour boundaries
+                if (this._visualTempDayState == null || this._visualTempLastDayHour !== t.hour) {
+                    this._visualTempLastDayHour = t.hour;
+                    // 25% chance to flip state
+                    if (this._visualTempDayState == null) {
+                        // Start with moderate
+                        this._visualTempDayState = 'moderate';
+                    } else if (this._visualTempSeededRandom.random() < cfg.dayChangeChance) {
+                        this._visualTempDayState = (this._visualTempDayState === 'moderate') ? 'warm' : 'moderate';
+                    }
+                }
+                return this._visualTempDayState;
+            }
+            // Fallback
+            return 'moderate';
         }
     }
     function getPhaserBarColor(type) {
