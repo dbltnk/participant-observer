@@ -893,22 +893,7 @@ console.log('Phaser main loaded');
         }
 
         executeEmergencyDrink(deltaTime, entities) {
-            if (this.stateData.targetWell) {
-                // Move towards well
-                console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_DRINK: Moving to well at (${Math.round(this.stateData.targetWell.position.x)}, ${Math.round(this.stateData.targetWell.position.y)})`);
-                this.villager.moveTowards(this.stateData.targetWell.position, deltaTime);
-
-                // Check if close enough to drink
-                if (distance(this.villager.position, this.stateData.targetWell.position) <= GameConfig.player.interactionThreshold) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_DRINK: Drinking from well`);
-                    this.drinkFromWell(this.stateData.targetWell);
-                    this.stateData.targetWell = null;
-                }
-            } else {
-                // No well found, try to find one
-                console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_DRINK: No well found, searching...`);
-                this.stateData.targetWell = this.findNearestWell();
-            }
+            this.executeDrink(deltaTime, entities);
         }
 
         // === EMERGENCY EAT STATE ===
@@ -917,74 +902,7 @@ console.log('Phaser main loaded');
         }
 
         executeEmergencyEat(deltaTime, entities, storageBoxes) {
-            // --- PERSISTENT STORAGE INTENT ---
-            if (!this.stateData) this.stateData = {};
-            // If we're in the middle of a storage task, finish it before doing anything else
-            if (this.stateData.currentTask === 'store') {
-                const storeSuccess = this.storeItemsInIdle(deltaTime);
-                if (storeSuccess) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_EAT: STORAGE TASK COMPLETE, clearing currentTask`);
-                    this.stateData.currentTask = null;
-                } else {
-                    // Still moving to storage or storing, do nothing else
-                    return;
-                }
-            }
-            // If we have items to store, start storage task
-            if (this.hasItemsToStore()) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_EAT: Has items to store, starting storage task`);
-                this.stateData.currentTask = 'store';
-                const storeSuccess = this.storeItemsInIdle(deltaTime);
-                if (!storeSuccess) {
-                    return; // Still moving to storage
-                }
-                // Storage complete, clear task
-                this.stateData.currentTask = null;
-            }
-
-            // First try to eat from inventory
-            if (this.eatFood()) {
-                return;
-            }
-
-            // Then try to retrieve food from storage
-            if (this.retrieveFromStorage(storageBoxes)) {
-                return;
-            }
-
-            // Finally, try to find and collect food
-            // Check if we have a current target food and if it's still available
-            if (this.stateData.targetFood) {
-                // Check if target has been collected by someone else
-                if (this.stateData.targetFood.collected) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_EAT: Target food ${this.stateData.targetFood.type} was collected by someone else, finding new target`);
-                    this.stateData.targetFood = null;
-                }
-            }
-
-            // Find new target food if we don't have one
-            if (!this.stateData.targetFood) {
-                this.stateData.targetFood = this.findNearestFood(entities, storageBoxes, true);
-                if (this.stateData.targetFood) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_EAT: New target food ${this.stateData.targetFood.type} at (${Math.round(this.stateData.targetFood.position.x)}, ${Math.round(this.stateData.targetFood.position.y)})`);
-                }
-            }
-
-            // Move toward target food if we have one
-            if (this.stateData.targetFood) {
-                this.villager.moveTowards(this.stateData.targetFood.position, deltaTime);
-                if (distance(this.villager.position, this.stateData.targetFood.position) <= GameConfig.player.interactionThreshold) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_EAT: Collecting ${this.stateData.targetFood.type}`);
-                    const success = this.collectResource(this.stateData.targetFood);
-                    if (success) {
-                        // Clear target after successful collection
-                        this.stateData.targetFood = null;
-                    } else {
-                        // Clear target so we find a new one next time
-                        this.stateData.targetFood = null;
-                    }
-                }
-            }
+            this.executeEat(true, deltaTime, entities, storageBoxes);
         }
 
         // === EMERGENCY WARM UP STATE ===
@@ -994,41 +912,12 @@ console.log('Phaser main loaded');
         }
 
         executeEmergencyWarmUp(deltaTime, entities) {
-            if (this.stateData.targetFire) {
-                // Move towards fire
-                this.villager.moveTowards(this.stateData.targetFire.position, deltaTime);
-            } else {
-                // No fire found, try to find one
-                this.stateData.targetFire = this.findNearestBurningFire();
-            }
+            this.executeWarmUp(deltaTime, entities);
         }
 
         // === EMERGENCY FIRE REFILL STATE ===
         shouldEmergencyRefillFire(entities) {
-            const ownFire = this.findOwnFireplace();
-
-            // If we're currently in EMERGENCY_FIRE_REFILL state, stay in it until task is complete
-            if (this.currentState === VILLAGER_STATES.EMERGENCY_FIRE_REFILL) {
-                // Only leave if fire is now above emergency threshold OR we have no target wood (task failed)
-                const fireIsAboveEmergency = ownFire && ownFire.wood >= GameConfig.villager.fireThresholds.emergency;
-                const hasNoTarget = !this.stateData.targetWood;
-
-                if (fireIsAboveEmergency) {
-                    const fireWood = ownFire ? ownFire.wood : 'no fire';
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Fire now above emergency threshold (${fireWood} logs), completing task`);
-                    return false; // Task complete, can leave state
-                } else if (hasNoTarget) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: No target wood, task failed`);
-                    return false; // Task failed, can leave state
-                } else {
-                    const fireWood = ownFire ? ownFire.wood : 'no fire';
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Staying in state, fire has ${fireWood} logs, target wood: ${this.stateData.targetWood ? 'found' : 'not found'}`);
-                    return true; // Stay in state to complete task
-                }
-            }
-
-            // If not currently in EMERGENCY_FIRE_REFILL, only enter if fire needs emergency refilling
-            return ownFire && ownFire.wood < GameConfig.villager.fireThresholds.emergency;
+            return this.shouldRefillFire(true, entities);
         }
 
         enterEmergencyFireRefill() {
@@ -1038,91 +927,7 @@ console.log('Phaser main loaded');
         }
 
         executeEmergencyFireRefill(deltaTime, entities, storageBoxes) {
-            // --- FIRE REFILL TASK PRIORITY ---
-            // When in fire refill state, prioritize completing the fire refill task
-            // Only handle storage if we're completely stuck (no target wood)
-            if (!this.stateData) this.stateData = {};
-
-            // If we have no target wood and have items to store, handle storage
-            if (!this.stateData.targetWood && this.hasItemsToStore()) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: No target wood, handling storage before continuing`);
-                const storeSuccess = this.storeItemsInIdle(deltaTime);
-                if (!storeSuccess) {
-                    return; // Still moving to storage
-                }
-            }
-
-            // Count how much wood we have collected
-            const woodCount = this.villager.inventory.filter(item => item && item.type === GameConfig.entityTypes.tree).length;
-            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Wood count: ${woodCount}/${this.stateData.woodTarget}`);
-
-            // If we have enough wood, return to fire
-            if (woodCount >= this.stateData.woodTarget) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Have enough wood (${woodCount}), returning to fire`);
-                this.villager.moveTowards(this.stateData.ownFire.position, deltaTime);
-
-                // Check if close enough to add wood
-                if (distance(this.villager.position, this.stateData.ownFire.position) <= GameConfig.player.interactionThreshold) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Adding wood to fire`);
-                    this.addWoodToFire(this.stateData.ownFire);
-                }
-                return;
-            }
-
-            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: State data - ownFire: ${this.stateData.ownFire ? 'found' : 'null'}, targetWood: ${this.stateData.targetWood ? 'found' : 'null'}`);
-
-            if (this.stateData.ownFire && this.stateData.targetWood) {
-                // Handle both storage and world sources
-                if (this.stateData.targetWood.storageBox) {
-                    // Target is in storage - move to storage box
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Moving towards storage box at (${Math.round(this.stateData.targetWood.storageBox.position.x)}, ${Math.round(this.stateData.targetWood.storageBox.position.y)})`);
-                    this.villager.moveTowards(this.stateData.targetWood.storageBox.position, deltaTime);
-
-                    // Check if close enough to retrieve
-                    if (distance(this.villager.position, this.stateData.targetWood.storageBox.position) <= GameConfig.player.interactionThreshold) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Close enough to retrieve wood from storage`);
-                        if (this.retrieveFromStorage([this.stateData.targetWood.storageBox], GameConfig.entityTypes.tree)) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Wood retrieved from storage successfully`);
-                            // Clear target so we find a new source
-                            this.stateData.targetWood = null;
-                        } else {
-                            // Retrieval failed - clear targetWood so we try a different source next time
-                            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Storage retrieval failed, trying different source`);
-                            this.stateData.targetWood = null;
-                        }
-                    }
-                } else {
-                    // Target is in world - move towards wood
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Moving towards wood at (${Math.round(this.stateData.targetWood.position.x)}, ${Math.round(this.stateData.targetWood.position.y)})`);
-                    this.villager.moveTowards(this.stateData.targetWood.position, deltaTime);
-
-                    // Check if close enough to collect
-                    if (distance(this.villager.position, this.stateData.targetWood.position) <= GameConfig.player.interactionThreshold) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Close enough to collect wood`);
-                        if (this.collectResource(this.stateData.targetWood)) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Wood collected successfully`);
-                            // Clear target so we find a new source
-                            this.stateData.targetWood = null;
-                        } else {
-                            // Collection failed - clear targetWood so we try a different source next time
-                            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Collection failed, trying different source`);
-                            this.stateData.targetWood = null;
-                        }
-                    }
-                }
-            } else {
-                console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Re-finding targets`);
-                // Re-find targets
-                this.stateData.ownFire = this.findOwnFireplace();
-                this.stateData.targetWood = this.findNearestWood(entities, storageBoxes, true); // true = emergency mode
-
-                console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: After re-finding - ownFire: ${this.stateData.ownFire ? 'found' : 'null'}, targetWood: ${this.stateData.targetWood ? 'found' : 'null'}`);
-
-                // If no wood found, log it
-                if (!this.stateData.targetWood) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: No wood found in storage or world`);
-                }
-            }
+            this.executeFireRefill(true, deltaTime, entities, storageBoxes);
         }
 
         // === REGULAR DRINK STATE ===
@@ -1131,15 +936,7 @@ console.log('Phaser main loaded');
         }
 
         executeRegularDrink(deltaTime, entities) {
-            if (this.stateData.targetWell) {
-                this.villager.moveTowards(this.stateData.targetWell.position, deltaTime);
-                if (distance(this.villager.position, this.stateData.targetWell.position) <= GameConfig.player.interactionThreshold) {
-                    this.drinkFromWell(this.stateData.targetWell);
-                    this.stateData.targetWell = null;
-                }
-            } else {
-                this.stateData.targetWell = this.findNearestWell();
-            }
+            this.executeDrink(deltaTime, entities);
         }
 
         // === REGULAR WARM UP STATE ===
@@ -1148,11 +945,7 @@ console.log('Phaser main loaded');
         }
 
         executeRegularWarmUp(deltaTime, entities) {
-            if (this.stateData.targetFire) {
-                this.villager.moveTowards(this.stateData.targetFire.position, deltaTime);
-            } else {
-                this.stateData.targetFire = this.findNearestBurningFire();
-            }
+            this.executeWarmUp(deltaTime, entities);
         }
 
         // === REGULAR EAT STATE ===
@@ -1161,103 +954,12 @@ console.log('Phaser main loaded');
         }
 
         executeRegularEat(deltaTime, entities, storageBoxes) {
-            // --- PERSISTENT STORAGE INTENT ---
-            if (!this.stateData) this.stateData = {};
-            // If we're in the middle of a storage task, finish it before doing anything else
-            if (this.stateData.currentTask === 'store') {
-                const storeSuccess = this.storeItemsInIdle(deltaTime);
-                if (storeSuccess) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_EAT: STORAGE TASK COMPLETE, clearing currentTask`);
-                    this.stateData.currentTask = null;
-                } else {
-                    // Still moving to storage or storing, do nothing else
-                    return;
-                }
-            }
-            // If we have items to store, start storage task
-            if (this.hasItemsToStore()) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_EAT: Has items to store, starting storage task`);
-                this.stateData.currentTask = 'store';
-                const storeSuccess = this.storeItemsInIdle(deltaTime);
-                if (!storeSuccess) {
-                    return; // Still moving to storage
-                }
-                // Storage complete, clear task
-                this.stateData.currentTask = null;
-            }
-
-            // First try to eat from inventory
-            if (this.eatFood()) {
-                return;
-            }
-
-            // Then try to retrieve food from storage
-            if (this.retrieveFromStorage(storageBoxes)) {
-                return;
-            }
-
-            // Finally, try to find and collect food
-            // Check if we have a current target food and if it's still available
-            if (this.stateData.targetFood) {
-                // Check if target has been collected by someone else
-                if (this.stateData.targetFood.collected) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_EAT: Target food ${this.stateData.targetFood.type} was collected by someone else, finding new target`);
-                    this.stateData.targetFood = null;
-                }
-            }
-
-            // Find new target food if we don't have one
-            if (!this.stateData.targetFood) {
-                this.stateData.targetFood = this.findNearestFood(entities, storageBoxes, false);
-                if (this.stateData.targetFood) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_EAT: New target food ${this.stateData.targetFood.type} at (${Math.round(this.stateData.targetFood.position.x)}, ${Math.round(this.stateData.targetFood.position.y)})`);
-                }
-            }
-
-            // Move toward target food if we have one
-            if (this.stateData.targetFood) {
-                this.villager.moveTowards(this.stateData.targetFood.position, deltaTime);
-                if (distance(this.villager.position, this.stateData.targetFood.position) <= GameConfig.player.interactionThreshold) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_EAT: Collecting ${this.stateData.targetFood.type}`);
-                    const success = this.collectResource(this.stateData.targetFood);
-                    if (success) {
-                        // Clear target after successful collection
-                        this.stateData.targetFood = null;
-                    } else {
-                        // Clear target so we find a new one next time
-                        this.stateData.targetFood = null;
-                    }
-                }
-            }
+            this.executeEat(false, deltaTime, entities, storageBoxes);
         }
 
         // === REGULAR FIRE REFILL STATE ===
         shouldRegularRefillFire(entities) {
-            const ownFire = this.findOwnFireplace();
-
-            // If we're currently in REGULAR_FIRE_REFILL state, stay in it until task is complete
-            if (this.currentState === VILLAGER_STATES.REGULAR_FIRE_REFILL) {
-                // Only leave if fire is now full OR we have no target wood (task failed)
-                const fireIsFull = ownFire && ownFire.wood >= GameConfig.villager.fireThresholds.regular;
-                const hasNoTarget = !this.stateData.targetWood;
-
-                if (fireIsFull) {
-                    const fireWood = ownFire ? ownFire.wood : 'no fire';
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Fire now full (${fireWood} logs), completing task`);
-                    return false; // Task complete, can leave state
-                } else if (hasNoTarget) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: No target wood, task failed`);
-                    return false; // Task failed, can leave state
-                } else {
-                    const fireWood = ownFire ? ownFire.wood : 'no fire';
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Staying in state, fire has ${fireWood} logs, target wood: ${this.stateData.targetWood ? 'found' : 'not found'}`);
-                    return true; // Stay in state to complete task
-                }
-            }
-
-            // If not currently in REGULAR_FIRE_REFILL, only enter if fire needs refilling
-            // Add null check to prevent accessing wood property on null
-            return ownFire && ownFire.wood < GameConfig.villager.fireThresholds.regular;
+            return this.shouldRefillFire(false, entities);
         }
 
         enterRegularFireRefill() {
@@ -1266,90 +968,7 @@ console.log('Phaser main loaded');
         }
 
         executeRegularFireRefill(deltaTime, entities, storageBoxes) {
-            // --- FIRE REFILL TASK PRIORITY ---
-            // When in fire refill state, prioritize completing the fire refill task
-            // Only handle storage if we're completely stuck (no target wood)
-            if (!this.stateData) this.stateData = {};
-
-            // If we have no target wood and have items to store, handle storage
-            if (!this.stateData.targetWood && this.hasItemsToStore()) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: No target wood, handling storage before continuing`);
-                const storeSuccess = this.storeItemsInIdle(deltaTime);
-                if (!storeSuccess) {
-                    return; // Still moving to storage
-                }
-            }
-
-            // Count how much wood we have collected
-            const woodCount = this.villager.inventory.filter(item => item && item.type === GameConfig.entityTypes.tree).length;
-            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Wood count: ${woodCount}/${this.stateData.woodTarget}`);
-
-            // If we have enough wood, return to fire
-            if (woodCount >= this.stateData.woodTarget) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Have enough wood (${woodCount}), returning to fire`);
-                this.villager.moveTowards(this.stateData.ownFire.position, deltaTime);
-
-                // Check if close enough to add wood
-                if (distance(this.villager.position, this.stateData.ownFire.position) <= GameConfig.player.interactionThreshold) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Adding wood to fire`);
-                    this.addWoodToFire(this.stateData.ownFire);
-                }
-                return;
-            }
-
-            if (this.stateData.ownFire && this.stateData.targetWood) {
-                // Handle both storage and world sources
-                if (this.stateData.targetWood.storageBox) {
-                    // Target is in storage - move to storage box
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Moving towards storage box at (${Math.round(this.stateData.targetWood.storageBox.position.x)}, ${Math.round(this.stateData.targetWood.storageBox.position.y)})`);
-                    this.villager.moveTowards(this.stateData.targetWood.storageBox.position, deltaTime);
-
-                    // Check if close enough to retrieve
-                    if (distance(this.villager.position, this.stateData.targetWood.storageBox.position) <= GameConfig.player.interactionThreshold) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Close enough to retrieve wood from storage`);
-                        if (this.retrieveFromStorage([this.stateData.targetWood.storageBox], GameConfig.entityTypes.tree)) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Wood retrieved from storage successfully`);
-                            // Clear target so we find a new source
-                            this.stateData.targetWood = null;
-                        } else {
-                            // Retrieval failed - clear targetWood so we try a different source next time
-                            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Storage retrieval failed, trying different source`);
-                            this.stateData.targetWood = null;
-                        }
-                    }
-                } else {
-                    // Target is in world - move towards wood
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Moving towards wood at (${Math.round(this.stateData.targetWood.position.x)}, ${Math.round(this.stateData.targetWood.position.y)})`);
-                    this.villager.moveTowards(this.stateData.targetWood.position, deltaTime);
-                    if (distance(this.villager.position, this.stateData.targetWood.position) <= GameConfig.player.interactionThreshold) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Close enough to collect wood`);
-                        if (this.collectResource(this.stateData.targetWood)) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Wood collected successfully`);
-                            // Clear target so we find a new source
-                            this.stateData.targetWood = null;
-                        } else {
-                            // Collection failed - clear targetWood so we try a different source next time
-                            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Collection failed, trying different source`);
-                            this.stateData.targetWood = null;
-                        }
-                    }
-                }
-            } else {
-                console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Finding own fire and target wood`);
-                this.stateData.ownFire = this.findOwnFireplace();
-                this.stateData.targetWood = this.findNearestWood(entities, storageBoxes, false); // false = regular mode
-
-                if (this.stateData.ownFire) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: ownFire: found, targetWood: ${this.stateData.targetWood ? 'found' : 'not found'}`);
-                } else {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: ownFire: not found`);
-                }
-
-                // If no wood found, log it
-                if (!this.stateData.targetWood) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: No wood found in storage or world`);
-                }
-            }
+            this.executeFireRefill(false, deltaTime, entities, storageBoxes);
         }
 
         // === STORAGE MANAGEMENT STATE ===
@@ -1372,6 +991,230 @@ console.log('Phaser main loaded');
             } else {
                 this.stateData.storageBox = this.findOwnStorageBox();
             }
+        }
+
+        // === SHARED EXECUTE METHODS ===
+        // These methods eliminate code duplication between emergency and regular states
+
+        executeFireRefill(isEmergency, deltaTime, entities, storageBoxes) {
+            // --- FIRE REFILL TASK PRIORITY ---
+            // When in fire refill state, prioritize completing the fire refill task
+            // Only handle storage if we're completely stuck (no target wood)
+            if (!this.stateData) this.stateData = {};
+
+            // If we have no target wood and have items to store, handle storage
+            if (!this.stateData.targetWood && this.hasItemsToStore()) {
+                const stateName = isEmergency ? 'EMERGENCY_FIRE_REFILL' : 'REGULAR_FIRE_REFILL';
+                console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: No target wood, handling storage before continuing`);
+                const storeSuccess = this.storeItemsInIdle(deltaTime);
+                if (!storeSuccess) {
+                    return; // Still moving to storage
+                }
+            }
+
+            // Count how much wood we have collected
+            const woodCount = this.villager.inventory.filter(item => item && item.type === GameConfig.entityTypes.tree).length;
+            const stateName = isEmergency ? 'EMERGENCY_FIRE_REFILL' : 'REGULAR_FIRE_REFILL';
+            console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Wood count: ${woodCount}/${this.stateData.woodTarget}`);
+
+            // If we have enough wood, return to fire
+            if (woodCount >= this.stateData.woodTarget) {
+                console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Have enough wood (${woodCount}), returning to fire`);
+                this.villager.moveTowards(this.stateData.ownFire.position, deltaTime);
+
+                // Check if close enough to add wood
+                if (distance(this.villager.position, this.stateData.ownFire.position) <= GameConfig.player.interactionThreshold) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Adding wood to fire`);
+                    this.addWoodToFire(this.stateData.ownFire);
+                }
+                return;
+            }
+
+            console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: State data - ownFire: ${this.stateData.ownFire ? 'found' : 'null'}, targetWood: ${this.stateData.targetWood ? 'found' : 'null'}`);
+
+            if (this.stateData.ownFire && this.stateData.targetWood) {
+                // Handle both storage and world sources
+                if (this.stateData.targetWood.storageBox) {
+                    // Target is in storage - move to storage box
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Moving towards storage box at (${Math.round(this.stateData.targetWood.storageBox.position.x)}, ${Math.round(this.stateData.targetWood.storageBox.position.y)})`);
+                    this.villager.moveTowards(this.stateData.targetWood.storageBox.position, deltaTime);
+
+                    // Check if close enough to retrieve
+                    if (distance(this.villager.position, this.stateData.targetWood.storageBox.position) <= GameConfig.player.interactionThreshold) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Close enough to retrieve wood from storage`);
+                        if (this.retrieveFromStorage([this.stateData.targetWood.storageBox], GameConfig.entityTypes.tree)) {
+                            console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Wood retrieved from storage successfully`);
+                            // Clear target so we find a new source
+                            this.stateData.targetWood = null;
+                        } else {
+                            // Retrieval failed - clear targetWood so we try a different source next time
+                            console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Storage retrieval failed, trying different source`);
+                            this.stateData.targetWood = null;
+                        }
+                    }
+                } else {
+                    // Target is in world - move towards wood
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Moving towards wood at (${Math.round(this.stateData.targetWood.position.x)}, ${Math.round(this.stateData.targetWood.position.y)})`);
+                    this.villager.moveTowards(this.stateData.targetWood.position, deltaTime);
+
+                    // Check if close enough to collect
+                    if (distance(this.villager.position, this.stateData.targetWood.position) <= GameConfig.player.interactionThreshold) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Close enough to collect wood`);
+                        if (this.collectResource(this.stateData.targetWood)) {
+                            console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Wood collected successfully`);
+                            // Clear target so we find a new source
+                            this.stateData.targetWood = null;
+                        } else {
+                            // Collection failed - clear targetWood so we try a different source next time
+                            console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Collection failed, trying different source`);
+                            this.stateData.targetWood = null;
+                        }
+                    }
+                }
+            } else {
+                console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Re-finding targets`);
+                // Re-find targets
+                this.stateData.ownFire = this.findOwnFireplace();
+                this.stateData.targetWood = this.findNearestWood(entities, storageBoxes, isEmergency);
+
+                console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: After re-finding - ownFire: ${this.stateData.ownFire ? 'found' : 'null'}, targetWood: ${this.stateData.targetWood ? 'found' : 'null'}`);
+
+                // If no wood found, log it
+                if (!this.stateData.targetWood) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: No wood found in storage or world`);
+                }
+            }
+        }
+
+        executeEat(isEmergency, deltaTime, entities, storageBoxes) {
+            // --- PERSISTENT STORAGE INTENT ---
+            if (!this.stateData) this.stateData = {};
+            const stateName = isEmergency ? 'EMERGENCY_EAT' : 'REGULAR_EAT';
+
+            // If we're in the middle of a storage task, finish it before doing anything else
+            if (this.stateData.currentTask === 'store') {
+                const storeSuccess = this.storeItemsInIdle(deltaTime);
+                if (storeSuccess) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: STORAGE TASK COMPLETE, clearing currentTask`);
+                    this.stateData.currentTask = null;
+                } else {
+                    // Still moving to storage or storing, do nothing else
+                    return;
+                }
+            }
+            // If we have items to store, start storage task
+            if (this.hasItemsToStore()) {
+                console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Has items to store, starting storage task`);
+                this.stateData.currentTask = 'store';
+                const storeSuccess = this.storeItemsInIdle(deltaTime);
+                if (!storeSuccess) {
+                    return; // Still moving to storage
+                }
+                // Storage complete, clear task
+                this.stateData.currentTask = null;
+            }
+
+            // First try to eat from inventory
+            if (this.eatFood()) {
+                return;
+            }
+
+            // Then try to retrieve food from storage
+            if (this.retrieveFromStorage(storageBoxes)) {
+                return;
+            }
+
+            // Finally, try to find and collect food
+            // Check if we have a current target food and if it's still available
+            if (this.stateData.targetFood) {
+                // Check if target has been collected by someone else
+                if (this.stateData.targetFood.collected) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Target food ${this.stateData.targetFood.type} was collected by someone else, finding new target`);
+                    this.stateData.targetFood = null;
+                }
+            }
+
+            // Find new target food if we don't have one
+            if (!this.stateData.targetFood) {
+                this.stateData.targetFood = this.findNearestFood(entities, storageBoxes, isEmergency);
+                if (this.stateData.targetFood) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: New target food ${this.stateData.targetFood.type} at (${Math.round(this.stateData.targetFood.position.x)}, ${Math.round(this.stateData.targetFood.position.y)})`);
+                }
+            }
+
+            // Move toward target food if we have one
+            if (this.stateData.targetFood) {
+                this.villager.moveTowards(this.stateData.targetFood.position, deltaTime);
+                if (distance(this.villager.position, this.stateData.targetFood.position) <= GameConfig.player.interactionThreshold) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Collecting ${this.stateData.targetFood.type}`);
+                    const success = this.collectResource(this.stateData.targetFood);
+                    if (success) {
+                        // Clear target after successful collection
+                        this.stateData.targetFood = null;
+                    } else {
+                        // Clear target so we find a new one next time
+                        this.stateData.targetFood = null;
+                    }
+                }
+            }
+        }
+
+        executeDrink(deltaTime, entities) {
+            if (this.stateData.targetWell) {
+                // Move towards well
+                console.log(`[VillagerStateMachine] ${this.villager.name} DRINK: Moving to well at (${Math.round(this.stateData.targetWell.position.x)}, ${Math.round(this.stateData.targetWell.position.y)})`);
+                this.villager.moveTowards(this.stateData.targetWell.position, deltaTime);
+
+                // Check if close enough to drink
+                if (distance(this.villager.position, this.stateData.targetWell.position) <= GameConfig.player.interactionThreshold) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} DRINK: Drinking from well`);
+                    this.drinkFromWell(this.stateData.targetWell);
+                    this.stateData.targetWell = null;
+                }
+            } else {
+                // No well found, try to find one
+                console.log(`[VillagerStateMachine] ${this.villager.name} DRINK: No well found, searching...`);
+                this.stateData.targetWell = this.findNearestWell();
+            }
+        }
+
+        executeWarmUp(deltaTime, entities) {
+            if (this.stateData.targetFire) {
+                // Move towards fire
+                this.villager.moveTowards(this.stateData.targetFire.position, deltaTime);
+            } else {
+                // No fire found, try to find one
+                this.stateData.targetFire = this.findNearestBurningFire();
+            }
+        }
+
+        shouldRefillFire(isEmergency, entities) {
+            const ownFire = this.findOwnFireplace();
+            const threshold = isEmergency ? GameConfig.villager.fireThresholds.emergency : GameConfig.villager.fireThresholds.regular;
+            const stateName = isEmergency ? 'EMERGENCY_FIRE_REFILL' : 'REGULAR_FIRE_REFILL';
+
+            // If we're currently in FIRE_REFILL state, stay in it until task is complete
+            if (this.currentState === (isEmergency ? VILLAGER_STATES.EMERGENCY_FIRE_REFILL : VILLAGER_STATES.REGULAR_FIRE_REFILL)) {
+                // Only leave if fire is now above threshold OR we have no target wood (task failed)
+                const fireIsAboveThreshold = ownFire && ownFire.wood >= threshold;
+                const hasNoTarget = !this.stateData.targetWood;
+
+                if (fireIsAboveThreshold) {
+                    const fireWood = ownFire ? ownFire.wood : 'no fire';
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Fire now above threshold (${fireWood} logs), completing task`);
+                    return false; // Task complete, can leave state
+                } else if (hasNoTarget) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: No target wood, task failed`);
+                    return false; // Task failed, can leave state
+                } else {
+                    const fireWood = ownFire ? ownFire.wood : 'no fire';
+                    console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Staying in state, fire has ${fireWood} logs, target wood: ${this.stateData.targetWood ? 'found' : 'not found'}`);
+                    return true; // Stay in state to complete task
+                }
+            }
+
+            // If not currently in FIRE_REFILL, only enter if fire needs refilling
+            return ownFire && ownFire.wood < threshold;
         }
 
         // === IDLE STATE ===
