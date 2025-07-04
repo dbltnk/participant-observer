@@ -2336,7 +2336,7 @@ console.log('Phaser main loaded');
                 console.log('[NewGame] New Game button clicked');
                 this.showNewGameConfirmation();
             });
-            // Don't add to container - keep it as a direct scene element for better interaction
+            this.uiContainer.add(this.ui.newGameBtn);
 
             // Initialize current seed value
             this.currentSeedValue = getCurrentSeed();
@@ -2345,20 +2345,7 @@ console.log('Phaser main loaded');
             this.ui.fpsCounter = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.fpsCounterOffset, 'FPS: 60', { fontSize: GameConfig.ui.fontSizes.fps, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.fpsBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.fpsCounter);
 
-            // Debug toggle (bottom left, above log spam button) - fixed to camera viewport
-            this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.debugButtonOffset, '⚪ Debug: OFF', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.debugBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-            this.ui.debugBtn.on('pointerdown', () => {
-                window.villagerDebugEnabled = !window.villagerDebugEnabled;
-                updateDebugBtn.call(this);
-                // Update all debug elements immediately
-                this.updateDebugElements();
-            });
-            // Initialize debug state (default to OFF)
-            if (typeof window.villagerDebugEnabled === 'undefined') {
-                window.villagerDebugEnabled = false;
-            }
-            updateDebugBtn.call(this);
-            this.uiContainer.add(this.ui.debugBtn);
+
         }
         update(time, delta) {
             // Update day/night lighting

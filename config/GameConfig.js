@@ -275,6 +275,7 @@ window.GameConfig = {
     ui: {
         barHeight: 20, // Height of need bars in pixels
         barWidth: 150, // Width of need bars in pixels
+        needBarSpacing: 5, // Spacing between need bars
         inventorySlotSize: 50, // Size of inventory slots in pixels (width and height)
 
         // Seed input
@@ -403,13 +404,26 @@ window.GameConfig = {
 
             // UI element dimensions
             seedInputHeight: 20,
+            seedInputWidth: 60,
+            seedBoxWidth: 200,
+            seedInputOffset: 30,
+            seedButtonOffset: 85,
             fpsCounterOffset: 150,
             debugButtonOffset: 120,
             logSpamButtonOffset: 90,
             tempMessageOffset: 40,
             sleepingOffset: 60,
             storageSlotOffset: 80,
-            storageInstructionsOffset: 60
+            storageInstructionsOffset: 60,
+            titleOffset: 60,
+            messageOffset: 20,
+            buttonOffset: 30,
+            buttonSpacing: 60,
+            valueOffset: 10,
+            slotSpacing: 56,
+            slotSize: 50,
+            confirmationWidth: 400,
+            confirmationHeight: 200
         },
 
         // Padding - Centralized padding definitions
