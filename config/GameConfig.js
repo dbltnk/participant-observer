@@ -126,32 +126,35 @@ window.GameConfig = {
     villager: {
         moveSpeed: 100, // Villager movement speed in pixels per second (same as player)
         // Formula: newPosition = oldPosition + (moveSpeed * deltaTime / 1000)
-        memoryCapacity: 10, // Maximum number of resource locations a villager can remember
-        // Used in: villager.memory.knownFoodLocations.length <= memoryCapacity
-        explorationRadius: 400, // How far villagers explore when they don't know of nearby food (doubled from 200)
-        // Formula: if (distanceToNearestKnownFood > explorationRadius) { exploreNewArea() }
-        // Higher values = villagers explore further from their camp
-        foragingEfficiency: 0.8, // Success rate when villagers try to collect resources
-        // Formula: if (Math.random() < foragingEfficiency) { collectResource() }
-        // Lower values = villagers fail to collect resources more often
 
-        // Behavior timing
-        maxForagingAttempts: 10, // Maximum attempts before giving up on foraging
-        goalPersistenceTime: 10000, // 10 seconds to stick with current goal
-        eatingCooldown: 5000, // 5 second cooldown after eating when calories > 80
-        criticalLogCooldown: 10000, // 10 seconds between critical need logs
-
-        // Daily task ranges
-        dailyTasks: {
-            woodTrips: { min: 1, max: 2 }, // 1-2 wood trips per day
-            foodTrips: { min: 3, max: 4 }, // 3-4 food trips per day
-            waterTrips: { min: 1, max: 2 } // 1-2 water trips per day
+        // State machine settings
+        emergencyThresholds: {
+            water: 20,           // Water <20% triggers emergency drink
+            calories: 20,        // Calories <20% triggers emergency eat
+            temperature: 20      // Temperature <20% triggers emergency warm up
         },
 
-        // Need thresholds
-        waterTripThreshold: 70, // Water level below which to prioritize water trips
-        eatingCalorieThreshold: 80, // Calorie level above which eating cooldown applies
-        criticalNeedThreshold: 2 // Need level below which is considered critical
+        regularThresholds: {
+            water: 50,           // Water <50% triggers regular drink
+            temperature: 70,     // Temperature <70% triggers regular warm up
+            calories: 60         // Calories <60% triggers regular eat
+        },
+
+        fireThresholds: {
+            emergency: 3,        // <3 logs triggers emergency refill
+            regular: 10          // <10 logs triggers regular refill
+        },
+
+        sleepSchedule: {
+            startHour: 22,       // Start sleeping at 22:00
+            endHour: 7,          // Wake up at 07:00
+            variance: 1          // ±1 hour daily variation
+        },
+
+        inventoryReservations: {
+            woodSlots: 2,        // Reserve 2 slots for wood
+            foodSlots: 4         // Reserve 4 slots for food
+        }
     },
 
     // Animal behavior settings
@@ -234,10 +237,17 @@ window.GameConfig = {
 
     // Villager states - Centralized state definitions
     villagerStates: {
-        SLEEPING: 'SLEEPING',
-        FORAGING: 'FORAGING',
-        RETURNING: 'RETURNING',
-        EATING: 'EATING'
+        SLEEP: 1,
+        EMERGENCY_DRINK: 2,
+        EMERGENCY_EAT: 3,
+        EMERGENCY_WARM_UP: 4,
+        EMERGENCY_FIRE_REFILL: 5,
+        REGULAR_DRINK: 6,
+        REGULAR_WARM_UP: 7,
+        REGULAR_EAT: 8,
+        REGULAR_FIRE_REFILL: 9,
+        STORAGE_MANAGEMENT: 10,
+        IDLE: 11
     },
 
     // Emoji definitions - Centralized emoji assignments
