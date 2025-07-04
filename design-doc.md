@@ -38,7 +38,7 @@
     * **Resource Cap:** Global cap of 10 animals and 10 plants per villager for now.
     * **Spawn & Spread:** Animals and plants spawn near the village at low density, but in groups, slowly spreading out. The intent is a "decent stock but decreasing as I venture out" vibe.
     * **Propagation:** If there are 2 plants or animals within a certain radius, they have a chance of spawning a third one overnight, but not if there are too many others nearby. This allows for slow growth into stability if the player does not intervene. The exact radius for propagation will be determined during development.
-* **Wells:** Limited capacity. Each well starts with 10 water portions and refills 4 portions per day.
+* **Wells:** Limited capacity. Each well starts with 10 water portions and refills 1 unit every 2 hours. Wells scale up to 3x size as they fill (3 water = normal, 10 water = 3x). Wells fade out as they drop below 5 water, fully invisible at 0.
 
 ---
 
@@ -76,9 +76,11 @@
     * Food can only be eaten when near a burning fire. You cannot eat if too far away from a burning fire.
     * **Wood:** Harvested from trees, works like any other plant resource. Used to fuel fires.
 * **Fires:**
-    * Require wood to burn (1 wood per day).
-    * Can store a maximum of 2 wood.
-    * Its state (burning, out of wood) should be visible on its sprite.
+    * Require wood to burn (1 wood every 6 in-game hours).
+    * Can store a maximum of 10 wood.
+    * Start with 7-9 logs randomly when world is generated.
+    * Scale up to 2x size as wood increases from 0 to 10.
+    * Fade out as wood drops below 3, fully invisible at 0.
     * A fire that runs out of wood cannot be rekindled ever.
 * **Sleeping:** At your sleeping bag, you can "sleep," which speeds up time until 08:00, passing within 10 seconds.
 * **Storage Boxes:** All personal and communal storage boxes are available to both the player and all villagers. However, villagers prioritize their own box for both storing and retrieving items and will not "rob" the player unless necessary. If a villager's personal storage box and the communal box are both full, excess resources will remain in their inventory for consumption if needed.
@@ -107,7 +109,7 @@
 
 ### VII. User Interface (UI)
 
-* **Top Right:** Current day, current time, "**Neighbours: x**" (counts only living villagers).
+* **Top Right:** Current day, current time, temperature display (freezing/cold/moderate/warm/hot), "**Neighbours: x**" (counts only living villagers).
 * **Top Left:** Bars for Temperature, Water, Calories, and 5 Vitamins (A to E) - instant updates, no animations.
 * **Bottom:** Player inventory hotbar (Minecraft style, size 6).
 * **Bottom Right:** Seed selection UI.
