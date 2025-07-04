@@ -1,0 +1,200 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Alpine Sustainability - Development Conventions & Rules
+
+**⚠️ CRITICAL: These rules are NOT suggestions. They are MANDATORY requirements for maintaining code quality and consistency.**
+
+## 🚨 THE IRON RULE: Configuration Centralization
+
+### **ALL CONFIG VALUES MUST BE IN GameConfig.js**
+
+**This is the MOST IMPORTANT rule. Violation is NOT acceptable.**
+
+- **NO** hardcoded values in game logic
+- **NO** magic numbers scattered throughout the codebase  
+- **NO** duplicate configuration values
+- **NO** entity types, emojis, or strings defined outside GameConfig
+- **NO** timing values, thresholds, or balance parameters in main code
+
+**GameConfig.js is the SINGLE SOURCE OF TRUTH for:**
+- Game balance parameters
+- Timing values and intervals
+- Entity types and their properties
+- Emoji assignments
+- UI dimensions and styling
+- Technical constants
+- Villager behavior parameters
+- Animal behavior parameters
+- Resource limits and propagation settings
+
+**Before adding ANY new value to the codebase, ask yourself: "Should this be in GameConfig?"**
+
+## 🏗️ Architecture Rules
+
+### **Single Responsibility Principle**
+- Each class/function should have ONE clear purpose
+- If a function does multiple things, split it
+- Keep functions under 50 lines when possible
+
+### **State Management**
+- All game state must be centralized and predictable
+- Use clear state transitions with defined constants
+- NO state mutations outside designated update methods
+
+### **Error Handling**
+- Use `assert()` statements liberally to document assumptions
+- Fail fast with clear error messages
+- NO silent failures or undefined behavior
+
+## 📝 Code Style & Organization
+
+### **File Structure**
+```
+sustain/
+├── config/
+│   └── GameConfig.js          # ALL configuration values
+├── phaser-main.js             # Main game logic
+├── index.html                 # Entry point
+├── server.js                  # Logging server
+└── logs/                      # Debug output
+```
+
+### **Naming Conventions**
+- **Variables**: `camelCase` (e.g., `playerState`, `moveSpeed`)
+- **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_INVENTORY_SIZE`)
+- **Functions**: `camelCase` (e.g., `updateNeeds()`, `findNearbyFire()`)
+- **Classes**: `PascalCase` (e.g., `Villager`, `MainScene`)
+- **Files**: `kebab-case` (e.g., `phaser-main.js`)
+
+### **Comments & Documentation**
+- **ALWAYS** comment complex logic
+- **ALWAYS** document assumptions with `assert()` statements
+- **ALWAYS** explain WHY, not just WHAT
+- Use JSDoc for public APIs
+
+## 🎮 Game Development Rules
+
+### **Entity System**
+- All entities must have consistent structure
+- Entity types MUST be defined in `GameConfig.entityTypes`
+- NO hardcoded entity type strings in game logic
+- Use centralized emoji assignments from `GameConfig.emojis`
+
+### **Villager AI**
+- All behavior parameters in `GameConfig.villager`
+- State transitions must be explicit and documented
+- NO hardcoded timing or threshold values
+- Use clear state constants from `GameConfig.villagerStates`
+
+### **Resource Management**
+- All resource limits in `GameConfig.resources.maxCounts`
+- Propagation settings in `GameConfig.resources`
+- NO hardcoded resource counts or spawn rates
+
+### **UI Development**
+- All UI dimensions in `GameConfig.ui`
+- NO hardcoded colors, sizes, or positions
+- Use consistent z-index values from config
+- Responsive design NOT required (desktop-optimized)
+
+## 🔧 Technical Rules
+
+### **Performance**
+- Optimize hot paths (game loop, rendering)
+- Use efficient data structures
+- Minimize DOM queries and updates
+- Profile before optimizing
+
+### **Memory Management**
+- Clean up event listeners
+- Destroy Phaser objects properly
+- Avoid memory leaks in long-running sessions
+
+### **Debugging & Logging**
+- Use structured logging with clear prefixes
+- Include relevant context in log messages
+- NO console.log spam in production
+- Use the built-in logging system for debugging
+
+## 🚫 ABSOLUTE PROHIBITIONS
+
+### **NEVER DO THESE:**
+- ❌ Hardcode ANY value that could be configurable
+- ❌ Duplicate configuration values across files
+- ❌ Use magic numbers without explanation
+- ❌ Create entity types outside GameConfig
+- ❌ Define emojis outside GameConfig
+- ❌ Use hardcoded timing values
+- ❌ Break existing functionality without permission
+- ❌ Ignore error handling
+- ❌ Write functions longer than 100 lines
+- ❌ Use default configurations without explicit choice
+
+### **ALWAYS DO THESE:**
+- ✅ Add new config values to GameConfig.js
+- ✅ Use assert() statements for assumptions
+- ✅ Document complex logic
+- ✅ Test changes thoroughly
+- ✅ Follow existing naming conventions
+- ✅ Handle errors gracefully
+- ✅ Keep functions focused and small
+
+## 🔍 Code Review Checklist
+
+Before submitting any code, verify:
+
+- [ ] All config values are in GameConfig.js
+- [ ] No hardcoded magic numbers
+- [ ] No duplicate configuration
+- [ ] All entity types use GameConfig constants
+- [ ] All emojis use GameConfig assignments
+- [ ] Error handling is in place
+- [ ] Functions are under 100 lines
+- [ ] Comments explain complex logic
+- [ ] assert() statements document assumptions
+- [ ] No breaking changes to existing functionality
+
+## 🎯 Configuration Categories
+
+When adding to GameConfig.js, organize into these sections:
+
+```javascript
+window.GameConfig = {
+    world: {},           // World size, generation settings
+    time: {},            // Time-related constants
+    needs: {},           // Needs system parameters
+    player: {},          // Player-specific settings
+    villager: {},        // AI villager behavior
+    animals: {},         // Animal behavior parameters
+    resources: {},       // Resource spawning and limits
+    entityTypes: {},     // All entity type definitions
+    villagerStates: {},  // Villager state constants
+    emojis: {},          // All emoji assignments
+    ui: {},              // UI dimensions and styling
+    logging: {},         // Debug logging settings
+    technical: {},       // Math and technical constants
+    // ... other categories as needed
+};
+```
+
+## 🚨 Enforcement
+
+**These rules are enforced through:**
+- Code review requirements
+- Automated linting where possible
+- Team accountability
+- Documentation requirements
+
+**Violations will result in:**
+- Code review rejection
+- Required refactoring
+- Documentation updates
+
+---
+
+**Remember: The goal is maintainable, consistent, and predictable code. These rules exist to prevent technical debt and ensure the codebase remains clean and professional.**
+
+**When in doubt, ask: "Is this the most maintainable way to implement this feature?"** 

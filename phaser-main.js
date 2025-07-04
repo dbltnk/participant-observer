@@ -35,17 +35,17 @@ console.log('Phaser main loaded');
         clearLogsOnPageLoad();
 
         // Start log transmission (every 2 seconds)
-        logTransmissionInterval = setInterval(sendLogsToServer, 2000);
+        logTransmissionInterval = setInterval(sendLogsToServer, GameConfig.logging.logTransmissionInterval);
 
         // Start DOM snapshots (every 5 seconds)
-        domSnapshotInterval = setInterval(sendDomSnapshot, 5000);
+        domSnapshotInterval = setInterval(sendDomSnapshot, GameConfig.logging.domSnapshotInterval);
 
         console.log('[Logging] Logging system initialized');
     }
 
     // Clear logs when page loads
     function clearLogsOnPageLoad() {
-        fetch('http://localhost:3000/clear', {
+        fetch(GameConfig.logging.serverUrl + '/clear', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         }).then(response => response.json())
@@ -87,7 +87,7 @@ console.log('Phaser main loaded');
         }));
 
         // Send to server
-        fetch('http://localhost:3000/log', {
+        fetch(GameConfig.logging.serverUrl + '/log', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ logs: formattedLogs })
@@ -106,7 +106,7 @@ console.log('Phaser main loaded');
             if (snapshotString !== lastDomSnapshot) {
                 lastDomSnapshot = snapshotString;
 
-                fetch('http://localhost:3000/dom-snapshot', {
+                fetch(GameConfig.logging.serverUrl + '/dom-snapshot', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: snapshotString
@@ -125,7 +125,7 @@ console.log('Phaser main loaded');
         const allElements = document.querySelectorAll('*');
 
         allElements.forEach((el, index) => {
-            if (index > 1000) return; // Limit to prevent memory issues
+            if (index > GameConfig.logging.domElementLimit) return; // Limit to prevent memory issues
 
             const rect = el.getBoundingClientRect();
             const styles = window.getComputedStyle(el);
@@ -177,17 +177,17 @@ console.log('Phaser main loaded');
             this.permutation = this.generatePermutation();
         }
         generatePermutation() {
-            const p = new Array(256);
-            for (let i = 0; i < 256; i++) p[i] = i;
-            for (let i = 255; i > 0; i--) {
+            const p = new Array(GameConfig.technical.perlinPermutationSize);
+            for (let i = 0; i < GameConfig.technical.perlinPermutationSize; i++) p[i] = i;
+            for (let i = GameConfig.technical.perlinPermutationSize - 1; i > 0; i--) {
                 const j = this.hash(this.seed + i) % (i + 1);
                 [p[i], p[j]] = [p[j], p[i]];
             }
             return [...p, ...p];
         }
         hash(x) {
-            x = ((x >> 16) ^ x) * 0x45d9f3b;
-            x = ((x >> 16) ^ x) * 0x45d9f3b;
+            x = ((x >> 16) ^ x) * GameConfig.technical.perlinHashConstant;
+            x = ((x >> 16) ^ x) * GameConfig.technical.perlinHashConstant;
             x = (x >> 16) ^ x;
             return x;
         }
@@ -199,8 +199,8 @@ console.log('Phaser main loaded');
             return ((h & 8) === 0 ? grad1 : -grad1) * x + ((h & 4) === 0 ? grad1 : -grad1) * y;
         }
         noise2D(x, y) {
-            const X = Math.floor(x) & 255;
-            const Y = Math.floor(y) & 255;
+            const X = Math.floor(x) & GameConfig.technical.perlinMask;
+            const Y = Math.floor(y) & GameConfig.technical.perlinMask;
             x -= Math.floor(x);
             y -= Math.floor(y);
             const u = this.fade(x);
@@ -225,7 +225,7 @@ console.log('Phaser main loaded');
             this.villagerId = villagerId;
 
             // State management
-            this.state = 'SLEEPING';
+            this.state = GameConfig.villagerStates.SLEEPING;
             this.stateTimer = 0;
 
             // Position and movement
@@ -258,16 +258,16 @@ console.log('Phaser main loaded');
             // Visual representation
             this.phaserText = null;
             this.nameText = null;
-            this.healthEmoji = '😊';
+            this.healthEmoji = GameConfig.emojis.health;
 
             // State-specific data
             this.currentTarget = null;
             this.foragingAttempts = 0;
-            this.maxForagingAttempts = 10;
+            this.maxForagingAttempts = GameConfig.villager.maxForagingAttempts;
 
             // Goal persistence system
             this.goalTimer = 0;
-            this.goalPersistenceTime = 10000; // 10 seconds to stick with current goal
+            this.goalPersistenceTime = GameConfig.villager.goalPersistenceTime; // 10 seconds to stick with current goal
             this.randomDirection = Math.random() * 2 * Math.PI; // Random direction for exploration
             this.explorationTarget = null; // Current exploration target position
 
@@ -276,11 +276,11 @@ console.log('Phaser main loaded');
             this.leaveCampTarget = null;
 
             // Daily routine system
-            this.wakeUpTime = 8 + Math.random(); // Random wake up between 8:00-9:00
+            this.wakeUpTime = GameConfig.time.dayStartHour + Math.random(); // Random wake up between 8:00-9:00
             this.dailyTasks = {
-                woodTrips: Math.floor(Math.random() * 2) + 1, // 1-2 wood trips per day
-                foodTrips: Math.floor(Math.random() * 2) + 3, // 3-4 food trips per day
-                waterTrips: Math.floor(Math.random() * 2) + 1  // 1-2 water trips per day
+                woodTrips: Math.floor(Math.random() * (GameConfig.villager.dailyTasks.woodTrips.max - GameConfig.villager.dailyTasks.woodTrips.min + 1)) + GameConfig.villager.dailyTasks.woodTrips.min,
+                foodTrips: Math.floor(Math.random() * (GameConfig.villager.dailyTasks.foodTrips.max - GameConfig.villager.dailyTasks.foodTrips.min + 1)) + GameConfig.villager.dailyTasks.foodTrips.min,
+                waterTrips: Math.floor(Math.random() * (GameConfig.villager.dailyTasks.waterTrips.max - GameConfig.villager.dailyTasks.waterTrips.min + 1)) + GameConfig.villager.dailyTasks.waterTrips.min
             };
             this.completedTasks = {
                 woodTrips: 0,
@@ -365,7 +365,7 @@ console.log('Phaser main loaded');
             // Apply fire temperature effects for villagers (same as player)
             if (isNight && this.gameEntities) {
                 for (const entity of this.gameEntities) {
-                    if (entity.type === 'fireplace' && entity.isBurning && entity.wood > 0) {
+                    if (entity.type === GameConfig.entityTypes.fireplace && entity.isBurning && entity.wood > 0) {
                         const dist = distance(this.position, entity.position);
                         const fireRange = GameConfig.player.interactionThreshold * 3; // Triple the range
 
@@ -418,7 +418,7 @@ console.log('Phaser main loaded');
 
             // Also log when any need is critically low (below 5) every 10 seconds
             const now = Date.now();
-            if (!this.lastCriticalLog || now - this.lastCriticalLog > 10000) {
+            if (!this.lastCriticalLog || now - this.lastCriticalLog > GameConfig.villager.criticalLogCooldown) {
                 const lowNeeds = [];
                 if (this.needs.temperature < 5) lowNeeds.push(`T${this.needs.temperature.toFixed(1)}`);
                 if (this.needs.water < 5) lowNeeds.push(`W${this.needs.water.toFixed(1)}`);
@@ -448,7 +448,7 @@ console.log('Phaser main loaded');
             }
 
             // State transitions based on time and needs
-            if (this.state === 'SLEEPING') {
+            if (this.state === GameConfig.villagerStates.SLEEPING) {
                 // Wake up at individual wake up time
                 if (hour >= this.wakeUpTime) {
                     // Free the sleeping bag
@@ -457,13 +457,13 @@ console.log('Phaser main loaded');
                         this.sleepingBag = null;
                     }
 
-                    this.state = 'FORAGING';
+                    this.state = GameConfig.villagerStates.FORAGING;
                     this.stateTimer = 0; // Reset timer
                     if (window.summaryLoggingEnabled) {
                         console.log(`[Villager] ${this.name} woke up at ${this.wakeUpTime.toFixed(1)} and started foraging`);
                     }
                 }
-            } else if (this.state === 'FORAGING') {
+            } else if (this.state === GameConfig.villagerStates.FORAGING) {
                 // Return to camp if needs are critical, inventory is full, or it's after 18:00
                 const shouldReturn = hour >= 18 ||
                     this.needs.calories < 50 ||
@@ -472,25 +472,25 @@ console.log('Phaser main loaded');
                     this.isInventoryFull();
 
                 if (shouldReturn) {
-                    this.state = 'RETURNING';
+                    this.state = GameConfig.villagerStates.RETURNING;
                     this.stateTimer = 0; // Reset timer
                     if (window.summaryLoggingEnabled) {
                         console.log(`[Villager] ${this.name} returning to camp (time: ${hour}, needs: ${this.needs.calories.toFixed(0)}/${this.needs.water.toFixed(0)}/${this.needs.temperature.toFixed(0)}, inventory full: ${this.isInventoryFull()})`);
                     }
                 }
-            } else if (this.state === 'RETURNING' && this.isAtCamp()) {
-                this.state = 'EATING';
+            } else if (this.state === GameConfig.villagerStates.RETURNING && this.isAtCamp()) {
+                this.state = GameConfig.villagerStates.EATING;
                 this.stateTimer = 0; // Reset timer
                 if (window.summaryLoggingEnabled) {
                     console.log(`[Villager] ${this.name} arrived at camp and is eating`);
                 }
-            } else if (this.state === 'EATING' && this.needs.calories > 80 && this.stateTimer > 5000) { // 5 second cooldown
+            } else if (this.state === GameConfig.villagerStates.EATING && this.needs.calories > GameConfig.villager.eatingCalorieThreshold && this.stateTimer > GameConfig.villager.eatingCooldown) { // 5 second cooldown
                 // Ensure villager is hydrated before going to sleep
-                if (this.needs.water < 70) {
+                if (this.needs.water < GameConfig.villager.waterTripThreshold) {
                     this.drinkFromWells();
                 }
 
-                this.state = 'SLEEPING';
+                this.state = GameConfig.villagerStates.SLEEPING;
                 this.stateTimer = 0; // Reset timer
                 if (window.summaryLoggingEnabled) {
                     console.log(`[Villager] ${this.name} finished eating and went to sleep`);
@@ -508,7 +508,7 @@ console.log('Phaser main loaded');
 
         executeCurrentState(deltaTime, entities, storageBoxes) {
             switch (this.state) {
-                case 'FORAGING':
+                case GameConfig.villagerStates.FORAGING:
                     // First, move away from camp if we're too close
                     if (this.isAtCamp() && !this.isLeavingCamp) {
                         this.startLeavingCamp();
@@ -520,13 +520,13 @@ console.log('Phaser main loaded');
                         this.forage(entities, deltaTime);
                     }
                     break;
-                case 'RETURNING':
+                case GameConfig.villagerStates.RETURNING:
                     this.moveTowards(this.campPosition, deltaTime);
                     break;
-                case 'EATING':
+                case GameConfig.villagerStates.EATING:
                     this.eatAndDrink(storageBoxes);
                     break;
-                case 'SLEEPING':
+                case GameConfig.villagerStates.SLEEPING:
                     this.sleep();
                     break;
             }
@@ -573,7 +573,7 @@ console.log('Phaser main loaded');
 
             // If we can't find anything or inventory is full, return to camp
             if (this.isInventoryFull() || this.foragingAttempts >= this.maxForagingAttempts) {
-                this.state = 'RETURNING';
+                this.state = GameConfig.villagerStates.RETURNING;
                 this.foragingAttempts = 0;
                 this.goalTimer = 0;
             }
@@ -651,7 +651,7 @@ console.log('Phaser main loaded');
             for (const entity of entities) {
                 if (this.isValidForagingTarget(entity)) {
                     validEntitiesFound++;
-                    if (entity.type === 'tree') treeCount++;
+                    if (entity.type === GameConfig.entityTypes.tree) treeCount++;
                     else if (ALL_FOOD_TYPES.includes(entity.type)) foodCount++;
 
                     const dist = distance(this.position, entity.position);
@@ -692,16 +692,16 @@ console.log('Phaser main loaded');
         isValidForagingTarget(entity) {
             // Custom foraging logic for wood reservation
             const inventoryCount = this.inventory.filter(i => i !== null).length;
-            const hasWood = this.inventory.some(i => i && i.type === 'tree');
+            const hasWood = this.inventory.some(i => i && i.type === GameConfig.entityTypes.tree);
             if (inventoryCount < 5) {
                 // Pick up anything
-                return !entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === 'tree');
+                return !entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === GameConfig.entityTypes.tree);
             } else if (inventoryCount === 5 && !hasWood) {
                 // Only pick up wood
-                return !entity.collected && entity.type === 'tree';
+                return !entity.collected && entity.type === GameConfig.entityTypes.tree;
             } else if (inventoryCount < 6) {
                 // If we already have wood, can pick up anything
-                return !entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === 'tree');
+                return !entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === GameConfig.entityTypes.tree);
             } else {
                 // Inventory full
                 return false;
@@ -717,7 +717,7 @@ console.log('Phaser main loaded');
             };
 
             // Add to appropriate memory list
-            if (entity.type === 'tree') {
+            if (entity.type === GameConfig.entityTypes.tree) {
                 this.addToMemoryList(this.memory.knownWoodLocations, memoryEntry);
             } else {
                 this.addToMemoryList(this.memory.knownFoodLocations, memoryEntry);
@@ -855,7 +855,7 @@ console.log('Phaser main loaded');
                         if (!nearbyFire) {
                             // Check what fires exist nearby
                             const allFires = this.gameEntities ? this.gameEntities.filter(e => e.type === 'fireplace') : [];
-                            const nearbyFires = allFires.filter(fire => distance(this.position, fire.position) <= 100);
+                            const nearbyFires = allFires.filter(fire => distance(this.position, fire.position) <= GameConfig.technical.distances.fireDetection);
                             console.log(`[Villager] ${this.name} FIRE CHECK: Nearby fires: ${nearbyFires.map(f => `(${Math.round(f.position.x)}, ${Math.round(f.position.y)}) burning=${f.isBurning} wood=${f.wood}`).join(', ')}`);
                         }
                     }
@@ -931,7 +931,7 @@ console.log('Phaser main loaded');
                 if (!nearestWell) {
                     // Check what wells exist nearby
                     const allWells = this.gameEntities ? this.gameEntities.filter(e => e.type === 'well') : [];
-                    const nearbyWells = allWells.filter(well => distance(this.position, well.position) <= 200);
+                    const nearbyWells = allWells.filter(well => distance(this.position, well.position) <= GameConfig.technical.distances.wellDetection);
                     console.log(`[Villager] ${this.name} WELL CHECK: Nearby wells: ${nearbyWells.map(w => `(${Math.round(w.position.x)}, ${Math.round(w.position.y)})`).join(', ')}`);
                 }
             }
@@ -1012,7 +1012,7 @@ console.log('Phaser main loaded');
             // Find fireplace at this camp
             const fires = this.gameEntities ? this.gameEntities.filter(e => e.type === 'fireplace') : [];
             for (const fire of fires) {
-                if (distance(this.campPosition, fire.position) < 50) { // Within camp radius
+                if (distance(this.campPosition, fire.position) < GameConfig.technical.distances.campRadius) { // Within camp radius
                     return fire;
                 }
             }
@@ -1078,7 +1078,7 @@ console.log('Phaser main loaded');
             // Find sleeping bag at this camp
             const sleepingBags = this.gameEntities ? this.gameEntities.filter(e => e.type === 'sleeping_bag') : [];
             for (const bag of sleepingBags) {
-                if (distance(this.campPosition, bag.position) < 50) { // Within camp radius
+                if (distance(this.campPosition, bag.position) < GameConfig.technical.distances.campRadius) { // Within camp radius
                     return bag;
                 }
             }
@@ -1086,12 +1086,12 @@ console.log('Phaser main loaded');
         }
 
         isAtCamp() {
-            return distance(this.position, this.campPosition) < 50;
+            return distance(this.position, this.campPosition) < GameConfig.technical.distances.campRadius;
         }
 
         setExplorationTarget() {
             // Set a new exploration target in the current random direction
-            const distance = 150 + Math.random() * 100; // 150-250 pixels away
+            const distance = GameConfig.technical.distances.explorationRange.min + Math.random() * (GameConfig.technical.distances.explorationRange.max - GameConfig.technical.distances.explorationRange.min); // 150-250 pixels away
             this.explorationTarget = {
                 x: this.position.x + Math.cos(this.randomDirection) * distance,
                 y: this.position.y + Math.sin(this.randomDirection) * distance
@@ -1110,8 +1110,8 @@ console.log('Phaser main loaded');
         startLeavingCamp() {
             // Set a target 100 pixels away from camp in a random direction
             const angle = Math.random() * 2 * Math.PI;
-            const targetX = this.campPosition.x + Math.cos(angle) * 100;
-            const targetY = this.campPosition.y + Math.sin(angle) * 100;
+            const targetX = this.campPosition.x + Math.cos(angle) * GameConfig.technical.distances.explorationTarget;
+            const targetY = this.campPosition.y + Math.sin(angle) * GameConfig.technical.distances.explorationTarget;
 
             this.leaveCampTarget = { x: targetX, y: targetY };
             this.isLeavingCamp = true;
@@ -1177,7 +1177,7 @@ console.log('Phaser main loaded');
             const avgNeeds = (this.needs.temperature + this.needs.water + this.needs.calories +
                 this.needs.vitamins.reduce((a, b) => a + b, 0) / this.needs.vitamins.length) / 4;
 
-            if (avgNeeds > 80) this.healthEmoji = '😊';
+            if (avgNeeds > 80) this.healthEmoji = GameConfig.emojis.health;
             else if (avgNeeds > 50) this.healthEmoji = '😐';
             else if (avgNeeds > 20) this.healthEmoji = '😟';
             else this.healthEmoji = '😵';
@@ -1192,14 +1192,14 @@ console.log('Phaser main loaded');
                 this.stateText.setPosition(this.position.x, this.position.y + 30);
                 if (window.villagerDebugEnabled) {
                     // Select next task if we don't have one
-                    if (!this.currentTask && this.state === 'FORAGING') {
+                    if (!this.currentTask && this.state === GameConfig.villagerStates.FORAGING) {
                         this.selectNextTask();
                     }
 
                     const taskEmoji = this.currentTask ? this.getTaskEmoji(this.currentTask) : '🔍';
-                    const actionEmoji = this.state === 'FORAGING' ? '🏃' :
-                        this.state === 'RETURNING' ? '🏠' :
-                            this.state === 'EATING' ? '🍽️' : '😴';
+                    const actionEmoji = this.state === GameConfig.villagerStates.FORAGING ? GameConfig.emojis.foraging :
+                        this.state === GameConfig.villagerStates.RETURNING ? GameConfig.emojis.returning :
+                            this.state === GameConfig.villagerStates.EATING ? GameConfig.emojis.eating : GameConfig.emojis.sleeping;
 
                     this.stateText.setText(`${actionEmoji} ${this.state} ${taskEmoji}`);
                     this.stateText.setVisible(true);
@@ -1304,9 +1304,9 @@ console.log('Phaser main loaded');
 
         resetDailyTasks() {
             this.dailyTasks = {
-                woodTrips: Math.floor(Math.random() * 2) + 1, // 1-2 wood trips per day
-                foodTrips: Math.floor(Math.random() * 2) + 3, // 3-4 food trips per day
-                waterTrips: Math.floor(Math.random() * 2) + 1  // 1-2 water trips per day
+                woodTrips: Math.floor(Math.random() * (GameConfig.villager.dailyTasks.woodTrips.max - GameConfig.villager.dailyTasks.woodTrips.min + 1)) + GameConfig.villager.dailyTasks.woodTrips.min,
+                foodTrips: Math.floor(Math.random() * (GameConfig.villager.dailyTasks.foodTrips.max - GameConfig.villager.dailyTasks.foodTrips.min + 1)) + GameConfig.villager.dailyTasks.foodTrips.min,
+                waterTrips: Math.floor(Math.random() * (GameConfig.villager.dailyTasks.waterTrips.max - GameConfig.villager.dailyTasks.waterTrips.min + 1)) + GameConfig.villager.dailyTasks.waterTrips.min
             };
             this.completedTasks = {
                 woodTrips: 0,
@@ -1321,30 +1321,30 @@ console.log('Phaser main loaded');
 
         selectNextTask() {
             // Priority: water if low, then food, then wood
-            if (this.needs.water < 70 && this.completedTasks.waterTrips < this.dailyTasks.waterTrips) {
-                this.currentTask = 'water';
+            if (this.needs.water < GameConfig.villager.waterTripThreshold && this.completedTasks.waterTrips < this.dailyTasks.waterTrips) {
+                this.currentTask = GameConfig.entityTypes.water;
                 return;
             }
 
             if (this.completedTasks.foodTrips < this.dailyTasks.foodTrips) {
-                this.currentTask = 'food';
+                this.currentTask = GameConfig.entityTypes.food;
                 return;
             }
 
             if (this.completedTasks.woodTrips < this.dailyTasks.woodTrips) {
-                this.currentTask = 'wood';
+                this.currentTask = GameConfig.entityTypes.wood;
                 return;
             }
 
             // All tasks completed, just forage for food
-            this.currentTask = 'food';
+            this.currentTask = GameConfig.entityTypes.food;
         }
 
         getTaskEmoji(task) {
             const emojis = {
-                'wood': '🪵',
-                'food': '🍎',
-                'water': '💧'
+                [GameConfig.entityTypes.wood]: GameConfig.emojis.wood,
+                [GameConfig.entityTypes.food]: GameConfig.emojis.food,
+                [GameConfig.entityTypes.water]: GameConfig.emojis.water
             };
             return emojis[task] || '❓';
         }
@@ -1363,7 +1363,7 @@ console.log('Phaser main loaded');
                     'herb': '🌿',
                     'rabbit': '🐰',
                     'deer': '🦌',
-                    'tree': '🌲'
+                    [GameConfig.entityTypes.tree]: GameConfig.emojis.tree
                 };
                 return emojis[item.type || item] || '❓'; // Return emoji for type or fallback
             }).join('');
@@ -1462,7 +1462,7 @@ console.log('Phaser main loaded');
                 // Don't add camp to entities since we don't want to render it
 
                 // Fireplace
-                this.entities.push({ position: { x: x + cfg.campSpacing.x, y: y }, type: 'fireplace', emoji: '🔥', isBurning: true, wood: 2, maxWood: GameConfig.fires.maxWood });
+                this.entities.push({ position: { x: x + cfg.campSpacing.x, y: y }, type: GameConfig.entityTypes.fireplace, emoji: GameConfig.emojis.fireplace, isBurning: true, wood: 2, maxWood: GameConfig.fires.maxWood });
                 // Sleeping bag
                 this.entities.push({ position: { x: x - cfg.campSpacing.x, y: y }, type: 'sleeping_bag', emoji: '🛏️', isOccupied: false });
                 // Personal storage
@@ -1493,7 +1493,7 @@ console.log('Phaser main loaded');
                 // Set initial state based on game start time
                 const startHour = GameConfig.time.gameStartHour;
                 if (startHour >= GameConfig.time.dayStartHour && startHour < GameConfig.time.nightStartHour) {
-                    villager.state = 'FORAGING';
+                    villager.state = GameConfig.villagerStates.FORAGING;
                     if (window.summaryLoggingEnabled) {
                         console.log(`[MainScene] Villager ${villagerName} starting in FORAGING state (daytime)`);
                     }
@@ -1549,7 +1549,7 @@ console.log('Phaser main loaded');
 
                 // Add some randomness to distance
                 const distanceVariation = (this.seededRandom.random() - 0.5) * 200;
-                const actualDistance = Math.max(100, distanceFromVillage + distanceVariation);
+                const actualDistance = Math.max(GameConfig.technical.distances.explorationTarget, distanceFromVillage + distanceVariation);
 
                 // Generate cluster center position
                 let clusterCenter;
@@ -1622,13 +1622,13 @@ console.log('Phaser main loaded');
                         y: this.seededRandom.randomRange(0, cfg.height)
                     };
                     attempts++;
-                } while (this.isTooCloseToVillage(pos) && attempts < 100);
+                } while (this.isTooCloseToVillage(pos) && attempts < GameConfig.technical.distances.resourcePlacementAttempts);
 
-                if (attempts < 100) {
+                if (attempts < GameConfig.technical.distances.resourcePlacementAttempts) {
                     const treeEntity = {
                         position: pos,
-                        type: 'tree',
-                        emoji: '🌲',
+                        type: GameConfig.entityTypes.tree,
+                        emoji: GameConfig.emojis.tree,
                         collected: false,
                         isChild: false, // Initial trees are adults
                         clusterId: -1 // Trees don't use cluster system
@@ -1676,7 +1676,7 @@ console.log('Phaser main loaded');
                         textObj.setVisible(false);
                         this.playerState.inventory[slot] = { type: entity.type, emoji: entity.emoji };
                         this.updatePhaserUI();
-                        this.showTempMessage(`Collected ${entity.type}!`, 1200);
+                        this.showTempMessage(`Collected ${entity.type}!`, GameConfig.technical.messageDurations.short);
                     });
                 }
                 // --- Well interaction: click to drink if near ---
@@ -1686,23 +1686,23 @@ console.log('Phaser main loaded');
                         const dist = distance(this.playerState.position, entity.position);
                         assert(dist <= GameConfig.player.interactionThreshold, 'Tried to drink from well out of range');
                         if (this.playerState.needs.water >= GameConfig.needs.fullValue) {
-                            this.showTempMessage('Already fully hydrated!', 1200);
+                            this.showTempMessage('Already fully hydrated!', GameConfig.technical.messageDurations.short);
                             return;
                         }
                         this.playerState.needs.water = Math.min(GameConfig.needs.fullValue, this.playerState.needs.water + GameConfig.wells.drinkingAmount);
                         this.updatePhaserUI();
-                        this.showTempMessage('Drank from well!', 1200);
+                        this.showTempMessage('Drank from well!', GameConfig.technical.messageDurations.short);
                     });
                 }
                 // --- Fire interaction: click to interact if near ---
-                if (entity.type === 'fireplace') {
+                if (entity.type === GameConfig.entityTypes.fireplace) {
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         const dist = distance(this.playerState.position, entity.position);
                         assert(dist <= GameConfig.player.interactionThreshold, 'Tried to interact with fire out of range');
 
                         // Check if player has wood to add
-                        const woodSlot = this.playerState.inventory.findIndex(item => item && item.type === 'tree');
+                        const woodSlot = this.playerState.inventory.findIndex(item => item && item.type === GameConfig.entityTypes.tree);
                         if (woodSlot !== -1 && entity.wood < entity.maxWood) {
                             // Add wood to fire
                             entity.wood++;
@@ -1713,11 +1713,11 @@ console.log('Phaser main loaded');
                             this.updateFireEmoji(entity);
 
                             this.updatePhaserUI();
-                            this.showTempMessage('Added wood to fire!', 1200);
+                            this.showTempMessage('Added wood to fire!', GameConfig.technical.messageDurations.short);
                         } else if (woodSlot !== -1) {
-                            this.showTempMessage('Fire is full of wood!', 1200);
+                            this.showTempMessage('Fire is full of wood!', GameConfig.technical.messageDurations.short);
                         } else {
-                            this.showTempMessage('Need wood to fuel fire!', 1200);
+                            this.showTempMessage('Need wood to fuel fire!', GameConfig.technical.messageDurations.short);
                         }
                     });
                 }
@@ -1729,7 +1729,7 @@ console.log('Phaser main loaded');
                         assert(dist <= GameConfig.player.interactionThreshold, 'Tried to interact with sleeping bag out of range');
 
                         if (entity.isOccupied) {
-                            this.showTempMessage('Sleeping bag is occupied!', 1200);
+                            this.showTempMessage('Sleeping bag is occupied!', GameConfig.technical.messageDurations.short);
                             return;
                         }
 
@@ -1787,21 +1787,21 @@ console.log('Phaser main loaded');
             const barStartX = margin + iconWidth + 5; // Start bars after icons with 5px spacing
 
             for (let i = 0; i < needLabels.length; i++) {
-                const barBg = this.add.rectangle(barStartX + GameConfig.ui.barWidth / 2, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing), GameConfig.ui.barWidth, GameConfig.ui.barHeight, 0x333333).setOrigin(0.5, 0).setScrollFactor(0);
+                const barBg = this.add.rectangle(barStartX + GameConfig.ui.barWidth / 2, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing), GameConfig.ui.barWidth, GameConfig.ui.barHeight, GameConfig.ui.colors.barBackground).setOrigin(0.5, 0).setScrollFactor(0);
                 const barFill = this.add.rectangle(barStartX + GameConfig.ui.barWidth / 2, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing), GameConfig.ui.barWidth, GameConfig.ui.barHeight, getPhaserBarColor(needTypes[i])).setOrigin(0.5, 0).setScrollFactor(0);
-                const label = this.add.text(margin, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, needLabels[i], { fontSize: '16px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 0.5).setScrollFactor(0);
-                const value = this.add.text(barStartX + GameConfig.ui.barWidth + 10, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, '100', { fontSize: '12px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 0.5).setScrollFactor(0);
+                const label = this.add.text(margin, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, needLabels[i], { fontSize: GameConfig.ui.fontSizes.needLabel, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0, 0.5).setScrollFactor(0);
+                const value = this.add.text(barStartX + GameConfig.ui.barWidth + GameConfig.ui.dimensions.valueOffset, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, '100', { fontSize: GameConfig.ui.fontSizes.needValue, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0, 0.5).setScrollFactor(0);
                 this.uiContainer.add([barBg, barFill, label, value]);
                 this.ui.needsBars.push({ barBg, barFill, label, value });
             }
             // Inventory (bottom center) - use viewport dimensions
-            const inventoryWidth = GameConfig.player.inventorySize * 56;
+            const inventoryWidth = GameConfig.player.inventorySize * GameConfig.ui.dimensions.slotSpacing;
             const inventoryStartX = (window.innerWidth - inventoryWidth) / 2;
             const inventoryY = window.innerHeight - margin - 30; // Add 30px more space from bottom
             this.ui.inventorySlots = [];
             for (let i = 0; i < GameConfig.player.inventorySize; i++) {
-                const slot = this.add.rectangle(inventoryStartX + i * 56, inventoryY, 50, 50, 0x222222).setOrigin(0.5).setStrokeStyle(2, 0x666666).setScrollFactor(0);
-                const emoji = this.add.text(inventoryStartX + i * 56, inventoryY, '', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setScrollFactor(0);
+                const slot = this.add.rectangle(inventoryStartX + i * GameConfig.ui.dimensions.slotSpacing, inventoryY, GameConfig.ui.dimensions.slotSize, GameConfig.ui.dimensions.slotSize, GameConfig.ui.colors.slotBackground).setOrigin(0.5).setStrokeStyle(2, GameConfig.ui.colors.slotBorder).setScrollFactor(0);
+                const emoji = this.add.text(inventoryStartX + i * GameConfig.ui.dimensions.slotSpacing, inventoryY, '', { fontSize: GameConfig.ui.fontSizes.inventory, fontFamily: 'Arial', color: GameConfig.ui.colors.textPrimary }).setOrigin(0.5).setScrollFactor(0);
                 this.uiContainer.add([slot, emoji]);
                 this.ui.inventorySlots.push({ slot, emoji });
                 // --- Inventory slot click: move to storage, eat, or add to fire ---
@@ -1826,13 +1826,13 @@ console.log('Phaser main loaded');
                                 this.eatFoodFromInventory(i, item);
                                 return;
                             } else {
-                                this.showTempMessage('Must be near a burning fire to eat!', 1500);
+                                this.showTempMessage('Must be near a burning fire to eat!', GameConfig.technical.messageDurations.medium);
                                 return;
                             }
                         }
 
                         // Third priority: add wood to fire if near a burning fire
-                        if (item.type === 'tree') {
+                        if (item.type === GameConfig.entityTypes.tree) {
                             const nearbyFire = this.findNearbyFire();
                             if (nearbyFire && nearbyFire.wood < nearbyFire.maxWood) {
                                 nearbyFire.wood++;
@@ -1862,13 +1862,13 @@ console.log('Phaser main loaded');
             //     }
             // });
             // Time display (top right) - fixed to camera viewport
-            this.ui.timeText = this.add.text(window.innerWidth - margin, margin, '', { fontSize: '18px', fontFamily: 'monospace', color: '#fff' }).setOrigin(1, 0).setScrollFactor(0);
+            this.ui.timeText = this.add.text(window.innerWidth - margin, margin, '', { fontSize: GameConfig.ui.fontSizes.time, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(1, 0).setScrollFactor(0);
             this.uiContainer.add(this.ui.timeText);
             // Info box (bottom left) - fixed to camera viewport
-            this.ui.infoBox = this.add.text(margin, window.innerHeight - margin, 'Alpine Sustainability v1.0\nControls: WASD to move\nClick inventory slots to select', { fontSize: '13px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#222', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setScrollFactor(0);
+            this.ui.infoBox = this.add.text(margin, window.innerHeight - margin, 'Alpine Sustainability v1.0\nControls: WASD to move\nClick inventory slots to select', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.infoBox);
             // Debug toggle (bottom left, above log spam button) - fixed to camera viewport
-            this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - 120, '⚪ Debug: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.debugButtonOffset, '⚪ Debug: OFF', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.debugBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.debugBtn.on('pointerdown', () => {
                 window.villagerDebugEnabled = !window.villagerDebugEnabled;
                 updateDebugBtn.call(this);
@@ -1877,12 +1877,12 @@ console.log('Phaser main loaded');
             });
             function updateDebugBtn() {
                 if (window.villagerDebugEnabled) {
-                    this.ui.debugBtn.setText('🟢 Debug: ON').setColor('#fff').setBackgroundColor('#228B22');
+                    this.ui.debugBtn.setText('🟢 Debug: ON').setColor(GameConfig.ui.colors.textPrimary).setBackgroundColor(GameConfig.ui.colors.buttonSuccess);
                     if (this.ui.fpsCounter) {
                         this.ui.fpsCounter.setVisible(true);
                     }
                 } else {
-                    this.ui.debugBtn.setText('⚪ Debug: OFF').setColor('#ccc').setBackgroundColor('#444');
+                    this.ui.debugBtn.setText('⚪ Debug: OFF').setColor(GameConfig.ui.colors.textSecondary).setBackgroundColor(GameConfig.ui.colors.debugBackground);
                     if (this.ui.fpsCounter) {
                         this.ui.fpsCounter.setVisible(false);
                     }
@@ -1896,16 +1896,16 @@ console.log('Phaser main loaded');
             this.uiContainer.add(this.ui.debugBtn);
 
             // Log spam toggle (bottom left, above info box) - fixed to camera viewport
-            this.ui.logSpamBtn = this.add.text(margin, window.innerHeight - margin - 90, '⚪ Log Spam: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.logSpamBtn = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.logSpamButtonOffset, '⚪ Log Spam: OFF', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.debugBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.logSpamBtn.on('pointerdown', () => {
                 window.summaryLoggingEnabled = !window.summaryLoggingEnabled;
                 updateLogSpamBtn.call(this);
             });
             function updateLogSpamBtn() {
                 if (window.summaryLoggingEnabled) {
-                    this.ui.logSpamBtn.setText('🟢 Log Spam: ON').setColor('#fff').setBackgroundColor('#228B22');
+                    this.ui.logSpamBtn.setText('🟢 Log Spam: ON').setColor(GameConfig.ui.colors.textPrimary).setBackgroundColor(GameConfig.ui.colors.buttonSuccess);
                 } else {
-                    this.ui.logSpamBtn.setText('⚪ Log Spam: OFF').setColor('#ccc').setBackgroundColor('#444');
+                    this.ui.logSpamBtn.setText('⚪ Log Spam: OFF').setColor(GameConfig.ui.colors.textSecondary).setBackgroundColor(GameConfig.ui.colors.debugBackground);
                 }
             }
             updateLogSpamBtn.call(this);
@@ -1913,23 +1913,23 @@ console.log('Phaser main loaded');
 
             // Seed control box (bottom right) - use viewport dimensions
             const seedBoxY = window.innerHeight - margin;
-            const seedBoxWidth = 200;
+            const seedBoxWidth = GameConfig.ui.dimensions.seedBoxWidth;
             const seedBoxX = window.innerWidth - margin - seedBoxWidth;
 
             // Seed label - fixed to camera viewport
-            this.ui.seedLabel = this.add.text(seedBoxX, seedBoxY - 25, '🌱 Seed:', { fontSize: '13px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0, 1).setScrollFactor(0);
+            this.ui.seedLabel = this.add.text(seedBoxX, seedBoxY - 25, '🌱 Seed:', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.seedLabel);
 
             // Seed input background - fixed to camera viewport
-            this.ui.seedInputBg = this.add.rectangle(seedBoxX + 30, seedBoxY - 15, 60, 20, 0x333333).setOrigin(0, 1).setStrokeStyle(1, 0x666666).setScrollFactor(0);
+            this.ui.seedInputBg = this.add.rectangle(seedBoxX + GameConfig.ui.dimensions.seedInputOffset, seedBoxY - 15, GameConfig.ui.dimensions.seedInputWidth, GameConfig.ui.dimensions.seedInputHeight, GameConfig.ui.colors.slotBackground).setOrigin(0, 1).setStrokeStyle(1, GameConfig.ui.colors.slotBorder).setScrollFactor(0);
             this.uiContainer.add(this.ui.seedInputBg);
 
             // Seed input text - fixed to camera viewport
-            this.ui.seedInputText = this.add.text(seedBoxX + 56, seedBoxY - 17, getCurrentSeed().toString(), { fontSize: '12px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5, 1).setScrollFactor(0);
+            this.ui.seedInputText = this.add.text(seedBoxX + 56, seedBoxY - 17, getCurrentSeed().toString(), { fontSize: GameConfig.ui.fontSizes.medium, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0.5, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.seedInputText);
 
             // Decrement button (-) - fixed to camera viewport
-            this.ui.seedDecrementBtn = this.add.text(seedBoxX + 25, seedBoxY - 15, '-', { fontSize: '14px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 6, right: 6, top: 2, bottom: 2 } }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.seedDecrementBtn = this.add.text(seedBoxX + 25, seedBoxY - 15, '-', { fontSize: GameConfig.ui.fontSizes.large, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonSecondary, padding: GameConfig.ui.dimensions.buttonPadding.small }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.seedDecrementBtn.on('pointerdown', () => {
                 console.log('[Seed] Decrement button clicked');
                 this.decrementSeed();
@@ -1937,7 +1937,7 @@ console.log('Phaser main loaded');
             this.uiContainer.add(this.ui.seedDecrementBtn);
 
             // Increment button (+) - fixed to camera viewport
-            this.ui.seedIncrementBtn = this.add.text(seedBoxX + 85, seedBoxY - 15, '+', { fontSize: '14px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 6, right: 6, top: 2, bottom: 2 } }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.seedIncrementBtn = this.add.text(seedBoxX + GameConfig.ui.dimensions.seedButtonOffset, seedBoxY - 15, '+', { fontSize: GameConfig.ui.fontSizes.large, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonSecondary, padding: GameConfig.ui.dimensions.buttonPadding.small }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.seedIncrementBtn.on('pointerdown', () => {
                 console.log('[Seed] Increment button clicked');
                 this.incrementSeed();
@@ -1945,7 +1945,7 @@ console.log('Phaser main loaded');
             this.uiContainer.add(this.ui.seedIncrementBtn);
 
             // New Game button - fixed to camera viewport
-            this.ui.newGameBtn = this.add.text(seedBoxX + 100, seedBoxY - 15, '🔄 New Game', { fontSize: '12px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#228B22', padding: { left: 8, right: 8, top: 4, bottom: 4 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.newGameBtn = this.add.text(seedBoxX + 100, seedBoxY - 15, '🔄 New Game', { fontSize: GameConfig.ui.fontSizes.medium, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonPrimary, padding: GameConfig.ui.dimensions.buttonPadding.medium }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.newGameBtn.on('pointerdown', () => {
                 console.log('[NewGame] New Game button clicked');
                 this.showNewGameConfirmation();
@@ -1956,11 +1956,11 @@ console.log('Phaser main loaded');
             this.currentSeedValue = getCurrentSeed();
 
             // FPS counter (above debug button) - fixed to camera viewport
-            this.ui.fpsCounter = this.add.text(margin, window.innerHeight - margin - 150, 'FPS: 60', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setScrollFactor(0);
+            this.ui.fpsCounter = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.fpsCounterOffset, 'FPS: 60', { fontSize: GameConfig.ui.fontSizes.fps, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.fpsBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.fpsCounter);
 
             // Debug toggle (bottom left, above log spam button) - fixed to camera viewport
-            this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - 120, '⚪ Debug: OFF', { fontSize: '13px', fontFamily: 'monospace', color: '#ccc', backgroundColor: '#444', padding: { left: 8, right: 8, top: 8, bottom: 8 } }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.debugButtonOffset, '⚪ Debug: OFF', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.debugBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.debugBtn.on('pointerdown', () => {
                 window.villagerDebugEnabled = !window.villagerDebugEnabled;
                 updateDebugBtn.call(this);
@@ -1993,7 +1993,7 @@ console.log('Phaser main loaded');
 
                     // Update ZZZ position
                     if (this.sleepZZZ) {
-                        this.sleepZZZ.setPosition(this.player.x, this.player.y - 60);
+                        this.sleepZZZ.setPosition(this.player.x, this.player.y - GameConfig.ui.dimensions.sleepingOffset);
                     }
 
                     // Restore temperature while sleeping (calories should still decay naturally)
@@ -2003,7 +2003,7 @@ console.log('Phaser main loaded');
                     const t = getCurrentTime(this.playerState);
                     if (t.hour === 8 && t.minute === 0) {
                         this.stopSleeping();
-                        this.showTempMessage('Woke up at 8:00 AM!', 2000);
+                        this.showTempMessage('Woke up at 8:00 AM!', GameConfig.ui.tempMessageDuration);
                     }
                 }
             } else {
@@ -2229,20 +2229,20 @@ console.log('Phaser main loaded');
             };
             return fallbackEmojis[type] || '❓';
         }
-        showTempMessage(msg, duration = 2000) {
+        showTempMessage(msg, duration = GameConfig.ui.tempMessageDuration) {
             if (this._tempMsg) this._tempMsg.destroy();
-            this._tempMsg = this.add.text(this.player.x, this.player.y - 40, msg, { fontSize: '18px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#222', padding: { left: 8, right: 8, top: 4, bottom: 4 } }).setOrigin(0.5);
+            this._tempMsg = this.add.text(this.player.x, this.player.y - GameConfig.ui.dimensions.tempMessageOffset, msg, { fontSize: GameConfig.ui.fontSizes.overlayMessage, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.buttonPadding.medium }).setOrigin(0.5);
             this.time.delayedCall(duration, () => { if (this._tempMsg) { this._tempMsg.destroy(); this._tempMsg = null; } });
         }
         showGameOverOverlay(reason) {
             if (this._gameOverOverlay) return;
             const w = this.cameras.main.width;
             const h = this.cameras.main.height;
-            const bg = this.add.rectangle(w / 2, h / 2, 400, 200, 0x222222, 0.95).setOrigin(0.5).setDepth(1000);
-            const text = this.add.text(w / 2, h / 2 - 40, 'Game Over', { fontSize: '32px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5).setDepth(1001);
-            const reasonText = this.add.text(w / 2, h / 2, reason, { fontSize: '18px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5).setDepth(1001);
-            const btn = this.add.text(w / 2, h / 2 + 60, 'New Game', { fontSize: '20px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#228B22', padding: { left: 16, right: 16, top: 8, bottom: 8 } })
-                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1001);
+            const bg = this.add.rectangle(w / 2, h / 2, GameConfig.ui.overlayDimensions.width, GameConfig.ui.overlayDimensions.height, GameConfig.ui.overlayColor, GameConfig.ui.overlayAlpha).setOrigin(0.5).setDepth(GameConfig.ui.overlayZIndex);
+            const text = this.add.text(w / 2, h / 2 - GameConfig.ui.dimensions.tempMessageOffset, 'Game Over', { fontSize: GameConfig.ui.fontSizes.massive, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent);
+            const reasonText = this.add.text(w / 2, h / 2, reason, { fontSize: GameConfig.ui.fontSizes.overlayMessage, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent);
+            const btn = this.add.text(w / 2, h / 2 + GameConfig.ui.dimensions.sleepingOffset, 'New Game', { fontSize: GameConfig.ui.fontSizes.huge, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonPrimary, padding: GameConfig.ui.dimensions.buttonPadding.xlarge })
+                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(GameConfig.ui.zIndex.overlayContent);
             btn.on('pointerdown', () => { window.location.reload(); });
             this._gameOverOverlay = [bg, text, reasonText, btn];
         }
@@ -2348,20 +2348,20 @@ console.log('Phaser main loaded');
             }
 
             // Background overlay - fixed to camera viewport
-            const bg = this.add.rectangle(w / 2, h / 2, 400, 200, 0x222222, 0.95).setOrigin(0.5).setDepth(1000).setScrollFactor(0);
+            const bg = this.add.rectangle(w / 2, h / 2, GameConfig.ui.dimensions.confirmationWidth, GameConfig.ui.dimensions.confirmationHeight, GameConfig.ui.colors.overlay, GameConfig.ui.alpha.overlay).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlay).setScrollFactor(0);
 
             // Title - fixed to camera viewport
-            const title = this.add.text(w / 2, h / 2 - 60, 'Start New Game?', { fontSize: '24px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
+            const title = this.add.text(w / 2, h / 2 - GameConfig.ui.dimensions.titleOffset, 'Start New Game?', { fontSize: GameConfig.ui.fontSizes.overlayTitle, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
 
             // Message - fixed to camera viewport
-            const message = this.add.text(w / 2, h / 2 - 20, `Seed: ${seed}`, { fontSize: '16px', fontFamily: 'monospace', color: '#ccc' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
+            const message = this.add.text(w / 2, h / 2 - GameConfig.ui.dimensions.messageOffset, `Seed: ${seed}`, { fontSize: GameConfig.ui.fontSizes.button, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
 
             // Buttons - fixed to camera viewport
-            const yesBtn = this.add.text(w / 2 - 60, h / 2 + 30, 'Yes', { fontSize: '16px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#228B22', padding: { left: 12, right: 12, top: 6, bottom: 6 } })
-                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1001).setScrollFactor(0);
+            const yesBtn = this.add.text(w / 2 - GameConfig.ui.dimensions.buttonSpacing, h / 2 + GameConfig.ui.dimensions.buttonOffset, 'Yes', { fontSize: GameConfig.ui.fontSizes.button, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonPrimary, padding: GameConfig.ui.dimensions.buttonPadding.large })
+                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
 
-            const noBtn = this.add.text(w / 2 + 60, h / 2 + 30, 'No', { fontSize: '16px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 12, right: 12, top: 6, bottom: 6 } })
-                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1001).setScrollFactor(0);
+            const noBtn = this.add.text(w / 2 + GameConfig.ui.dimensions.buttonSpacing, h / 2 + GameConfig.ui.dimensions.buttonOffset, 'No', { fontSize: GameConfig.ui.fontSizes.button, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonSecondary, padding: GameConfig.ui.dimensions.buttonPadding.large })
+                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
 
             // Button handlers
             yesBtn.on('pointerdown', () => {
@@ -2627,7 +2627,7 @@ console.log('Phaser main loaded');
             // Show ZZZ above player
             this.sleepZZZ = this.add.text(this.player.x, this.player.y - 60, '💤', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setDepth(1000);
 
-            this.showTempMessage('Sleeping... (time accelerated)', 2000);
+            this.showTempMessage('Sleeping... (time accelerated)', GameConfig.ui.tempMessageDuration);
         }
 
         stopSleeping() {
@@ -2655,7 +2655,7 @@ console.log('Phaser main loaded');
             // Background overlay - make it larger for communal storage
             const isCommunal = !storageBox.isPersonal;
             const bgHeight = isCommunal ? 450 : 300;
-            const bg = this.add.rectangle(w / 2, h / 2, 400, bgHeight, 0x222222, 0.95).setOrigin(0.5).setDepth(1000).setScrollFactor(0);
+            const bg = this.add.rectangle(w / 2, h / 2, GameConfig.ui.overlayDimensions.width, bgHeight, GameConfig.ui.overlayColor, GameConfig.ui.overlayAlpha).setOrigin(0.5).setDepth(GameConfig.ui.overlayZIndex).setScrollFactor(0);
 
             // Title
             const title = this.add.text(w / 2, h / 2 - (bgHeight / 2) + 30, `${storageBox.isPersonal ? 'Personal' : 'Communal'} Storage`, { fontSize: '20px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
@@ -2983,11 +2983,11 @@ console.log('Phaser main loaded');
 
                 // Check each uncollected resource for propagation (both adults and children)
                 for (const entity of this.entities) {
-                    if (!entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === 'tree')) {
+                    if (!entity.collected && (ALL_FOOD_TYPES.includes(entity.type) || entity.type === GameConfig.entityTypes.tree)) {
                         // Calculate propagation chance based on global resource count
                         const globalCount = this.getGlobalResourceCount(entity.type);
                         const baseChance = 0.5; // 50% base chance
-                        const maxCount = entity.type === 'tree' ? 50 : 10; // Trees cap at 50, others at 10
+                        const maxCount = entity.type === GameConfig.entityTypes.tree ? GameConfig.resources.maxCounts.tree : GameConfig.resources.maxCounts.default; // Trees cap at 50, others at 10
                         const finalChance = Math.max(0, baseChance * (1 - globalCount / maxCount)); // Decreases to 0% at max count
 
                         // Attempt to spawn new resource nearby
@@ -3112,7 +3112,7 @@ console.log('Phaser main loaded');
 
                 // Check distance to player
                 const distToPlayer = distance(this.playerState.position, animal.position);
-                if (distToPlayer < 100) { // Flee if player is within 100 pixels
+                if (distToPlayer < GameConfig.technical.distances.animalFleeDistance) { // Flee if player is within 100 pixels
                     this.fleeFromTarget(animal, this.playerState.position);
                     isFleeing = true;
                 }
@@ -3121,7 +3121,7 @@ console.log('Phaser main loaded');
                 for (const villager of this.villagers) {
                     if (villager && !villager.isDead) {
                         const distToVillager = distance(villager.position, animal.position);
-                        if (distToVillager < 100) { // Flee if villager is within 100 pixels
+                        if (distToVillager < GameConfig.technical.distances.animalFleeDistance) { // Flee if villager is within 100 pixels
                             this.fleeFromTarget(animal, villager.position);
                             isFleeing = true;
                             break; // Only flee from one threat at a time
@@ -3144,7 +3144,7 @@ console.log('Phaser main loaded');
 
             if (dist > 0) {
                 // Move away at 80% speed
-                const fleeSpeed = GameConfig.player.moveSpeed * 0.8 * (16 / 1000); // 80% speed, 16ms delta
+                const fleeSpeed = GameConfig.player.moveSpeed * GameConfig.animals.fleeSpeedMultiplier * (GameConfig.animals.fixedDeltaTime / GameConfig.technical.millisecondsPerSecond); // 80% speed, 16ms delta
                 const moveX = (dx / dist) * fleeSpeed;
                 const moveY = (dy / dist) * fleeSpeed;
 
@@ -3168,9 +3168,9 @@ console.log('Phaser main loaded');
             if (!animal.wanderState) {
                 animal.wanderState = {
                     targetPosition: null,
-                    wanderSpeed: GameConfig.player.moveSpeed * (0.3 + Math.random() * 0.2), // 30-50% speed
+                    wanderSpeed: GameConfig.player.moveSpeed * (GameConfig.animals.wanderSpeedRange.min + Math.random() * (GameConfig.animals.wanderSpeedRange.max - GameConfig.animals.wanderSpeedRange.min)), // 30-50% speed
                     changeDirectionTimer: 0,
-                    changeDirectionInterval: 2000 + Math.random() * 3000 // 2-5 seconds
+                    changeDirectionInterval: GameConfig.animals.directionChangeInterval.min + Math.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min) // 2-5 seconds
                 };
             }
 
@@ -3183,7 +3183,7 @@ console.log('Phaser main loaded');
 
                 // Pick new random direction
                 const angle = Math.random() * 2 * Math.PI;
-                const distance = 50 + Math.random() * 100; // 50-150 pixels away
+                const distance = GameConfig.technical.distances.animalWanderRange.min + Math.random() * (GameConfig.technical.distances.animalWanderRange.max - GameConfig.technical.distances.animalWanderRange.min); // 50-150 pixels away
                 wander.targetPosition = {
                     x: animal.position.x + Math.cos(angle) * distance,
                     y: animal.position.y + Math.sin(angle) * distance
@@ -3195,8 +3195,8 @@ console.log('Phaser main loaded');
 
                 // Reset timer and pick new random speed
                 wander.changeDirectionTimer = 0;
-                wander.wanderSpeed = GameConfig.player.moveSpeed * (0.3 + Math.random() * 0.2); // 30-50% speed
-                wander.changeDirectionInterval = 2000 + Math.random() * 3000; // 2-5 seconds
+                wander.wanderSpeed = GameConfig.player.moveSpeed * (GameConfig.animals.wanderSpeedRange.min + Math.random() * (GameConfig.animals.wanderSpeedRange.max - GameConfig.animals.wanderSpeedRange.min)); // 30-50% speed
+                wander.changeDirectionInterval = GameConfig.animals.directionChangeInterval.min + Math.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min); // 2-5 seconds
             }
 
             // Move towards target if we have one
@@ -3207,7 +3207,7 @@ console.log('Phaser main loaded');
 
                 if (dist > 0) {
                     // Move at wandering speed
-                    const moveSpeed = wander.wanderSpeed * (16 / 1000); // Convert to per-frame movement
+                    const moveSpeed = wander.wanderSpeed * (GameConfig.animals.fixedDeltaTime / GameConfig.technical.millisecondsPerSecond); // Convert to per-frame movement
                     const moveX = (dx / dist) * moveSpeed;
                     const moveY = (dy / dist) * moveSpeed;
 

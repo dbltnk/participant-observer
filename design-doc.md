@@ -165,6 +165,9 @@
 * **Community Knowledge:** Successful strategies can be shared with villagers through specific actions.
 * **Discovery Rewards:** Finding the optimal survival strategy for a seed unlocks special insights.
 
+**Conversation System
+* **LLM-driven chat:** You can talk to NPCs to learn about what they are doing and why. They might not always have all information or understand exactly why they are doing things but they will not lie to you either.
+
 **Technical Enhancements:**
 * Ability to load a game from a specific random seed.
 * Pixel art visuals and refined color palettes.
