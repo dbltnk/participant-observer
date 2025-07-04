@@ -2494,7 +2494,7 @@ console.log('Phaser main loaded');
             // Time display
             const t = getCurrentTime(this.playerState);
             let timeEmoji = '🌅';
-            if (t.hour >= 6 && t.hour < 12) timeEmoji = '��';
+            if (t.hour >= 6 && t.hour < 12) timeEmoji = '🌅';
             else if (t.hour >= 12 && t.hour < GameConfig.time.nightStartHour) timeEmoji = '☀️';
             else if (t.hour >= GameConfig.time.nightStartHour && t.hour < 22) timeEmoji = '🌆';
             else timeEmoji = '🌙';
