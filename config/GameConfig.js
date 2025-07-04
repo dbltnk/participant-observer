@@ -452,14 +452,14 @@ window.GameConfig = {
     // Storage settings
     storage: {
         communalCapacity: 20, // Capacity of communal storage box
-        personalCapacity: 4, // Capacity of personal storage boxes
+        personalCapacity: 8, // Capacity of personal storage boxes
         localStorageKey: 'alpine-seed' // LocalStorage key for seed persistence
     },
 
     // Well settings
     wells: {
         initialWaterLevel: 10, // Starting water level for wells
-        dailyRefill: 4, // Water refilled per day
+        hourlyRefill: 0.5, // Water refilled per hour (1 unit every 2 hours)
         drinkingAmount: 50 // Amount of water restored when drinking from well
     },
 

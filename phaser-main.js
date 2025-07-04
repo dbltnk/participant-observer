@@ -938,6 +938,8 @@ console.log('Phaser main loaded');
 
             if (nearestWell && distance(this.position, nearestWell.position) <= GameConfig.player.interactionThreshold) {
                 this.needs.water = Math.min(GameConfig.needs.fullValue, this.needs.water + GameConfig.wells.drinkingAmount);
+                // Reduce well water level
+                nearestWell.waterLevel = Math.max(0, nearestWell.waterLevel - 1);
                 if (window.summaryLoggingEnabled) {
                     console.log(`[Villager] ${this.name} drank from well`);
                 }
@@ -1648,7 +1650,35 @@ console.log('Phaser main loaded');
                 if (entity.type === 'storage_box' && !entity.isPersonal) {
                     fontSize = 48; // 2x the normal 24px size
                 }
-                const textObj = this.add.text(entity.position.x, entity.position.y, entity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+
+                let textObj;
+                // Special handling for wells - scale based on water level
+                if (entity.type === 'well') {
+                    // Scale from 22px (3 water) to 66px (10 water) - 3x size
+                    const baseSize = 22;
+                    const maxSize = 66;
+                    const minWater = 3;
+                    const maxWater = 10;
+
+                    // Calculate scale factor based on water level
+                    const waterLevel = entity.waterLevel || 0;
+                    const scaleFactor = Math.max(0, Math.min(1, (waterLevel - minWater) / (maxWater - minWater)));
+                    const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
+
+                    // Calculate transparency (fully transparent at 0 water, fully opaque at 5+ water)
+                    const transparencyThreshold = 5;
+                    const alpha = waterLevel <= 0 ? 0 : Math.min(1, waterLevel / transparencyThreshold);
+
+                    fontSize = Math.round(scaledSize);
+                    textObj = this.add.text(entity.position.x, entity.position.y, entity.emoji, {
+                        fontSize: fontSize + 'px',
+                        fontFamily: 'Arial',
+                        color: '#fff',
+                        alpha: alpha
+                    }).setOrigin(0.5);
+                } else {
+                    textObj = this.add.text(entity.position.x, entity.position.y, entity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+                }
                 entity._phaserText = textObj;
                 this.worldEntities.push(textObj);
 
@@ -1690,6 +1720,10 @@ console.log('Phaser main loaded');
                             return;
                         }
                         this.playerState.needs.water = Math.min(GameConfig.needs.fullValue, this.playerState.needs.water + GameConfig.wells.drinkingAmount);
+                        // Reduce well water level
+                        entity.waterLevel = Math.max(0, entity.waterLevel - 1);
+                        // Update well visuals
+                        this.updateWellVisuals(entity);
                         this.updatePhaserUI();
                         this.showTempMessage('Drank from well!', GameConfig.technical.messageDurations.short);
                     });
@@ -2032,6 +2066,9 @@ console.log('Phaser main loaded');
 
             // Update resource propagation (overnight)
             this.updateResourcePropagation();
+
+            // Update well water levels (hourly regeneration)
+            this.updateWellRegeneration(effectiveDelta);
 
             // Update animal fleeing behavior
             this.updateAnimalFleeing();
@@ -3285,6 +3322,48 @@ console.log('Phaser main loaded');
             }
             // Fallback
             return 'moderate';
+        }
+
+        updateWellRegeneration(delta) {
+            // Regenerate well water levels over time (1 unit every 2 hours)
+            const wells = this.entities.filter(e => e.type === 'well');
+            const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
+            const gameTimeDelta = (delta / 1000) * timeAcceleration;
+
+            // Convert game time delta to hours
+            const hoursDelta = gameTimeDelta / GameConfig.time.secondsPerHour;
+
+            for (const well of wells) {
+                // Add water based on hourly refill rate
+                const waterToAdd = hoursDelta * GameConfig.wells.hourlyRefill;
+                well.waterLevel = Math.min(10, well.waterLevel + waterToAdd);
+
+                // Update well visuals if water level changed
+                if (waterToAdd > 0) {
+                    this.updateWellVisuals(well);
+                }
+            }
+        }
+
+        updateWellVisuals(well) {
+            // Update well size and transparency based on water level
+            if (well._phaserText) {
+                // Scale from 22px (3 water) to 66px (10 water) - 3x size
+                const baseSize = 22;
+                const maxSize = 66;
+                const minWater = 3;
+                const maxWater = 10;
+                // Calculate scale factor based on water level
+                const waterLevel = well.waterLevel || 0;
+                const scaleFactor = Math.max(0, Math.min(1, (waterLevel - minWater) / (maxWater - minWater)));
+                const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
+                // Calculate transparency (fully transparent at 0 water, fully opaque at 5+ water)
+                const transparencyThreshold = 5;
+                const alpha = waterLevel <= 0 ? 0 : Math.min(1, waterLevel / transparencyThreshold);
+                // Update font size and alpha
+                well._phaserText.setFontSize(Math.round(scaledSize) + 'px');
+                well._phaserText.setAlpha(alpha);
+            }
         }
     }
     function getPhaserBarColor(type) {
