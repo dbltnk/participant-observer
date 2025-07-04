@@ -994,19 +994,19 @@ console.log('Phaser main loaded');
             }
         }
 
-        updateFireEmoji(fire) {
-            // Update fire emoji based on wood level - SINGLE SOURCE OF TRUTH
+        updateFireVisuals(fire) {
+            // Update fire size and transparency based on wood level
             if (fire._phaserText) {
-                if (fire.wood === 0) {
-                    fire._phaserText.setText('🪵'); // Cold/empty fire (logs but not burning)
-                    fire.isBurning = false;
-                } else if (fire.wood === 1) {
-                    fire._phaserText.setText('🌋'); // Burning fire with 1 wood
-                    fire.isBurning = true;
-                } else if (fire.wood === 2) {
-                    fire._phaserText.setText('🔥'); // Burning fire with 2 wood
-                    fire.isBurning = true;
-                }
+                const baseSize = 24;
+                const maxSize = 48;
+                const maxWood = 10;
+                const woodLevel = fire.wood || 0;
+                const scaleFactor = Math.max(0, Math.min(1, woodLevel / maxWood));
+                const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
+                const transparencyThreshold = 3;
+                const alpha = woodLevel <= 0 ? 0 : Math.min(1, woodLevel / transparencyThreshold);
+                fire._phaserText.setFontSize(Math.round(scaledSize) + 'px');
+                fire._phaserText.setAlpha(alpha);
             }
         }
 
@@ -1676,6 +1676,23 @@ console.log('Phaser main loaded');
                         color: '#fff',
                         alpha: alpha
                     }).setOrigin(0.5);
+                } else if (entity.type === 'fireplace') {
+                    // Special handling for fires - scale and fade based on wood level
+                    const baseSize = 24; // Normal fireplace size
+                    const maxSize = 48; // 2x size at max wood
+                    const maxWood = 10;
+
+                    // Calculate scale factor based on wood level
+                    const woodLevel = entity.wood || 0;
+                    const scaleFactor = Math.max(0, Math.min(1, woodLevel / maxWood));
+                    const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
+
+                    fontSize = Math.round(scaledSize);
+                    textObj = this.add.text(entity.position.x, entity.position.y, GameConfig.emojis.fireplace, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+                    textObj.setAlpha(1 - scaleFactor);
+                    entity._phaserText = textObj;
+                    this.worldEntities.push(textObj);
+                    continue;
                 } else {
                     textObj = this.add.text(entity.position.x, entity.position.y, entity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
                 }
@@ -1743,8 +1760,8 @@ console.log('Phaser main loaded');
                             this.playerState.inventory[woodSlot] = null;
                             entity.isBurning = true;
 
-                            // Update fire emoji - SINGLE SOURCE OF TRUTH
-                            this.updateFireEmoji(entity);
+                            // Update fire visuals
+                            this.updateFireVisuals(entity);
 
                             this.updatePhaserUI();
                             this.showTempMessage('Added wood to fire!', GameConfig.technical.messageDurations.short);
@@ -1873,8 +1890,8 @@ console.log('Phaser main loaded');
                                 nearbyFire.isBurning = true;
                                 this.playerState.inventory[i] = null;
 
-                                // Update fire emoji - SINGLE SOURCE OF TRUTH
-                                this.updateFireEmoji(nearbyFire);
+                                // Update fire visuals
+                                this.updateFireVisuals(nearbyFire);
 
                                 this.updatePhaserUI();
                                 this.showTempMessage('Added wood to fire!', 1200);
@@ -2069,6 +2086,9 @@ console.log('Phaser main loaded');
 
             // Update well water levels (hourly regeneration)
             this.updateWellRegeneration(effectiveDelta);
+
+            // Update fire wood consumption
+            this.updateFireConsumption(effectiveDelta);
 
             // Update animal fleeing behavior
             this.updateAnimalFleeing();
@@ -2981,8 +3001,8 @@ console.log('Phaser main loaded');
                     if (woodConsumed >= 1) {
                         entity.wood = Math.max(0, entity.wood - 1);
 
-                        // Update fire emoji - SINGLE SOURCE OF TRUTH
-                        this.updateFireEmoji(entity);
+                        // Update fire visuals
+                        this.updateFireVisuals(entity);
                     }
                 }
             }
@@ -3014,24 +3034,24 @@ console.log('Phaser main loaded');
             // Update emoji for all fires to reflect current wood levels - SINGLE SOURCE OF TRUTH
             for (const entity of this.entities) {
                 if (entity.type === 'fireplace') {
-                    this.updateFireEmoji(entity);
+                    this.updateFireVisuals(entity);
                 }
             }
         }
 
-        updateFireEmoji(fire) {
-            // Update fire emoji based on wood level - SINGLE SOURCE OF TRUTH
+        updateFireVisuals(fire) {
+            // Update fire size and transparency based on wood level
             if (fire._phaserText) {
-                if (fire.wood === 0) {
-                    fire._phaserText.setText('🪵'); // Cold/empty fire (logs but not burning)
-                    fire.isBurning = false;
-                } else if (fire.wood === 1) {
-                    fire._phaserText.setText('🌋'); // Burning fire with 1 wood
-                    fire.isBurning = true;
-                } else if (fire.wood === 2) {
-                    fire._phaserText.setText('🔥'); // Burning fire with 2 wood
-                    fire.isBurning = true;
-                }
+                const baseSize = 24;
+                const maxSize = 48;
+                const maxWood = 10;
+                const woodLevel = fire.wood || 0;
+                const scaleFactor = Math.max(0, Math.min(1, woodLevel / maxWood));
+                const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
+                const transparencyThreshold = 3;
+                const alpha = woodLevel <= 0 ? 0 : Math.min(1, woodLevel / transparencyThreshold);
+                fire._phaserText.setFontSize(Math.round(scaledSize) + 'px');
+                fire._phaserText.setAlpha(alpha);
             }
         }
 
@@ -3363,6 +3383,24 @@ console.log('Phaser main loaded');
                 // Update font size and alpha
                 well._phaserText.setFontSize(Math.round(scaledSize) + 'px');
                 well._phaserText.setAlpha(alpha);
+            }
+        }
+
+        updateFireConsumption(delta) {
+            // Decrement fire wood by 1 every 6 in-game hours (0.167 per hour)
+            // Use config values for all timing and limits
+            const fires = this.entities.filter(e => e.type === GameConfig.entityTypes.fireplace);
+            const timeAcceleration = GameConfig.time.secondsPerDay / GameConfig.time.realSecondsPerGameDay;
+            const gameTimeDelta = (delta / 1000) * timeAcceleration;
+            // Convert game time delta to hours
+            const hoursDelta = gameTimeDelta / GameConfig.time.secondsPerHour;
+            const woodToConsume = hoursDelta * GameConfig.fires.hourlyConsumption;
+            for (const fire of fires) {
+                assert(typeof fire.wood === 'number', 'Fire entity missing wood property');
+                if (fire.wood > 0) {
+                    fire.wood = Math.max(0, fire.wood - woodToConsume);
+                    this.updateFireVisuals(fire);
+                }
             }
         }
     }

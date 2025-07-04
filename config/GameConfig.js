@@ -465,7 +465,9 @@ window.GameConfig = {
 
     // Fire settings
     fires: {
-        maxWood: 2, // Maximum wood that can be stored in a fire
+        maxWood: 10, // Maximum wood that can be stored in a fire
+        initialWoodRange: { min: 7, max: 9 }, // Random initial wood range
+        hourlyConsumption: 0.167, // Wood consumed per hour (1 unit every 6 hours)
         dailyWoodConsumption: 1 // Wood consumed per day when burning
     },
 
