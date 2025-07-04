@@ -461,8 +461,15 @@ console.log('Phaser main loaded');
             // Update villager emoji
             this.phaserText.setPosition(this.position.x, this.position.y);
 
-            // Update name text
+            // Update name text with stats when debug is enabled
             this.nameText.setPosition(this.position.x, this.position.y - 20);
+            if (window.villagerDebugEnabled) {
+                // Show stats above name: T W C V[A,B,C,D,E]
+                const stats = `T${this.needs.temperature.toFixed(0)} W${this.needs.water.toFixed(0)} C${this.needs.calories.toFixed(0)} V[${this.needs.vitamins.map(v => v.toFixed(0)).join(',')}]`;
+                this.nameText.setText(`${this.name}\n${stats}`);
+            } else {
+                this.nameText.setText(this.name);
+            }
 
             // Update state text with action and task emojis (only show if debug enabled)
             this.stateText.setPosition(this.position.x, this.position.y + 30);
@@ -472,6 +479,29 @@ console.log('Phaser main loaded');
                 this.stateText.setVisible(true);
             } else {
                 this.stateText.setVisible(false);
+            }
+
+            // Update inventory text when debug is enabled
+            if (window.villagerDebugEnabled) {
+                if (!this.inventoryText) {
+                    // Create inventory text if it doesn't exist
+                    this.inventoryText = this.phaserText.scene.add.text(this.position.x, this.position.y + 50, '', {
+                        fontSize: '10px',
+                        fontFamily: 'monospace',
+                        color: '#00ff00'
+                    }).setOrigin(0.5);
+                }
+
+                // Show inventory slots as emojis (empty slots show nothing)
+                const inventoryEmojis = this.inventory.map(item => item ? item.emoji : ' ').join('');
+                this.inventoryText.setText(inventoryEmojis);
+                this.inventoryText.setPosition(this.position.x, this.position.y + 50);
+                this.inventoryText.setVisible(true);
+            } else {
+                // Hide inventory text when debug is disabled
+                if (this.inventoryText) {
+                    this.inventoryText.setVisible(false);
+                }
             }
         }
 
@@ -511,6 +541,13 @@ console.log('Phaser main loaded');
                 color: '#ffff00'
             }).setOrigin(0.5).setVisible(false);
 
+            // Create inventory text (hidden by default, will be shown when debug is enabled)
+            this.inventoryText = scene.add.text(this.position.x, this.position.y + 50, '', {
+                fontSize: '10px',
+                fontFamily: 'monospace',
+                color: '#00ff00'
+            }).setOrigin(0.5).setVisible(false);
+
             // Mark visuals as created
             this.visualsCreated = true;
 
@@ -518,7 +555,8 @@ console.log('Phaser main loaded');
             return {
                 entity: this.phaserText,
                 nameText: this.nameText,
-                stateText: this.stateText
+                stateText: this.stateText,
+                inventoryText: this.inventoryText
             };
         }
 
@@ -534,6 +572,10 @@ console.log('Phaser main loaded');
             if (this.stateText) {
                 this.stateText.destroy();
                 this.stateText = null;
+            }
+            if (this.inventoryText) {
+                this.inventoryText.destroy();
+                this.inventoryText = null;
             }
         }
     }
@@ -911,11 +953,36 @@ console.log('Phaser main loaded');
             }
 
             // Finally, try to find and collect food
-            const nearestFood = this.findNearestFood(entities);
-            if (nearestFood) {
-                this.villager.moveTowards(nearestFood.position, deltaTime);
-                if (distance(this.villager.position, nearestFood.position) <= GameConfig.player.interactionThreshold) {
-                    this.collectResource(nearestFood);
+            // Check if we have a current target food and if it's still available
+            if (this.stateData.targetFood) {
+                // Check if target has been collected by someone else
+                if (this.stateData.targetFood.collected) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_EAT: Target food ${this.stateData.targetFood.type} was collected by someone else, finding new target`);
+                    this.stateData.targetFood = null;
+                }
+            }
+
+            // Find new target food if we don't have one
+            if (!this.stateData.targetFood) {
+                this.stateData.targetFood = this.findNearestFood(entities);
+                if (this.stateData.targetFood) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_EAT: New target food ${this.stateData.targetFood.type} at (${Math.round(this.stateData.targetFood.position.x)}, ${Math.round(this.stateData.targetFood.position.y)})`);
+                }
+            }
+
+            // Move toward target food if we have one
+            if (this.stateData.targetFood) {
+                this.villager.moveTowards(this.stateData.targetFood.position, deltaTime);
+                if (distance(this.villager.position, this.stateData.targetFood.position) <= GameConfig.player.interactionThreshold) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_EAT: Collecting ${this.stateData.targetFood.type}`);
+                    const success = this.collectResource(this.stateData.targetFood);
+                    if (success) {
+                        // Clear target after successful collection
+                        this.stateData.targetFood = null;
+                    } else {
+                        // Clear target so we find a new one next time
+                        this.stateData.targetFood = null;
+                    }
                 }
             }
         }
@@ -1098,11 +1165,36 @@ console.log('Phaser main loaded');
             }
 
             // Finally, try to find and collect food
-            const nearestFood = this.findNearestFood(entities);
-            if (nearestFood) {
-                this.villager.moveTowards(nearestFood.position, deltaTime);
-                if (distance(this.villager.position, nearestFood.position) <= GameConfig.player.interactionThreshold) {
-                    this.collectResource(nearestFood);
+            // Check if we have a current target food and if it's still available
+            if (this.stateData.targetFood) {
+                // Check if target has been collected by someone else
+                if (this.stateData.targetFood.collected) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_EAT: Target food ${this.stateData.targetFood.type} was collected by someone else, finding new target`);
+                    this.stateData.targetFood = null;
+                }
+            }
+
+            // Find new target food if we don't have one
+            if (!this.stateData.targetFood) {
+                this.stateData.targetFood = this.findNearestFood(entities);
+                if (this.stateData.targetFood) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_EAT: New target food ${this.stateData.targetFood.type} at (${Math.round(this.stateData.targetFood.position.x)}, ${Math.round(this.stateData.targetFood.position.y)})`);
+                }
+            }
+
+            // Move toward target food if we have one
+            if (this.stateData.targetFood) {
+                this.villager.moveTowards(this.stateData.targetFood.position, deltaTime);
+                if (distance(this.villager.position, this.stateData.targetFood.position) <= GameConfig.player.interactionThreshold) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_EAT: Collecting ${this.stateData.targetFood.type}`);
+                    const success = this.collectResource(this.stateData.targetFood);
+                    if (success) {
+                        // Clear target after successful collection
+                        this.stateData.targetFood = null;
+                    } else {
+                        // Clear target so we find a new one next time
+                        this.stateData.targetFood = null;
+                    }
                 }
             }
         }
@@ -1366,19 +1458,39 @@ console.log('Phaser main loaded');
                 return;
             }
 
-            // Find nearest uncollected resource
-            const nearestResource = this.findNearestResource(entities);
-            if (nearestResource) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Moving to collect ${nearestResource.type} at (${Math.round(nearestResource.position.x)}, ${Math.round(nearestResource.position.y)})`);
-                this.villager.moveTowards(nearestResource.position, deltaTime);
+            // Check if we have a current target resource and if it's still available
+            if (this.stateData.targetResource) {
+                // Check if target has been collected by someone else
+                if (this.stateData.targetResource.collected) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Target resource ${this.stateData.targetResource.type} was collected by someone else, finding new target`);
+                    this.stateData.targetResource = null;
+                }
+            }
 
-                if (distance(this.villager.position, nearestResource.position) <= GameConfig.player.interactionThreshold) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Collecting ${nearestResource.type}`);
-                    const success = this.collectResource(nearestResource);
-                    if (!success) {
+            // Find new target resource if we don't have one
+            if (!this.stateData.targetResource) {
+                this.stateData.targetResource = this.findNearestResource(entities);
+                if (this.stateData.targetResource) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: New target resource ${this.stateData.targetResource.type} at (${Math.round(this.stateData.targetResource.position.x)}, ${Math.round(this.stateData.targetResource.position.y)})`);
+                }
+            }
+
+            // Move toward target resource if we have one
+            if (this.stateData.targetResource) {
+                this.villager.moveTowards(this.stateData.targetResource.position, deltaTime);
+
+                if (distance(this.villager.position, this.stateData.targetResource.position) <= GameConfig.player.interactionThreshold) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Collecting ${this.stateData.targetResource.type}`);
+                    const success = this.collectResource(this.stateData.targetResource);
+                    if (success) {
+                        // Clear target after successful collection
+                        this.stateData.targetResource = null;
+                    } else {
                         console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Collection failed, returning to camp to store items`);
                         // If collection failed, return to camp to store items
                         this.villager.moveTowards(this.villager.campPosition, deltaTime);
+                        // Clear target so we find a new one next time
+                        this.stateData.targetResource = null;
                     }
                 }
             } else {
@@ -1471,7 +1583,7 @@ console.log('Phaser main loaded');
             let nearestDistance = Infinity;
 
             for (const entity of this.villager.gameEntities) {
-                if (entity.type === GameConfig.entityTypes.well && entity.waterLevel > 0) {
+                if (entity.type === GameConfig.entityTypes.well && entity.waterLevel >= 1) {
                     const dist = distance(this.villager.position, entity.position);
                     if (dist < nearestDistance) {
                         nearest = entity;
@@ -1682,7 +1794,7 @@ console.log('Phaser main loaded');
         }
 
         drinkFromWell(well) {
-            if (well && well.waterLevel > 0) {
+            if (well && well.waterLevel >= 1) {
                 const oldWater = this.villager.needs.water;
                 this.villager.needs.water = Math.min(GameConfig.needs.fullValue, this.villager.needs.water + GameConfig.wells.drinkingAmount);
                 well.waterLevel = Math.max(0, well.waterLevel - GameConfig.wells.drinkingAmount);
@@ -1692,7 +1804,7 @@ console.log('Phaser main loaded');
                 this.logNearbyObjects();
                 return true;
             } else {
-                console.log(`[Villager] ${this.villager.name} DRINK FAILED: Well has no water or doesn't exist`);
+                console.log(`[Villager] ${this.villager.name} DRINK FAILED: Well has insufficient water (${well ? well.waterLevel : 'no well'}) or doesn't exist`);
                 this.logNearbyObjects();
                 return false;
             }
@@ -1819,6 +1931,13 @@ console.log('Phaser main loaded');
         }
 
         collectResource(entity) {
+            // Safety check: prevent collecting already collected resources
+            if (entity.collected) {
+                console.log(`[Villager] ${this.villager.name} COLLECT FAILED: Resource ${entity.type}${entity.emoji} already collected`);
+                this.logNearbyObjects();
+                return false;
+            }
+
             // Check if we can carry it
             const slot = this.villager.inventory.findIndex(i => i === null);
             if (slot === -1) {
@@ -1837,9 +1956,14 @@ console.log('Phaser main loaded');
 
             // Success chance (80% for villagers)
             if (Math.random() < 0.8) {
-                this.villager.inventory[slot] = { type: entity.type, emoji: entity.emoji };
+                // Mark as collected BEFORE adding to inventory to prevent race conditions
                 entity.collected = true;
                 entity.collectedAt = this.villager.currentGameTime || 0;
+
+                // Add to inventory
+                this.villager.inventory[slot] = { type: entity.type, emoji: entity.emoji };
+
+                // Hide the visual
                 if (entity._phaserText) entity._phaserText.setVisible(false);
 
                 console.log(`[Villager] ${this.villager.name} COLLECT SUCCESS: Collected ${entity.type}${entity.emoji} in slot ${slot}`);

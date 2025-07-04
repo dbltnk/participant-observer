@@ -20,7 +20,7 @@ window.GameConfig = {
 
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 0 }, // Offset for village well from center
-        campRadius: 300, // Distance from village center to camps (doubled from 150)
+        campRadius: 400, // Distance from village center to camps (doubled from 150)
         campSpacing: { x: 40, y: 60 }, // Spacing between camp facilities (doubled from 20,30)
         playerStartOffset: { x: 40, y: 0 }, // Player start position relative to their camp,
 
@@ -28,7 +28,7 @@ window.GameConfig = {
         villagerSpawnRadius: 5000, // Maximum distance from village center for villager spawning
 
         // Resource generation
-        resourceVillageMinDistance: 600, // Minimum distance from village center for resources
+        resourceVillageMinDistance: 700, // Minimum distance from village center for resources
         wellMinDistance: 3000, // Minimum distance between wells
         wellCount: 30, // Number of additional wells beyond village well
         wellMaxAttempts: 50, // Maximum attempts to place a well
@@ -192,7 +192,7 @@ window.GameConfig = {
 
         // Resource type limits
         maxCounts: {
-            tree: 50, // Trees cap at 50
+            tree: 200, // Trees cap at 200
             default: 10 // Other resources cap at 10
         },
 
