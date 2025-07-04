@@ -3406,7 +3406,7 @@ console.log('Phaser main loaded');
 
             // Transfer item
             this.playerState.inventory[playerSlot] = storageBox.items[storageSlot];
-            storageBox.items.splice(storageSlot, 1); // Remove item from storage
+            storageBox.items[storageSlot] = null; // Clear the slot instead of splicing
 
             // Update UI
             this.updatePhaserUI();
@@ -3428,15 +3428,15 @@ console.log('Phaser main loaded');
                 return;
             }
 
-            // Check if storage has capacity
-            const capacity = storageBox.isPersonal ? GameConfig.storage.personalCapacity : GameConfig.storage.communalCapacity;
-            if (storageBox.items.length >= capacity) {
+            // Find first empty slot in storage (consistent with villager logic)
+            const storageSlot = storageBox.items.findIndex(slot => slot === null);
+            if (storageSlot === -1) {
                 this.showTempMessage('Storage full!', 1200);
                 return;
             }
 
-            // Transfer item (add to end of array)
-            storageBox.items.push(this.playerState.inventory[playerSlot]);
+            // Transfer item to the first available slot
+            storageBox.items[storageSlot] = this.playerState.inventory[playerSlot];
             this.playerState.inventory[playerSlot] = null;
 
             // Update UI
