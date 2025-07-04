@@ -224,7 +224,7 @@ console.log('Phaser main loaded');
 
     // === BEGIN: Villager AI System ===
     class Villager {
-        constructor(name, campPosition, villagerId) {
+        constructor(name, campPosition, villagerId, seededRandom = null) {
             this.name = name;
             this.campPosition = campPosition;
             this.villagerId = villagerId;
@@ -233,12 +233,14 @@ console.log('Phaser main loaded');
             this.position = { ...campPosition };
             this.moveSpeed = GameConfig.villager.moveSpeed;
 
-            // Needs system (same as player)
+            // Needs system (same as player) - Initialize with random values
+            // Use seeded random if provided, otherwise fall back to Math.random
+            const random = seededRandom || { randomRange: (min, max) => Math.random() * (max - min) + min };
             this.needs = {
-                temperature: GameConfig.needs.fullValue,
-                water: GameConfig.needs.fullValue,
-                calories: GameConfig.needs.fullValue,
-                vitamins: new Array(GameConfig.needs.vitaminCount).fill(GameConfig.needs.fullValue)
+                temperature: random.randomRange(GameConfig.villager.startingStats.temperature.min, GameConfig.villager.startingStats.temperature.max),
+                water: random.randomRange(GameConfig.villager.startingStats.water.min, GameConfig.villager.startingStats.water.max),
+                calories: random.randomRange(GameConfig.villager.startingStats.calories.min, GameConfig.villager.startingStats.calories.max),
+                vitamins: new Array(GameConfig.needs.vitaminCount).fill(0).map(() => random.randomRange(GameConfig.villager.startingStats.vitamins.min, GameConfig.villager.startingStats.vitamins.max))
             };
 
             // Inventory (same as player)
@@ -1774,6 +1776,55 @@ console.log('Phaser main loaded');
                 y: playerCamp.position.y
             };
 
+            // === ADD RANDOM INITIAL ITEMS TO STORAGE BOXES ===
+            // Add random items to communal storage
+            const initialCommunalStorageBox = this.entities.find(e => e.type === GameConfig.entityTypes.storage_box && !e.isPersonal);
+            assert(initialCommunalStorageBox, 'Communal storage box not found during initialization');
+
+            // Add random wood and food to communal storage based on config
+            const communalWoodCount = this.seededRandom.randomInt(GameConfig.storage.initialItems.wood.min, GameConfig.storage.initialItems.wood.max);
+            const communalFoodCount = this.seededRandom.randomInt(GameConfig.storage.initialItems.food.min, GameConfig.storage.initialItems.food.max);
+
+            for (let i = 0; i < communalWoodCount; i++) {
+                initialCommunalStorageBox.items.push({ type: GameConfig.entityTypes.tree, emoji: GameConfig.emojis.tree });
+            }
+
+            // Add random food items to communal storage
+            for (let i = 0; i < communalFoodCount; i++) {
+                const foodType = GameConfig.resources.foodTypes[this.seededRandom.randomInt(0, GameConfig.resources.foodTypes.length - 1)];
+                const foodData = GameConfig.resources.foodData[foodType];
+                initialCommunalStorageBox.items.push({ type: foodType, emoji: foodData.emoji });
+            }
+
+            console.log(`[Storage] Added ${communalWoodCount} wood and ${communalFoodCount} food to communal storage`);
+
+            // Add random items to personal storage boxes
+            for (let i = 1; i < cfg.villagerCount; i++) { // Skip camp 0 (player)
+                const personalStorageBox = this.entities.find(e =>
+                    e.type === GameConfig.entityTypes.storage_box &&
+                    e.isPersonal &&
+                    e.villagerId === i - 1
+                );
+                assert(personalStorageBox, `Personal storage box not found for villager ${i - 1}`);
+
+                // Add random wood and food to personal storage based on config
+                const personalWoodCount = this.seededRandom.randomInt(GameConfig.storage.initialItems.wood.min, GameConfig.storage.initialItems.wood.max);
+                const personalFoodCount = this.seededRandom.randomInt(GameConfig.storage.initialItems.food.min, GameConfig.storage.initialItems.food.max);
+
+                for (let j = 0; j < personalWoodCount; j++) {
+                    personalStorageBox.items.push({ type: GameConfig.entityTypes.tree, emoji: GameConfig.emojis.tree });
+                }
+
+                // Add random food items to personal storage
+                for (let j = 0; j < personalFoodCount; j++) {
+                    const foodType = GameConfig.resources.foodTypes[this.seededRandom.randomInt(0, GameConfig.resources.foodTypes.length - 1)];
+                    const foodData = GameConfig.resources.foodData[foodType];
+                    personalStorageBox.items.push({ type: foodType, emoji: foodData.emoji });
+                }
+
+                console.log(`[Storage] Added ${personalWoodCount} wood and ${personalFoodCount} food to personal storage for villager ${i - 1}`);
+            }
+
             // --- Create villagers (skip camp 0 since player takes that role) ---
             this.villagers = [];
             this.villagerVisuals = [];
@@ -1786,13 +1837,18 @@ console.log('Phaser main loaded');
                 const camp = this.camps[i];
                 const villagerName = generateVillagerName();
 
-                // Spawn villager at camp center
+                // Spawn villager randomly within config radius of village center
+                const villageCenter = { x: centerX, y: centerY };
+                const spawnRadius = GameConfig.world.villagerSpawnRadius;
+                const spawnAngle = this.seededRandom.random() * 2 * Math.PI;
+                const spawnDistance = this.seededRandom.random() * spawnRadius;
+
                 const villagerSpawnPosition = {
-                    x: camp.position.x,
-                    y: camp.position.y
+                    x: villageCenter.x + Math.cos(spawnAngle) * spawnDistance,
+                    y: villageCenter.y + Math.sin(spawnAngle) * spawnDistance
                 };
 
-                const villager = new Villager(villagerName, villagerSpawnPosition, i - 1); // Use camp index for villagerId
+                const villager = new Villager(villagerName, villagerSpawnPosition, i - 1, this.seededRandom); // Use camp index for villagerId and pass seeded random
 
                 // Find this villager's personal storage box
                 const personalStorageBox = this.entities.find(e =>
@@ -1837,7 +1893,7 @@ console.log('Phaser main loaded');
 
                 this.villagers.push(villager);
                 if (window.summaryLoggingEnabled) {
-                    console.log(`[MainScene] Created villager ${villagerName} at camp ${i} (spawned at ${Math.round(villagerSpawnPosition.x)}, ${Math.round(villagerSpawnPosition.y)})`);
+                    console.log(`[MainScene] Created villager ${villagerName} at camp ${i} (spawned randomly at ${Math.round(villagerSpawnPosition.x)}, ${Math.round(villagerSpawnPosition.y)})`);
                     console.log(`[MainScene] Assigned facilities to ${villagerName}: personal storage at (${Math.round(personalStorageBox.position.x)}, ${Math.round(personalStorageBox.position.y)}), communal storage at (${Math.round(communalStorageBox.position.x)}, ${Math.round(communalStorageBox.position.y)})`);
                 }
             }
@@ -1856,14 +1912,7 @@ console.log('Phaser main loaded');
                 }
             }
             // --- Resources (Small clusters of same type, spreading from village) ---
-            const resourceTypes = [
-                // Plants
-                'blackberry', 'mushroom', 'herb', 'blueberry', 'raspberry', 'elderberry', 'wild_garlic', 'dandelion', 'nettle', 'sorrel',
-                'watercress', 'wild_onion', 'chickweed', 'plantain', 'yarrow',
-                // Animals
-                'rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk',
-                'marten', 'grouse', 'woodcock', 'beaver', 'otter'
-            ];
+            const resourceTypes = GameConfig.resources.foodTypes;
             const totalResources = (cfg.villagerCount + 1) * cfg.resourcesPerVillager;
             console.log(`[World Generation] Generating ${totalResources} resources in clusters for ${cfg.villagerCount} villagers + 1 player`);
 
@@ -1975,7 +2024,7 @@ console.log('Phaser main loaded');
             // --- Render all entities as Phaser text objects ---
             this.worldEntities = [];
             for (const entity of this.entities) {
-                let fontSize = entity.type === 'camp' ? 28 : entity.type === 'fireplace' || entity.type === 'sleeping_bag' ? 24 : entity.type === 'storage_box' ? 24 : ['well', 'blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'].includes(entity.type) ? 22 : 22;
+                let fontSize = entity.type === 'camp' ? 28 : entity.type === 'fireplace' || entity.type === 'sleeping_bag' ? 24 : entity.type === 'storage_box' ? 24 : ['well', ...GameConfig.resources.foodTypes, 'tree'].includes(entity.type) ? 22 : 22;
 
                 // Make communal storage 2x larger
                 if (entity.type === 'storage_box' && !entity.isPersonal) {
@@ -2141,10 +2190,10 @@ console.log('Phaser main loaded');
             this.playerState = {
                 position: { ...this.playerStartPosition },
                 needs: {
-                    temperature: GameConfig.needs.fullValue,
-                    water: GameConfig.needs.fullValue,
-                    calories: GameConfig.needs.fullValue,
-                    vitamins: new Array(GameConfig.needs.vitaminCount).fill(GameConfig.needs.fullValue)
+                    temperature: this.seededRandom.randomRange(GameConfig.player.startingStats.temperature.min, GameConfig.player.startingStats.temperature.max),
+                    water: this.seededRandom.randomRange(GameConfig.player.startingStats.water.min, GameConfig.player.startingStats.water.max),
+                    calories: this.seededRandom.randomRange(GameConfig.player.startingStats.calories.min, GameConfig.player.startingStats.calories.max),
+                    vitamins: new Array(GameConfig.needs.vitaminCount).fill(0).map(() => this.seededRandom.randomRange(GameConfig.player.startingStats.vitamins.min, GameConfig.player.startingStats.vitamins.max))
                 },
                 inventory: new Array(GameConfig.player.inventorySize).fill(null),
                 currentTime: GameConfig.time.gameStartTime
@@ -2529,7 +2578,7 @@ console.log('Phaser main loaded');
 
             // Debug: Log entity count occasionally (behind log spam gate)
             if (window.summaryLoggingEnabled && Math.random() < 0.01) { // 1% chance per frame when spam enabled
-                const resourceEntities = this.entities.filter(e => ['blackberry', 'mushroom', 'herb', 'rabbit', 'deer', 'tree'].includes(e.type));
+                const resourceEntities = this.entities.filter(e => [...GameConfig.resources.foodTypes, 'tree'].includes(e.type));
                 const uncollectedResources = resourceEntities.filter(e => !e.collected);
                 console.log(`[MainScene] Total entities: ${this.entities.length}, Resources: ${resourceEntities.length}, Uncollected: ${uncollectedResources.length}`);
             }

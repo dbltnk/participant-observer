@@ -22,7 +22,10 @@ window.GameConfig = {
         villageCenterOffset: { x: 50, y: 0 }, // Offset for village well from center
         campRadius: 300, // Distance from village center to camps (doubled from 150)
         campSpacing: { x: 40, y: 60 }, // Spacing between camp facilities (doubled from 20,30)
-        playerStartOffset: { x: 40, y: 0 }, // Player start position relative to their camp
+        playerStartOffset: { x: 40, y: 0 }, // Player start position relative to their camp,
+
+        // Villager spawning
+        villagerSpawnRadius: 5000, // Maximum distance from village center for villager spawning
 
         // Resource generation
         resourceVillageMinDistance: 600, // Minimum distance from village center for resources
@@ -51,8 +54,8 @@ window.GameConfig = {
         secondsPerMinute: 60, // Seconds in a game minute
 
         // Game start time
-        gameStartHour: 8, // Hour when the game starts (08:00)
-        gameStartTime: 8 * 3600 // Seconds from midnight when game starts
+        gameStartHour: 12, // Hour when the game starts (12:00)
+        gameStartTime: 12 * 3600 // Seconds from midnight when game starts
     },
 
     // Needs system constants
@@ -88,7 +91,7 @@ window.GameConfig = {
 
     // Player settings - Controls player character behavior and needs
     player: {
-        moveSpeed: 100, // Player movement speed in pixels per second
+        moveSpeed: 125, // Player movement speed in pixels per second
         // Formula: newPosition = oldPosition + (moveSpeed * deltaTime / 1000)
         inventorySize: 6, // Number of inventory slots (Minecraft-style hotbar)
 
@@ -119,7 +122,15 @@ window.GameConfig = {
 
         // Rendering
         fontSize: 32, // Player emoji font size
-        zIndex: 100 // Player rendering z-index
+        zIndex: 100, // Player rendering z-index
+
+        // Random starting stats ranges
+        startingStats: {
+            temperature: { min: 80, max: 100 }, // Temperature range at game start
+            water: { min: 60, max: 90 }, // Water range at game start
+            calories: { min: 60, max: 90 }, // Calories range at game start
+            vitamins: { min: 50, max: 80 } // Vitamin range at game start (applies to all vitamins A-E)
+        }
     },
 
     // Villager settings - Controls AI villager behavior and capabilities
@@ -154,6 +165,14 @@ window.GameConfig = {
         inventoryReservations: {
             woodSlots: 2,        // Reserve 2 slots for wood
             foodSlots: 4         // Reserve 4 slots for food
+        },
+
+        // Random starting stats ranges (same as player)
+        startingStats: {
+            temperature: { min: 80, max: 100 }, // Temperature range at game start
+            water: { min: 60, max: 90 }, // Water range at game start
+            calories: { min: 60, max: 90 }, // Calories range at game start
+            vitamins: { min: 50, max: 80 } // Vitamin range at game start (applies to all vitamins A-E)
         }
     },
 
@@ -176,6 +195,16 @@ window.GameConfig = {
             tree: 50, // Trees cap at 50
             default: 10 // Other resources cap at 10
         },
+
+        // Food types available for random selection (used in storage initialization and resource generation)
+        foodTypes: [
+            // Plants
+            'blackberry', 'mushroom', 'herb', 'blueberry', 'raspberry', 'elderberry', 'wild_garlic', 'dandelion', 'nettle', 'sorrel',
+            'watercress', 'wild_onion', 'chickweed', 'plantain', 'yarrow',
+            // Animals
+            'rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk',
+            'marten', 'grouse', 'woodcock', 'beaver', 'otter'
+        ],
 
         // === DESIGNER BALANCING SECTION ===
         // All food/resource types with complete data (easier to maintain)
@@ -477,7 +506,13 @@ window.GameConfig = {
     storage: {
         communalCapacity: 20, // Capacity of communal storage box
         personalCapacity: 8, // Capacity of personal storage boxes
-        localStorageKey: 'alpine-seed' // LocalStorage key for seed persistence
+        localStorageKey: 'alpine-seed', // LocalStorage key for seed persistence
+
+        // Random initial items configuration
+        initialItems: {
+            wood: { min: 0, max: 2 }, // Wood items per storage box at game start
+            food: { min: 0, max: 3 }  // Food items per storage box at game start
+        }
     },
 
     // Well settings
