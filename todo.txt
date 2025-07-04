@@ -1,0 +1,5 @@
+villager states
+spawn stuff in obvious groups
+add topology
+game name
+nicer visuals
