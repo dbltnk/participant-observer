@@ -797,7 +797,7 @@ console.log('Phaser main loaded');
                     this.executeEmergencyWarmUp(deltaTime, entities);
                     break;
                 case VILLAGER_STATES.EMERGENCY_FIRE_REFILL:
-                    this.executeEmergencyFireRefill(deltaTime, entities);
+                    this.executeEmergencyFireRefill(deltaTime, entities, storageBoxes);
                     break;
                 case VILLAGER_STATES.REGULAR_DRINK:
                     this.executeRegularDrink(deltaTime, entities);
@@ -809,7 +809,7 @@ console.log('Phaser main loaded');
                     this.executeRegularEat(deltaTime, entities, storageBoxes);
                     break;
                 case VILLAGER_STATES.REGULAR_FIRE_REFILL:
-                    this.executeRegularFireRefill(deltaTime, entities);
+                    this.executeRegularFireRefill(deltaTime, entities, storageBoxes);
                     break;
                 case VILLAGER_STATES.STORAGE_MANAGEMENT:
                     this.executeStorageManagement(deltaTime, storageBoxes);
@@ -964,7 +964,7 @@ console.log('Phaser main loaded');
 
             // Find new target food if we don't have one
             if (!this.stateData.targetFood) {
-                this.stateData.targetFood = this.findNearestFood(entities);
+                this.stateData.targetFood = this.findNearestFood(entities, storageBoxes, true);
                 if (this.stateData.targetFood) {
                     console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_EAT: New target food ${this.stateData.targetFood.type} at (${Math.round(this.stateData.targetFood.position.x)}, ${Math.round(this.stateData.targetFood.position.y)})`);
                 }
@@ -1037,7 +1037,7 @@ console.log('Phaser main loaded');
             this.stateData.targetWood = null; // Will be set in execute phase
         }
 
-        executeEmergencyFireRefill(deltaTime, entities) {
+        executeEmergencyFireRefill(deltaTime, entities, storageBoxes) {
             // --- FIRE REFILL TASK PRIORITY ---
             // When in fire refill state, prioritize completing the fire refill task
             // Only handle storage if we're completely stuck (no target wood)
@@ -1052,43 +1052,75 @@ console.log('Phaser main loaded');
                 }
             }
 
+            // Count how much wood we have collected
+            const woodCount = this.villager.inventory.filter(item => item && item.type === GameConfig.entityTypes.tree).length;
+            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Wood count: ${woodCount}/${this.stateData.woodTarget}`);
+
+            // If we have enough wood, return to fire
+            if (woodCount >= this.stateData.woodTarget) {
+                console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Have enough wood (${woodCount}), returning to fire`);
+                this.villager.moveTowards(this.stateData.ownFire.position, deltaTime);
+
+                // Check if close enough to add wood
+                if (distance(this.villager.position, this.stateData.ownFire.position) <= GameConfig.player.interactionThreshold) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Adding wood to fire`);
+                    this.addWoodToFire(this.stateData.ownFire);
+                }
+                return;
+            }
+
             console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: State data - ownFire: ${this.stateData.ownFire ? 'found' : 'null'}, targetWood: ${this.stateData.targetWood ? 'found' : 'null'}`);
 
             if (this.stateData.ownFire && this.stateData.targetWood) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Moving towards wood at (${Math.round(this.stateData.targetWood.position.x)}, ${Math.round(this.stateData.targetWood.position.y)})`);
-                // Move towards wood
-                this.villager.moveTowards(this.stateData.targetWood.position, deltaTime);
+                // Handle both storage and world sources
+                if (this.stateData.targetWood.storageBox) {
+                    // Target is in storage - move to storage box
+                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Moving towards storage box at (${Math.round(this.stateData.targetWood.storageBox.position.x)}, ${Math.round(this.stateData.targetWood.storageBox.position.y)})`);
+                    this.villager.moveTowards(this.stateData.targetWood.storageBox.position, deltaTime);
 
-                // Check if close enough to collect
-                if (distance(this.villager.position, this.stateData.targetWood.position) <= GameConfig.player.interactionThreshold) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Close enough to collect wood`);
-                    if (this.collectResource(this.stateData.targetWood)) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Wood collected, moving back to fire`);
-                        // Move back to fire
-                        this.villager.moveTowards(this.stateData.ownFire.position, deltaTime);
-
-                        // Check if close enough to add wood
-                        if (distance(this.villager.position, this.stateData.ownFire.position) <= GameConfig.player.interactionThreshold) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Adding wood to fire`);
-                            this.addWoodToFire(this.stateData.ownFire);
+                    // Check if close enough to retrieve
+                    if (distance(this.villager.position, this.stateData.targetWood.storageBox.position) <= GameConfig.player.interactionThreshold) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Close enough to retrieve wood from storage`);
+                        if (this.retrieveFromStorage([this.stateData.targetWood.storageBox], GameConfig.entityTypes.tree)) {
+                            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Wood retrieved from storage successfully`);
+                            // Clear target so we find a new source
+                            this.stateData.targetWood = null;
+                        } else {
+                            // Retrieval failed - clear targetWood so we try a different source next time
+                            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Storage retrieval failed, trying different source`);
+                            this.stateData.targetWood = null;
                         }
-                    } else {
-                        // Collection failed - clear targetWood so we try a different tree next time
-                        console.log(`[VillagerStateMachine] ${this.villager.name} FIRE_REFILL: Collection failed, trying different tree`);
-                        this.stateData.targetWood = null;
+                    }
+                } else {
+                    // Target is in world - move towards wood
+                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Moving towards wood at (${Math.round(this.stateData.targetWood.position.x)}, ${Math.round(this.stateData.targetWood.position.y)})`);
+                    this.villager.moveTowards(this.stateData.targetWood.position, deltaTime);
+
+                    // Check if close enough to collect
+                    if (distance(this.villager.position, this.stateData.targetWood.position) <= GameConfig.player.interactionThreshold) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Close enough to collect wood`);
+                        if (this.collectResource(this.stateData.targetWood)) {
+                            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Wood collected successfully`);
+                            // Clear target so we find a new source
+                            this.stateData.targetWood = null;
+                        } else {
+                            // Collection failed - clear targetWood so we try a different source next time
+                            console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Collection failed, trying different source`);
+                            this.stateData.targetWood = null;
+                        }
                     }
                 }
             } else {
                 console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: Re-finding targets`);
                 // Re-find targets
                 this.stateData.ownFire = this.findOwnFireplace();
-                this.stateData.targetWood = this.findNearestWood(entities);
+                this.stateData.targetWood = this.findNearestWood(entities, storageBoxes, true); // true = emergency mode
 
                 console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: After re-finding - ownFire: ${this.stateData.ownFire ? 'found' : 'null'}, targetWood: ${this.stateData.targetWood ? 'found' : 'null'}`);
 
                 // If no wood found, log it
                 if (!this.stateData.targetWood) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} FIRE_REFILL: No wood found in world`);
+                    console.log(`[VillagerStateMachine] ${this.villager.name} EMERGENCY_FIRE_REFILL: No wood found in storage or world`);
                 }
             }
         }
@@ -1176,7 +1208,7 @@ console.log('Phaser main loaded');
 
             // Find new target food if we don't have one
             if (!this.stateData.targetFood) {
-                this.stateData.targetFood = this.findNearestFood(entities);
+                this.stateData.targetFood = this.findNearestFood(entities, storageBoxes, false);
                 if (this.stateData.targetFood) {
                     console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_EAT: New target food ${this.stateData.targetFood.type} at (${Math.round(this.stateData.targetFood.position.x)}, ${Math.round(this.stateData.targetFood.position.y)})`);
                 }
@@ -1233,7 +1265,7 @@ console.log('Phaser main loaded');
             this.stateData.targetWood = null; // Will be set in execute phase
         }
 
-        executeRegularFireRefill(deltaTime, entities) {
+        executeRegularFireRefill(deltaTime, entities, storageBoxes) {
             // --- FIRE REFILL TASK PRIORITY ---
             // When in fire refill state, prioritize completing the fire refill task
             // Only handle storage if we're completely stuck (no target wood)
@@ -1248,28 +1280,64 @@ console.log('Phaser main loaded');
                 }
             }
 
+            // Count how much wood we have collected
+            const woodCount = this.villager.inventory.filter(item => item && item.type === GameConfig.entityTypes.tree).length;
+            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Wood count: ${woodCount}/${this.stateData.woodTarget}`);
+
+            // If we have enough wood, return to fire
+            if (woodCount >= this.stateData.woodTarget) {
+                console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Have enough wood (${woodCount}), returning to fire`);
+                this.villager.moveTowards(this.stateData.ownFire.position, deltaTime);
+
+                // Check if close enough to add wood
+                if (distance(this.villager.position, this.stateData.ownFire.position) <= GameConfig.player.interactionThreshold) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Adding wood to fire`);
+                    this.addWoodToFire(this.stateData.ownFire);
+                }
+                return;
+            }
+
             if (this.stateData.ownFire && this.stateData.targetWood) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Moving towards wood at (${Math.round(this.stateData.targetWood.position.x)}, ${Math.round(this.stateData.targetWood.position.y)})`);
-                this.villager.moveTowards(this.stateData.targetWood.position, deltaTime);
-                if (distance(this.villager.position, this.stateData.targetWood.position) <= GameConfig.player.interactionThreshold) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Close enough to collect wood`);
-                    if (this.collectResource(this.stateData.targetWood)) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Wood collected successfully`);
-                        this.villager.moveTowards(this.stateData.ownFire.position, deltaTime);
-                        if (distance(this.villager.position, this.stateData.ownFire.position) <= GameConfig.player.interactionThreshold) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Adding wood to fire`);
-                            this.addWoodToFire(this.stateData.ownFire);
+                // Handle both storage and world sources
+                if (this.stateData.targetWood.storageBox) {
+                    // Target is in storage - move to storage box
+                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Moving towards storage box at (${Math.round(this.stateData.targetWood.storageBox.position.x)}, ${Math.round(this.stateData.targetWood.storageBox.position.y)})`);
+                    this.villager.moveTowards(this.stateData.targetWood.storageBox.position, deltaTime);
+
+                    // Check if close enough to retrieve
+                    if (distance(this.villager.position, this.stateData.targetWood.storageBox.position) <= GameConfig.player.interactionThreshold) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Close enough to retrieve wood from storage`);
+                        if (this.retrieveFromStorage([this.stateData.targetWood.storageBox], GameConfig.entityTypes.tree)) {
+                            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Wood retrieved from storage successfully`);
+                            // Clear target so we find a new source
+                            this.stateData.targetWood = null;
+                        } else {
+                            // Retrieval failed - clear targetWood so we try a different source next time
+                            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Storage retrieval failed, trying different source`);
+                            this.stateData.targetWood = null;
                         }
-                    } else {
-                        // Collection failed - clear targetWood so we try a different tree next time
-                        console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Collection failed, trying different tree`);
-                        this.stateData.targetWood = null;
+                    }
+                } else {
+                    // Target is in world - move towards wood
+                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Moving towards wood at (${Math.round(this.stateData.targetWood.position.x)}, ${Math.round(this.stateData.targetWood.position.y)})`);
+                    this.villager.moveTowards(this.stateData.targetWood.position, deltaTime);
+                    if (distance(this.villager.position, this.stateData.targetWood.position) <= GameConfig.player.interactionThreshold) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Close enough to collect wood`);
+                        if (this.collectResource(this.stateData.targetWood)) {
+                            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Wood collected successfully`);
+                            // Clear target so we find a new source
+                            this.stateData.targetWood = null;
+                        } else {
+                            // Collection failed - clear targetWood so we try a different source next time
+                            console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Collection failed, trying different source`);
+                            this.stateData.targetWood = null;
+                        }
                     }
                 }
             } else {
                 console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: Finding own fire and target wood`);
                 this.stateData.ownFire = this.findOwnFireplace();
-                this.stateData.targetWood = this.findNearestWood(entities);
+                this.stateData.targetWood = this.findNearestWood(entities, storageBoxes, false); // false = regular mode
 
                 if (this.stateData.ownFire) {
                     console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: ownFire: found, targetWood: ${this.stateData.targetWood ? 'found' : 'not found'}`);
@@ -1279,7 +1347,7 @@ console.log('Phaser main loaded');
 
                 // If no wood found, log it
                 if (!this.stateData.targetWood) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: No wood found in world`);
+                    console.log(`[VillagerStateMachine] ${this.villager.name} REGULAR_FIRE_REFILL: No wood found in storage or world`);
                 }
             }
         }
@@ -1617,65 +1685,9 @@ console.log('Phaser main loaded');
             return nearest;
         }
 
-        findNearestWood(entities) {
-            let nearest = null;
-            let nearestDistance = Infinity;
 
-            console.log(`[VillagerStateMachine] ${this.villager.name} FIND_WOOD: Checking ${entities.length} entities for trees`);
 
-            // Count different entity types for debugging
-            const entityTypeCounts = {};
-            let treeCount = 0;
-            let uncollectedTreeCount = 0;
 
-            for (const entity of entities) {
-                // Count entity types
-                entityTypeCounts[entity.type] = (entityTypeCounts[entity.type] || 0) + 1;
-
-                if (entity.type === GameConfig.entityTypes.tree) {
-                    treeCount++;
-                    if (!entity.collected) {
-                        uncollectedTreeCount++;
-                        const dist = distance(this.villager.position, entity.position);
-                        console.log(`[VillagerStateMachine] ${this.villager.name} FIND_WOOD: Found uncollected tree at distance ${Math.round(dist)}px`);
-                        if (dist < nearestDistance) {
-                            nearest = entity;
-                            nearestDistance = dist;
-                        }
-                    } else {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} FIND_WOOD: Found collected tree at distance ${Math.round(distance(this.villager.position, entity.position))}px`);
-                    }
-                }
-            }
-
-            // Log entity type summary
-            console.log(`[VillagerStateMachine] ${this.villager.name} FIND_WOOD: Entity summary - Total: ${entities.length}, Trees: ${treeCount}, Uncollected trees: ${uncollectedTreeCount}`);
-            console.log(`[VillagerStateMachine] ${this.villager.name} FIND_WOOD: Entity types found:`, entityTypeCounts);
-
-            if (nearest) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} FIND_WOOD: Selected nearest tree at ${Math.round(nearestDistance)}px`);
-            } else {
-                console.log(`[VillagerStateMachine] ${this.villager.name} FIND_WOOD: No uncollected trees found`);
-            }
-
-            return nearest;
-        }
-
-        findNearestFood(entities) {
-            let nearest = null;
-            let nearestDistance = Infinity;
-
-            for (const entity of entities) {
-                if (isFood(entity.type) && !entity.collected) {
-                    const dist = distance(this.villager.position, entity.position);
-                    if (dist < nearestDistance) {
-                        nearest = entity;
-                        nearestDistance = dist;
-                    }
-                }
-            }
-            return nearest;
-        }
 
         findOwnStorageBox() {
             // Use direct reference assigned during villager creation
@@ -2029,6 +2041,73 @@ console.log('Phaser main loaded');
             this.logNearbyObjects();
             return false;
         }
+
+        // Generic method to find nearest resource source (storage or world)
+        findNearestResourceSource(entities, storageBoxes, resourceType, isEmergency = false) {
+            let nearestSource = null;
+            let nearestDistance = Infinity;
+            let sourceType = null; // 'storage' or 'world'
+
+            console.log(`[VillagerStateMachine] ${this.villager.name} FIND_RESOURCE: Looking for ${resourceType} (emergency: ${isEmergency})`);
+
+            // Check storage boxes first
+            const storageBoxesToCheck = isEmergency ?
+                [this.villager.personalStorageBox, this.villager.communalStorageBox, ...storageBoxes.filter(box => box !== this.villager.personalStorageBox && box !== this.villager.communalStorageBox)] :
+                [this.villager.personalStorageBox, this.villager.communalStorageBox];
+
+            for (const storageBox of storageBoxesToCheck) {
+                if (!storageBox) continue;
+
+                // Check if this storage box has the resource we need
+                for (let i = 0; i < storageBox.items.length; i++) {
+                    const item = storageBox.items[i];
+                    if (item && item.type === resourceType) {
+                        const dist = distance(this.villager.position, storageBox.position);
+                        console.log(`[VillagerStateMachine] ${this.villager.name} FIND_RESOURCE: Found ${resourceType} in storage at distance ${Math.round(dist)}px`);
+
+                        if (dist < nearestDistance) {
+                            nearestSource = { storageBox, slot: i, item };
+                            nearestDistance = dist;
+                            sourceType = 'storage';
+                        }
+                    }
+                }
+            }
+
+            // Check world entities
+            for (const entity of entities) {
+                if (entity.type === resourceType && !entity.collected) {
+                    const dist = distance(this.villager.position, entity.position);
+                    console.log(`[VillagerStateMachine] ${this.villager.name} FIND_RESOURCE: Found ${resourceType} in world at distance ${Math.round(dist)}px`);
+
+                    if (dist < nearestDistance) {
+                        nearestSource = entity;
+                        nearestDistance = dist;
+                        sourceType = 'world';
+                    }
+                }
+            }
+
+            if (nearestSource) {
+                console.log(`[VillagerStateMachine] ${this.villager.name} FIND_RESOURCE: Selected ${sourceType} source at ${Math.round(nearestDistance)}px`);
+            } else {
+                console.log(`[VillagerStateMachine] ${this.villager.name} FIND_RESOURCE: No ${resourceType} found in storage or world`);
+            }
+
+            return { source: nearestSource, distance: nearestDistance, type: sourceType };
+        }
+
+        // Specialized method for finding nearest wood (uses the generic method)
+        findNearestWood(entities, storageBoxes, isEmergency = false) {
+            const result = this.findNearestResourceSource(entities, storageBoxes, GameConfig.entityTypes.tree, isEmergency);
+            return result.source;
+        }
+
+        // Specialized method for finding nearest food (uses the generic method)
+        findNearestFood(entities, storageBoxes, isEmergency = false) {
+            const result = this.findNearestResourceSource(entities, storageBoxes, 'food', isEmergency);
+            return result.source;
+        }
     }
 
     // Villager name generator
@@ -2129,7 +2208,7 @@ console.log('Phaser main loaded');
             assert(initialCommunalStorageBox, 'Communal storage box not found during initialization');
 
             // Add random wood and food to communal storage based on config
-            const communalWoodCount = this.seededRandom.randomInt(GameConfig.storage.initialItems.wood.min, GameConfig.storage.initialItems.wood.max);
+            const communalWoodCount = 6;//this.seededRandom.randomInt(GameConfig.storage.initialItems.wood.min, GameConfig.storage.initialItems.wood.max);
             const communalFoodCount = this.seededRandom.randomInt(GameConfig.storage.initialItems.food.min, GameConfig.storage.initialItems.food.max);
 
             // Add wood to communal storage
