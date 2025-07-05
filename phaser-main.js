@@ -1536,7 +1536,21 @@ console.log('Phaser main loaded');
                 if (window.summaryLoggingEnabled) {
                     console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Staying near fire at (${Math.round(this.stateData.targetFire.position.x)}, ${Math.round(this.stateData.targetFire.position.y)})`);
                 }
-                this.villager.moveTowards(this.stateData.targetFire.position, deltaTime);
+                // Move towards fire but stay within interaction distance
+                const targetPosition = this.stateData.targetFire.position;
+                const distanceToFire = Phaser.Math.Distance.Between(
+                    this.villager.position.x, this.villager.position.y,
+                    targetPosition.x, targetPosition.y
+                );
+
+                // If we're already within interaction distance, don't move closer
+                if (distanceToFire <= GameConfig.player.interactionThreshold) {
+                    // Stay in place - we're close enough
+                    return;
+                }
+
+                // Move towards fire until we reach interaction distance
+                this.villager.moveTowards(targetPosition, deltaTime);
             } else {
                 if (window.summaryLoggingEnabled) {
                     console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: No fire found, staying at camp`);
@@ -1544,7 +1558,6 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(this.villager.campPosition, deltaTime);
             }
         }
-
 
 
         // Helper method to find nearest uncollected resource
