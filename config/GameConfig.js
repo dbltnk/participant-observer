@@ -225,25 +225,37 @@ window.GameConfig = {
         tree: 'tree',
     },
 
-    // Emoji definitions - Centralized emoji assignments
-    emojis: {
-        // Health and status
-        health: '😊',
+    // Character emoji system - State-based character representation
+    characters: {
+        // Pre-composed emoji characters with skin tone and gender variants
+        // Each array contains: [light skin, medium-light, medium, medium-dark, dark skin]
+        emojiSets: {
+            standing: {
+                male: ['🧍🏻', '🧍🏼', '🧍🏽', '🧍🏾', '🧍🏿'],
+                female: ['🧍🏻‍♀️', '🧍🏼‍♀️', '🧍🏽‍♀️', '🧍🏾‍♀️', '🧍🏿‍♀️'],
+                neutral: ['🧍🏻', '🧍🏼', '🧍🏽', '🧍🏾', '🧍🏿']
+            },
+            running: {
+                male: ['🏃🏻‍♂️', '🏃🏼‍♂️', '🏃🏽‍♂️', '🏃🏾‍♂️', '🏃🏿‍♂️'],
+                female: ['🏃🏻‍♀️', '🏃🏼‍♀️', '🏃🏽‍♀️', '🏃🏾‍♀️', '🏃🏿‍♀️'],
+                neutral: ['🏃🏻', '🏃🏼', '🏃🏽', '🏃🏾', '🏃🏿']
+            },
+            sleeping: {
+                male: ['🧘🏻‍♂️', '🧘🏼‍♂️', '🧘🏽‍♂️', '🧘🏾‍♂️', '🧘🏿‍♂️'],
+                female: ['🧘🏻‍♀️', '🧘🏼‍♀️', '🧘🏽‍♀️', '🧘🏾‍♀️', '🧘🏿‍♀️'],
+                neutral: ['🧘🏻', '🧘🏼', '🧘🏽', '🧘🏾', '🧘🏿']
+            }
+        },
 
-        // Actions
-        foraging: '🏃',
-        returning: '🏠',
-        eating: '🍽️',
-        sleeping: '😴',
+        // Character customization settings
+        customization: {
+            // Randomization seed for consistent character appearance
+            useGameSeed: true,   // Use game seed for character customization
 
-        // Tasks
-        wood: '🪵',
-        food: '🍎',
-        water: '💧',
-
-        // Entities
-        fireplace: '🔥',
-        tree: '🌲'
+            // Default appearance (fallback if no customization)
+            defaultSkinTone: 1,  // Index for medium-light skin
+            defaultGender: 'neutral'
+        }
     },
 
     // UI settings - Controls the appearance and layout of user interface elements

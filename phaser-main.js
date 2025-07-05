@@ -297,6 +297,97 @@ console.log('Phaser main loaded');
     }
     // === END: PerlinNoise and utility functions ===
 
+    // === CHARACTER CUSTOMIZATION SYSTEM ===
+    // Handles character appearance and state-based emoji generation
+
+    class CharacterCustomization {
+        constructor(seededRandom) {
+            assert(seededRandom, 'SeededRandom required for character customization');
+            this.seededRandom = seededRandom;
+
+            // Generate consistent character appearance for this game session
+            this.skinToneIndex = this.selectSkinToneIndex();
+            this.gender = this.selectGender();
+
+            console.log(`[CharacterCustomization] Generated appearance: skin=${this.skinToneIndex}, gender=${this.gender}`);
+        }
+
+        selectSkinToneIndex() {
+            // 0-4 for the 5 skin tone options (indices 0,1,2,3,4)
+            return this.seededRandom.randomInt(0, 4); // Fix: use 4 for exclusive upper bound
+        }
+
+        selectGender() {
+            const genders = ['male', 'female', 'neutral'];
+            const index = this.seededRandom.randomInt(0, genders.length - 1); // Fix: use length-1 for exclusive upper bound
+            const selectedGender = genders[index];
+
+            // Debug logging to see what's happening
+            console.log(`[CharacterCustomization] selectGender: index=${index}, selectedGender=${selectedGender}, genders.length=${genders.length}`);
+
+            assert(selectedGender, 'Gender selection failed - selectedGender is undefined');
+            return selectedGender;
+        }
+
+        // Generate emoji for a specific character state
+        getStateEmoji(state, isMoving = false, direction = null) {
+            assert(state, 'State is required for emoji generation');
+
+            // Determine the appropriate emoji set
+            let emojiSet = 'standing';
+
+            switch (state) {
+                case 'standing':
+                case 'idle':
+                    emojiSet = 'standing';
+                    break;
+                case 'running':
+                case 'moving':
+                case 'foraging':
+                case 'returning':
+                    emojiSet = 'running';
+                    break;
+                case 'sleeping':
+                    emojiSet = 'sleeping';
+                    break;
+                default:
+                    // Fallback to standing for unknown states
+                    emojiSet = 'standing';
+            }
+
+            // Get the pre-composed emoji from the appropriate set
+            assert(this.gender, `Gender is undefined. Available genders: ${Object.keys(GameConfig.characters.emojiSets[emojiSet])}`);
+            assert(GameConfig.characters.emojiSets[emojiSet][this.gender], `Gender '${this.gender}' not found in emojiSet '${emojiSet}'. Available: ${Object.keys(GameConfig.characters.emojiSets[emojiSet])}`);
+
+            const emojiArray = GameConfig.characters.emojiSets[emojiSet][this.gender];
+            assert(emojiArray, `Emoji array is undefined for gender '${this.gender}' in emojiSet '${emojiSet}'`);
+            assert(emojiArray[this.skinToneIndex], `Skin tone index ${this.skinToneIndex} out of bounds for emoji array length ${emojiArray.length}`);
+
+            const emoji = emojiArray[this.skinToneIndex];
+
+            // Return emoji with direction info for running state
+            if (state === 'running' && direction !== null) {
+                return { emoji, direction };
+            }
+
+            return emoji;
+        }
+
+        // Get the current emoji based on character state and movement
+        getCurrentEmoji(characterState, isMoving = false, direction = null) {
+            // Determine the appropriate state
+            let state = 'standing';
+
+            if (characterState === 'SLEEP') {
+                state = 'sleeping';
+            } else if (isMoving) {
+                state = 'running';
+            }
+
+            return this.getStateEmoji(state, isMoving, direction);
+        }
+    }
+
     // === BEGIN: Villager AI System ===
     class Villager {
         constructor(name, campPosition, villagerId, seededRandom = null) {
@@ -328,11 +419,18 @@ console.log('Phaser main loaded');
             // Daily variance for needs (different per villager)
             this.dailyDecay = this.generateDailyDecay();
 
+            // Character customization - use shared character appearance
+            this.characterCustomization = null; // Will be set by MainScene
+
             // Visual representation
             this.phaserText = null;
             this.nameText = null;
-            this.healthEmoji = GameConfig.emojis.health;
             this.visualsCreated = false; // Flag to track if visuals have been created
+
+            // Movement tracking for emoji updates
+            this.lastPosition = { ...this.position };
+            this.isMoving = false;
+            this.movementDirection = null; // 'left', 'right', 'up', 'down', or null
 
             // Game entities reference (will be set by update method)
             this.gameEntities = null;
@@ -349,6 +447,26 @@ console.log('Phaser main loaded');
 
             // Update needs
             this.updateNeeds(deltaTime, gameTime);
+
+            // Track movement for emoji updates
+            const distanceMoved = GameUtils.distance(this.position, this.lastPosition);
+            this.isMoving = distanceMoved > 0.1; // Small threshold to detect movement
+
+            // Calculate movement direction (only left/right matters for emoji flipping)
+            if (this.isMoving) {
+                const dx = this.position.x - this.lastPosition.x;
+
+                // Only consider horizontal movement for direction
+                if (Math.abs(dx) > 0.1) { // Small threshold to detect horizontal movement
+                    this.movementDirection = dx > 0 ? 'right' : 'left';
+                } else {
+                    this.movementDirection = null; // No horizontal movement
+                }
+            } else {
+                this.movementDirection = null;
+            }
+
+            this.lastPosition = { ...this.position };
 
             // Log what villager is trying to do when needs are critically low (behind spam gate)
             const hasCriticalNeeds = this.needs.temperature < 5 || this.needs.water < 5 || this.needs.calories < 5 || this.needs.vitamins.some(v => v < 5);
@@ -532,7 +650,28 @@ console.log('Phaser main loaded');
                 return;
             }
 
-            // Update villager emoji
+            // Update villager emoji based on state and movement
+            if (this.characterCustomization) {
+                const currentState = this.stateMachine.getStateName(this.stateMachine.currentState);
+                const emojiResult = this.characterCustomization.getCurrentEmoji(currentState, this.isMoving, this.movementDirection);
+
+                // Handle emoji result (could be string or object with direction)
+                if (typeof emojiResult === 'object' && emojiResult.emoji) {
+                    // Running state with direction info
+                    this.phaserText.setText(emojiResult.emoji);
+
+                    // Flip sprite horizontally for left movement
+                    if (emojiResult.direction === 'left') {
+                        this.phaserText.setScale(1, 1); // Face left (no flip needed for left-facing emoji)
+                    } else {
+                        this.phaserText.setScale(-1, 1); // Face right (flip for right movement)
+                    }
+                } else {
+                    // Standing or sleeping state (string emoji)
+                    this.phaserText.setText(emojiResult);
+                    this.phaserText.setScale(1, 1); // Reset scale for non-running states
+                }
+            }
             this.phaserText.setPosition(this.position.x, this.position.y);
 
             // Update name text (always show just the name, no stats)
@@ -616,8 +755,12 @@ console.log('Phaser main loaded');
         }
 
         createVisuals(scene) {
-            // Create villager emoji
-            this.phaserText = scene.add.text(this.position.x, this.position.y, this.healthEmoji, {
+            // Create villager emoji with default standing emoji
+            const defaultEmoji = this.characterCustomization ?
+                this.characterCustomization.getStateEmoji('standing') :
+                GameConfig.characters.states.standing;
+
+            this.phaserText = scene.add.text(this.position.x, this.position.y, defaultEmoji, {
                 fontSize: '22px',
                 fontFamily: 'Arial'
             }).setOrigin(0.5);
@@ -2165,6 +2308,9 @@ console.log('Phaser main loaded');
             this.noise = new PerlinNoise(currentSeed);
             this.seededRandom = new SeededRandom(currentSeed);
 
+            // Create character customization system for consistent appearance
+            this.characterCustomization = new CharacterCustomization(this.seededRandom);
+
             // Create ground texture for better navigation (after noise is initialized)
             this.createGroundTexture();
 
@@ -2203,7 +2349,7 @@ console.log('Phaser main loaded');
 
                 // Fireplace
                 const initialWood = this.seededRandom.randomRange(GameConfig.fires.initialWoodRange.min, GameConfig.fires.initialWoodRange.max);
-                this.entities.push({ position: { x: x + cfg.campSpacing.x, y: y }, type: GameConfig.entityTypes.fireplace, emoji: GameConfig.emojis.fireplace, isBurning: true, wood: initialWood, maxWood: GameConfig.fires.maxWood, villagerId: i });
+                this.entities.push({ position: { x: x + cfg.campSpacing.x, y: y }, type: GameConfig.entityTypes.fireplace, emoji: '🔥', isBurning: true, wood: initialWood, maxWood: GameConfig.fires.maxWood, villagerId: i });
                 // Sleeping bag
                 this.entities.push({ position: { x: x - cfg.campSpacing.x, y: y }, type: GameConfig.entityTypes.sleeping_bag, emoji: '🛏️', isOccupied: false, villagerId: i });
                 // Personal storage
@@ -2229,7 +2375,7 @@ console.log('Phaser main loaded');
             for (let i = 0; i < communalWoodCount; i++) {
                 const emptySlot = GameUtils.findEmptySlot(initialCommunalStorageBox.items);
                 if (emptySlot !== -1) {
-                    initialCommunalStorageBox.items[emptySlot] = { type: GameConfig.entityTypes.tree, emoji: GameConfig.emojis.tree };
+                    initialCommunalStorageBox.items[emptySlot] = { type: GameConfig.entityTypes.tree, emoji: '🌲' };
                 }
             }
 
@@ -2262,7 +2408,7 @@ console.log('Phaser main loaded');
                 for (let j = 0; j < personalWoodCount; j++) {
                     const emptySlot = GameUtils.findEmptySlot(personalStorageBox.items);
                     if (emptySlot !== -1) {
-                        personalStorageBox.items[emptySlot] = { type: GameConfig.entityTypes.tree, emoji: GameConfig.emojis.tree };
+                        personalStorageBox.items[emptySlot] = { type: GameConfig.entityTypes.tree, emoji: '🌲' };
                     }
                 }
 
@@ -2303,6 +2449,9 @@ console.log('Phaser main loaded');
                 };
 
                 const villager = new Villager(villagerName, villagerSpawnPosition, i - 1, this.seededRandom); // Use camp index for villagerId and pass seeded random
+
+                // Assign character customization to villager
+                villager.characterCustomization = this.characterCustomization;
 
                 // Find this villager's personal storage box
                 const personalStorageBox = this.entities.find(e =>
@@ -2463,7 +2612,7 @@ console.log('Phaser main loaded');
                     const treeEntity = {
                         position: pos,
                         type: GameConfig.entityTypes.tree,
-                        emoji: GameConfig.emojis.tree,
+                        emoji: '🌲',
                         collected: false,
                         isChild: false, // Initial trees are adults
                         clusterId: -1 // Trees don't use cluster system
@@ -2521,7 +2670,7 @@ console.log('Phaser main loaded');
                     const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
 
                     fontSize = Math.round(scaledSize);
-                    textObj = this.add.text(entity.position.x, entity.position.y, GameConfig.emojis.fireplace, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+                    textObj = this.add.text(entity.position.x, entity.position.y, '🔥', { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
                     textObj.setAlpha(1 - scaleFactor);
                     entity._phaserText = textObj;
                     this.worldEntities.push(textObj);
@@ -2651,7 +2800,9 @@ console.log('Phaser main loaded');
                 inventory: new Array(GameConfig.player.inventorySize).fill(null),
                 currentTime: gameStartTime,
             };
-            this.player = this.add.text(this.playerState.position.x, this.playerState.position.y, '👤', { fontSize: GameConfig.player.fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+            // Create player with character customization
+            const playerEmoji = this.characterCustomization.getStateEmoji('standing');
+            this.player = this.add.text(this.playerState.position.x, this.playerState.position.y, playerEmoji, { fontSize: GameConfig.player.fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
             assert(this.player, 'Failed to create player emoji.');
             // Camera - follow player with smooth interpolation, no bounds restriction
             this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
@@ -2971,7 +3122,46 @@ console.log('Phaser main loaded');
             this.playerState.position.x = Math.max(0, Math.min(GameConfig.world.width, this.playerState.position.x));
             this.playerState.position.y = Math.max(0, Math.min(GameConfig.world.height, this.playerState.position.y));
 
+            // Update player emoji based on state (sleeping takes priority over movement)
+            const isPlayerMoving = vx !== 0 || vy !== 0;
+
+            // Determine player movement direction (only left/right matters for emoji flipping)
+            let playerDirection = null;
+            if (isPlayerMoving && Math.abs(vx) > 0.1) { // Only consider horizontal movement
+                playerDirection = vx > 0 ? 'right' : 'left';
+            }
+
+            let playerEmojiResult;
+
+            if (this.isSleeping) {
+                // Player is sleeping - use sleeping emoji
+                playerEmojiResult = this.characterCustomization.getStateEmoji('sleeping');
+            } else if (isPlayerMoving) {
+                // Player is moving - use running emoji with direction
+                playerEmojiResult = this.characterCustomization.getStateEmoji('running', true, playerDirection);
+            } else {
+                // Player is standing still - use standing emoji
+                playerEmojiResult = this.characterCustomization.getStateEmoji('standing');
+            }
+
+            // Handle emoji result (could be string or object with direction)
+            if (typeof playerEmojiResult === 'object' && playerEmojiResult.emoji) {
+                // Running state with direction info
+                this.player.setText(playerEmojiResult.emoji);
+
+                // Flip sprite horizontally for left movement
+                if (playerEmojiResult.direction === 'left') {
+                    this.player.setScale(1, 1); // Face left (no flip needed for left-facing emoji)
+                } else {
+                    this.player.setScale(-1, 1); // Face right (flip for right movement)
+                }
+            } else {
+                // Standing or sleeping state (string emoji)
+                this.player.setText(playerEmojiResult);
+                this.player.setScale(1, 1); // Reset scale for non-running states
+            }
             this.player.setPosition(this.playerState.position.x, this.playerState.position.y);
+
             // --- Visual Temperature State Update ---
             const t = getCurrentTime(this.playerState);
             if (this._visualTempLastHour !== t.hour) {
