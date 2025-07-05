@@ -74,12 +74,12 @@
 - **Fallback:** If own fireplace unavailable, maintain nearest fire instead
 - **Exit:** Target fireplace = 10 logs
 
-#### 10. Storage Management (Village Task)
-- **Enter:** In village + carrying unneeded items + no higher priorities
-- **Behavior:** Put items in own chest → community chest if own chest full
-- **Exit:** All items stored OR higher priority need triggers
+#### 10. Forage (Village Task)
+- **Enter:** No higher priorities + both personal and communal storage have space
+- **Behavior:** Find any resource → collect → store in personal storage first, then communal
+- **Exit:** All storage full OR higher priority need triggers
 
 #### 11. Idle (Default State)
 - **Enter:** No other needs/tasks
-- **Behavior:** Stay near own fire (or nearest if own unavailable)
+- **Behavior:** Stay near own fire (or nearest if own unavailable) - passive state
 - **Exit:** Any higher priority state triggers

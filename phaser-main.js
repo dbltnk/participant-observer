@@ -710,7 +710,7 @@ console.log('Phaser main loaded');
         REGULAR_WARM_UP: 7,          // Normal need - temperature <70%
         REGULAR_EAT: 8,              // Normal need - calories <60%
         REGULAR_FIRE_REFILL: 9,      // Normal need - own fire <10 logs
-        STORAGE_MANAGEMENT: 10,      // Village task - store excess items
+        FORAGE: 10,                  // Village task - collect and store resources
         IDLE: 11                     // Default state - stay near fire
     };
 
@@ -829,10 +829,10 @@ console.log('Phaser main loaded');
                 return VILLAGER_STATES.REGULAR_FIRE_REFILL;
             }
 
-            // 10. STORAGE_MANAGEMENT - Village task
-            if (this.shouldManageStorage(storageBoxes)) {
-                if (shouldLogEvaluation) console.log(`[VillagerStateMachine] ${this.villager.name} choosing STORAGE_MANAGEMENT`);
-                return VILLAGER_STATES.STORAGE_MANAGEMENT;
+            // 10. FORAGE - Village task
+            if (this.shouldForage(storageBoxes)) {
+                if (shouldLogEvaluation) console.log(`[VillagerStateMachine] ${this.villager.name} choosing FORAGE`);
+                return VILLAGER_STATES.FORAGE;
             }
 
             // 11. IDLE - Default state
@@ -872,8 +872,8 @@ console.log('Phaser main loaded');
                 case VILLAGER_STATES.REGULAR_FIRE_REFILL:
                     this.enterRegularFireRefill();
                     break;
-                case VILLAGER_STATES.STORAGE_MANAGEMENT:
-                    this.enterStorageManagement();
+                case VILLAGER_STATES.FORAGE:
+                    this.enterForage();
                     break;
                 case VILLAGER_STATES.IDLE:
                     this.enterIdle();
@@ -925,8 +925,8 @@ console.log('Phaser main loaded');
                 case VILLAGER_STATES.REGULAR_FIRE_REFILL:
                     this.executeRegularFireRefill(deltaTime, entities, storageBoxes);
                     break;
-                case VILLAGER_STATES.STORAGE_MANAGEMENT:
-                    this.executeStorageManagement(deltaTime, storageBoxes);
+                case VILLAGER_STATES.FORAGE:
+                    this.executeForage(deltaTime, entities, storageBoxes);
                     break;
                 case VILLAGER_STATES.IDLE:
                     this.executeIdle(deltaTime, entities, storageBoxes);
@@ -1052,6 +1052,7 @@ console.log('Phaser main loaded');
             // Find own fireplace (wood will be found in execute phase)
             this.stateData.ownFire = this.findOwnFireplace();
             this.stateData.targetWood = null; // Will be set in execute phase
+            this.stateData.woodTarget = 1; // Need 1 piece of wood to refill fire
         }
 
         executeEmergencyFireRefill(deltaTime, entities, storageBoxes) {
@@ -1093,32 +1094,136 @@ console.log('Phaser main loaded');
         enterRegularFireRefill() {
             this.stateData.ownFire = this.findOwnFireplace();
             this.stateData.targetWood = null; // Will be set in execute phase
+            this.stateData.woodTarget = 1; // Need 1 piece of wood to refill fire
         }
 
         executeRegularFireRefill(deltaTime, entities, storageBoxes) {
             this.executeFireRefill(false, deltaTime, entities, storageBoxes);
         }
 
-        // === STORAGE MANAGEMENT STATE ===
-        shouldManageStorage(storageBoxes) {
-            // Check if inventory is getting full
-            const inventoryCount = this.villager.inventory.filter(item => item !== null).length;
-            return inventoryCount >= GameConfig.player.inventorySize - 1; // Start storing when almost full
-        }
+        // === FORAGE STATE ===
+        shouldForage(storageBoxes) {
+            // Check if both personal and communal storage have space
+            const personalStorage = this.findOwnStorageBox();
+            const communalStorage = this.findCommunalStorageBox();
 
-        enterStorageManagement() {
-            this.stateData.storageBox = this.findOwnStorageBox();
-        }
-
-        executeStorageManagement(deltaTime, storageBoxes) {
-            if (this.stateData.storageBox) {
-                this.villager.moveTowards(this.stateData.storageBox.position, deltaTime);
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.storageBox.position)) {
-                    this.storeItemsInStorage(this.stateData.storageBox);
-                }
-            } else {
-                this.stateData.storageBox = this.findOwnStorageBox();
+            if (!personalStorage || !communalStorage) {
+                return false; // Can't forage if storage isn't available
             }
+
+            const personalStorageCount = personalStorage.items.filter(item => item !== null).length;
+            const communalStorageCount = communalStorage.items.filter(item => item !== null).length;
+
+            // Only forage if both storages have space
+            return personalStorageCount < GameConfig.storage.personalCapacity &&
+                communalStorageCount < GameConfig.storage.communalCapacity;
+        }
+
+        enterForage() {
+            // Initialize forage state - will find target resource when needed
+            this.stateData.targetResource = null;
+            this.stateData.storageBox = null;
+        }
+
+        executeForage(deltaTime, entities, storageBoxes) {
+            // If we have items to store, store them first
+            if (this.hasItemsToStore()) {
+                const storeComplete = this.storeForagedItems(deltaTime);
+                if (!storeComplete) {
+                    return; // Still moving to storage or storing
+                }
+                // All items stored, continue with collection
+            }
+
+            // Find and collect resources
+            if (!this.stateData.targetResource) {
+                this.stateData.targetResource = this.findNearestResource(entities);
+                if (this.stateData.targetResource && window.summaryLoggingEnabled) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE: Found target resource ${this.stateData.targetResource.type} at (${Math.round(this.stateData.targetResource.position.x)}, ${Math.round(this.stateData.targetResource.position.y)})`);
+                }
+            }
+
+            if (this.stateData.targetResource) {
+                // Move towards target resource
+                this.villager.moveTowards(this.stateData.targetResource.position, deltaTime);
+
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.targetResource.position)) {
+                    if (this.collectResource(this.stateData.targetResource)) {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE: Collected ${this.stateData.targetResource.type}`);
+                        }
+                        this.stateData.targetResource = null; // Clear target to find new one
+                    } else {
+                        // Collection failed, find new target
+                        this.stateData.targetResource = null;
+                    }
+                }
+            }
+        }
+
+        storeForagedItems(deltaTime) {
+            // Store ALL items before returning true
+            let itemsStored = false;
+
+            // First try personal storage
+            const personalStorage = this.findOwnStorageBox();
+            if (personalStorage) {
+                const personalStorageCount = personalStorage.items.filter(item => item !== null).length;
+                if (personalStorageCount < GameConfig.storage.personalCapacity) {
+                    const distanceToStorage = GameUtils.distance(this.villager.position, personalStorage.position);
+
+                    if (distanceToStorage <= GameConfig.player.interactionThreshold) {
+                        // At storage, try to store all items at once
+                        const itemsStoredCount = this.storeAllItemsInStorage(personalStorage);
+                        if (itemsStoredCount > 0) {
+                            itemsStored = true;
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE: Stored ${itemsStoredCount} items in personal storage`);
+                            }
+                        }
+                    } else {
+                        // Move towards personal storage
+                        this.villager.moveTowards(personalStorage.position, deltaTime);
+                        return false; // Still moving
+                    }
+                }
+            }
+
+            // If we still have items to store, try communal storage
+            if (this.hasItemsToStore()) {
+                const communalStorage = this.findCommunalStorageBox();
+                if (communalStorage) {
+                    const communalStorageCount = communalStorage.items.filter(item => item !== null).length;
+                    if (communalStorageCount < GameConfig.storage.communalCapacity) {
+                        const distanceToStorage = GameUtils.distance(this.villager.position, communalStorage.position);
+
+                        if (distanceToStorage <= GameConfig.player.interactionThreshold) {
+                            // At storage, try to store all remaining items at once
+                            const itemsStoredCount = this.storeAllItemsInStorage(communalStorage);
+                            if (itemsStoredCount > 0) {
+                                itemsStored = true;
+                                if (window.summaryLoggingEnabled) {
+                                    console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE: Stored ${itemsStoredCount} items in communal storage`);
+                                }
+                            }
+                        } else {
+                            // Move towards communal storage
+                            this.villager.moveTowards(communalStorage.position, deltaTime);
+                            return false; // Still moving
+                        }
+                    }
+                }
+            }
+
+            // Return true if all items are stored (no more items to store)
+            const allItemsStored = !this.hasItemsToStore();
+            if (allItemsStored && itemsStored && window.summaryLoggingEnabled) {
+                console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE: All items stored successfully`);
+            } else if (!allItemsStored && window.summaryLoggingEnabled) {
+                console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE: All storage appears full, cannot store remaining items`);
+            }
+
+            return allItemsStored;
         }
 
         // === SHARED EXECUTE METHODS ===
@@ -1425,236 +1530,21 @@ console.log('Phaser main loaded');
         }
 
         executeIdle(deltaTime, entities, storageBoxes) {
-            // Check if all storage is full (inventory + personal storage + communal storage)
-            if (this.isAllStorageFull()) {
-                // All storage is full, just stay near fire
-                if (this.stateData.targetFire) {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: All storage full, staying near fire at (${Math.round(this.stateData.targetFire.position.x)}, ${Math.round(this.stateData.targetFire.position.y)})`);
-                    }
-                    this.villager.moveTowards(this.stateData.targetFire.position, deltaTime);
-                } else {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: All storage full, no fire found, staying at camp`);
-                    }
-                    this.villager.moveTowards(this.villager.campPosition, deltaTime);
-                }
-                return;
-            }
-
-            // Check if inventory is getting full and we need to store items
-            const inventoryCount = this.villager.inventory.filter(item => item !== null).length;
-            if (inventoryCount >= GameConfig.player.inventorySize - 2) { // Start storing when 4 out of 6 slots are filled
-                // Inventory is getting full, store items
+            // Passive IDLE state - just stay near fire
+            if (this.stateData.targetFire) {
                 if (window.summaryLoggingEnabled) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Inventory getting full (${inventoryCount}/${GameConfig.player.inventorySize}), starting storage`);
+                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Staying near fire at (${Math.round(this.stateData.targetFire.position.x)}, ${Math.round(this.stateData.targetFire.position.y)})`);
                 }
-                this.storeItemsInIdle(deltaTime);
-                return;
-            }
-
-            // Inventory has space, go collect resources
-            this.collectResourcesInIdle(deltaTime, entities);
-        }
-
-        // Helper method to check if all storage is full
-        isAllStorageFull() {
-            // Check inventory
-            const inventoryCount = this.villager.inventory.filter(item => item !== null).length;
-            if (inventoryCount < GameConfig.player.inventorySize) {
-                return false; // Inventory not full
-            }
-
-            // Check personal storage using direct reference
-            if (this.villager.personalStorageBox) {
-                const personalStorageCount = this.villager.personalStorageBox.items.filter(item => item !== null).length;
-                if (personalStorageCount < GameConfig.storage.personalCapacity) {
-                    return false; // Personal storage not full
-                }
-            }
-
-            // Check communal storage using direct reference
-            if (this.villager.communalStorageBox) {
-                const communalStorageCount = this.villager.communalStorageBox.items.filter(item => item !== null).length;
-                if (communalStorageCount < GameConfig.storage.communalCapacity) {
-                    return false; // Communal storage not full
-                }
-            }
-
-            // All storage is full
-            return true;
-        }
-
-        // Helper method to store items during idle state
-        storeItemsInIdle(deltaTime) {
-            // First try personal storage
-            const personalStorage = this.findOwnStorageBox();
-            if (personalStorage) {
-                const personalStorageCount = personalStorage.items.filter(item => item !== null).length;
-                if (personalStorageCount < GameConfig.storage.personalCapacity) {
-                    const distanceToStorage = GameUtils.distance(this.villager.position, personalStorage.position);
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Distance to personal storage: ${Math.round(distanceToStorage)}px`);
-                    }
-
-                    if (distanceToStorage <= GameConfig.player.interactionThreshold) {
-                        // Already at storage, try to store
-                        if (window.summaryLoggingEnabled) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: At personal storage, storing items`);
-                        }
-                        const success = this.storeItemsInStorage(personalStorage);
-                        return success;
-                    } else {
-                        // Move towards personal storage
-                        if (window.summaryLoggingEnabled) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Moving to personal storage at (${Math.round(personalStorage.position.x)}, ${Math.round(personalStorage.position.y)})`);
-                        }
-                        this.villager.moveTowards(personalStorage.position, deltaTime);
-                        return false; // Still moving to storage
-                    }
-                } else {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Personal storage full (${personalStorageCount}/${GameConfig.storage.personalCapacity})`);
-                    }
-                }
+                this.villager.moveTowards(this.stateData.targetFire.position, deltaTime);
             } else {
                 if (window.summaryLoggingEnabled) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: CRITICAL ERROR - No personal storage found! VillagerId: ${this.villager.villagerId}, PersonalStorageBox: ${this.villager.personalStorageBox ? 'found' : 'null'}`);
+                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: No fire found, staying at camp`);
                 }
-            }
-
-            // Personal storage full, try communal storage
-            const communalStorage = this.findCommunalStorageBox();
-            if (communalStorage) {
-                const communalStorageCount = communalStorage.items.filter(item => item !== null).length;
-                if (communalStorageCount < GameConfig.storage.communalCapacity) {
-                    const distanceToStorage = GameUtils.distance(this.villager.position, communalStorage.position);
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Distance to communal storage: ${Math.round(distanceToStorage)}px`);
-                    }
-
-                    if (distanceToStorage <= GameConfig.player.interactionThreshold) {
-                        // Already at storage, try to store
-                        if (window.summaryLoggingEnabled) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: At communal storage, storing items`);
-                        }
-                        const success = this.storeItemsInStorage(communalStorage);
-                        return success;
-                    } else {
-                        // Move towards communal storage
-                        if (window.summaryLoggingEnabled) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Moving to communal storage at (${Math.round(communalStorage.position.x)}, ${Math.round(communalStorage.position.y)})`);
-                        }
-                        this.villager.moveTowards(communalStorage.position, deltaTime);
-                        return false; // Still moving to storage
-                    }
-                } else {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Communal storage full (${communalStorageCount}/${GameConfig.storage.communalCapacity})`);
-                    }
-                }
-            } else {
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: CRITICAL ERROR - No communal storage found! CommunalStorageBox: ${this.villager.communalStorageBox ? 'found' : 'null'}`);
-                }
-            }
-
-            // All storage is full, this shouldn't happen if isAllStorageFull() is working correctly
-            if (window.summaryLoggingEnabled) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: All storage appears full, staying near fire`);
-            }
-            return false;
-        }
-
-        // Helper method to collect resources during idle state
-        collectResourcesInIdle(deltaTime, entities) {
-            // --- PERSISTENT STORAGE INTENT ---
-            if (!this.stateData) this.stateData = {};
-            // If we're in the middle of a storage task, finish it before doing anything else
-            if (this.stateData.currentTask === 'store') {
-                const storeSuccess = this.storeItemsInIdle(deltaTime);
-                if (storeSuccess) {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} STORAGE TASK COMPLETE, clearing currentTask`);
-                    }
-                    this.stateData.currentTask = null;
-                } else {
-                    // Still moving to storage or storing, do nothing else
-                    return;
-                }
-            }
-            // If we have items to store, start storage task
-            else if (this.hasItemsToStore()) {
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} STARTING STORAGE TASK`);
-                }
-                this.stateData.currentTask = 'store';
-                const storeSuccess = this.storeItemsInIdle(deltaTime);
-                if (storeSuccess) {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} STORAGE TASK COMPLETE, clearing currentTask`);
-                    }
-                    this.stateData.currentTask = null;
-                }
-                return;
-            }
-
-            // Check if we have a current target resource and if it's still available
-            if (this.stateData.targetResource) {
-                // Check if target has been collected by someone else
-                if (this.stateData.targetResource.collected) {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Target resource ${this.stateData.targetResource.type} was collected by someone else, finding new target`);
-                    }
-                    this.stateData.targetResource = null;
-                }
-            }
-
-            // Find new target resource if we don't have one
-            if (!this.stateData.targetResource) {
-                this.stateData.targetResource = this.findNearestResource(entities);
-                if (this.stateData.targetResource && window.summaryLoggingEnabled) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: New target resource ${this.stateData.targetResource.type} at (${Math.round(this.stateData.targetResource.position.x)}, ${Math.round(this.stateData.targetResource.position.y)})`);
-                }
-            }
-
-            // Move toward target resource if we have one
-            if (this.stateData.targetResource) {
-                this.villager.moveTowards(this.stateData.targetResource.position, deltaTime);
-
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.targetResource.position)) {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Collecting ${this.stateData.targetResource.type}`);
-                    }
-                    const success = this.collectResource(this.stateData.targetResource);
-                    if (success) {
-                        // Clear target after successful collection
-                        this.stateData.targetResource = null;
-                    } else {
-                        if (window.summaryLoggingEnabled) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Collection failed, returning to camp to store items`);
-                        }
-                        // If collection failed, return to camp to store items
-                        this.villager.moveTowards(this.villager.campPosition, deltaTime);
-                        // Clear target so we find a new one next time
-                        this.stateData.targetResource = null;
-                    }
-                }
-            } else {
-                // No resources found, stay near fire
-                if (this.stateData.targetFire) {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: No resources found, staying near fire`);
-                    }
-                    this.villager.moveTowards(this.stateData.targetFire.position, deltaTime);
-                } else {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: No resources found, no fire, staying at camp`);
-                    }
-                    this.villager.moveTowards(this.villager.campPosition, deltaTime);
-                }
+                this.villager.moveTowards(this.villager.campPosition, deltaTime);
             }
         }
+
+
 
         // Helper method to find nearest uncollected resource
         findNearestResource(entities) {
@@ -1689,7 +1579,7 @@ console.log('Phaser main loaded');
                 [VILLAGER_STATES.REGULAR_WARM_UP]: 'REGULAR_WARM_UP',
                 [VILLAGER_STATES.REGULAR_EAT]: 'REGULAR_EAT',
                 [VILLAGER_STATES.REGULAR_FIRE_REFILL]: 'REGULAR_FIRE_REFILL',
-                [VILLAGER_STATES.STORAGE_MANAGEMENT]: 'STORAGE_MANAGEMENT',
+                [VILLAGER_STATES.FORAGE]: 'FORAGE',
                 [VILLAGER_STATES.IDLE]: 'IDLE'
             };
             return stateNames[state] || 'UNKNOWN';
@@ -1750,38 +1640,19 @@ console.log('Phaser main loaded');
         }
 
         hasItemsToStore() {
-            // Check if villager has items that should be stored (not needed)
-            for (const item of this.villager.inventory) {
-                if (item && !this.isItemNeeded(item)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        isItemNeeded(item) {
-            if (!item) return false;
-
+            // Simple threshold: store items when inventory is >80% full
             const inventoryCount = this.villager.inventory.filter(i => i !== null).length;
             const maxItems = GameConfig.player.inventorySize;
+            const threshold = Math.floor(maxItems * 0.8); // 80% threshold
 
             if (window.summaryLoggingEnabled) {
-                console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Checking ${item.type}${item.emoji}, Inventory count: ${inventoryCount}/${maxItems}, Inventory: [${this.villager.inventory.map(i => i ? i.type : 'null').join(', ')}]`);
+                console.log(`[Villager] ${this.villager.name} HAS_ITEMS_TO_STORE: Inventory ${inventoryCount}/${maxItems}, threshold ${threshold}`);
             }
 
-            // Simple logic: can pick up anything if inventory has space
-            if (inventoryCount < maxItems) {
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Can pick up ${item.type} (inventory has space)`);
-                }
-                return true;
-            }
-
-            if (window.summaryLoggingEnabled) {
-                console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Inventory full, cannot pick up anything`);
-            }
-            return false; // Inventory full
+            return inventoryCount > threshold;
         }
+
+        // isItemNeeded method removed - using simple inventory thresholds instead
 
         // isFood and distance now use GameUtils methods
 
@@ -1890,25 +1761,22 @@ console.log('Phaser main loaded');
                     for (let i = 0; i < storageBox.items.length; i++) {
                         const item = storageBox.items[i];
                         if (item) {
-                            // Check if we need this item
-                            if (this.isItemNeeded(item)) {
-                                // Move item from storage to inventory
-                                this.villager.inventory[emptySlot] = item;
-                                storageBox.items[i] = null;
+                            // Retrieve any item if we have space
+                            this.villager.inventory[emptySlot] = item;
+                            storageBox.items[i] = null;
 
-                                if (window.summaryLoggingEnabled) {
-                                    console.log(`[Villager] ${this.villager.name} RETRIEVE_SUCCESS: Retrieved ${item.type}${item.emoji} from storage to inventory slot ${emptySlot}`);
-                                    this.logNearbyObjects();
-                                }
-                                return true;
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Villager] ${this.villager.name} RETRIEVE_SUCCESS: Retrieved ${item.type}${item.emoji} from storage to inventory slot ${emptySlot}`);
+                                this.logNearbyObjects();
                             }
+                            return true;
                         }
                     }
                 }
             }
 
             if (window.summaryLoggingEnabled) {
-                console.log(`[Villager] ${this.villager.name} RETRIEVE_FAILED: No needed items in nearby storage`);
+                console.log(`[Villager] ${this.villager.name} RETRIEVE_FAILED: No items in nearby storage`);
                 this.logNearbyObjects();
             }
             return false;
@@ -1935,22 +1803,15 @@ console.log('Phaser main loaded');
                     for (let i = 0; i < storageBox.items.length; i++) {
                         const item = storageBox.items[i];
                         if (item && (itemType === null || item.type === itemType)) {
-                            // Check if we need this item
-                            if (this.isItemNeeded(item)) {
-                                // Move item from storage to inventory
-                                this.villager.inventory[emptySlot] = item;
-                                storageBox.items[i] = null;
+                            // Retrieve any matching item if we have space
+                            this.villager.inventory[emptySlot] = item;
+                            storageBox.items[i] = null;
 
-                                if (window.summaryLoggingEnabled) {
-                                    console.log(`[Villager] ${this.villager.name} RETRIEVE_SUCCESS: Retrieved ${item.type}${item.emoji} from storage slot ${i} to inventory slot ${emptySlot}`);
-                                    this.logNearbyObjects();
-                                }
-                                return true;
-                            } else {
-                                if (window.summaryLoggingEnabled) {
-                                    console.log(`[Villager] ${this.villager.name} RETRIEVE_SKIP: Don't need ${item.type}${item.emoji} from storage`);
-                                }
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Villager] ${this.villager.name} RETRIEVE_SUCCESS: Retrieved ${item.type}${item.emoji} from storage slot ${i} to inventory slot ${emptySlot}`);
+                                this.logNearbyObjects();
                             }
+                            return true;
                         }
                     }
                 }
@@ -1985,15 +1846,7 @@ console.log('Phaser main loaded');
                 return false; // Inventory full
             }
 
-            // Check if we should collect this item
-            if (!this.isItemNeeded(entity)) {
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[Villager] ${this.villager.name} COLLECT FAILED: Don't need ${entity.type}${entity.emoji}`);
-                    console.log(`[Villager] ${this.villager.name} COLLECT DEBUG: Inventory count: ${this.villager.inventory.filter(i => i !== null).length}, Inventory: [${this.villager.inventory.map(i => i ? i.type : 'null').join(', ')}]`);
-                    this.logNearbyObjects();
-                }
-                return false; // Don't need this item
-            }
+            // Collect any resource if we have space (no complex "needed" logic)
 
             // Success chance (80% for villagers)
             if (Math.random() < 0.8) {
@@ -2050,43 +1903,146 @@ console.log('Phaser main loaded');
                 console.log(`[Villager] ${this.villager.name} STORE_ATTEMPT: Checking inventory for items to store`);
             }
 
-            // Find items to store (non-essential items)
+            // Store any item if inventory is getting full
             for (let i = 0; i < this.villager.inventory.length; i++) {
                 const item = this.villager.inventory[i];
                 if (item) {
-                    const isNeeded = this.isItemNeeded(item);
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[Villager] ${this.villager.name} STORE_CHECK: Item ${item.type}${item.emoji} in slot ${i}, isNeeded: ${isNeeded}`);
-                    }
+                    // Find empty slot in storage
+                    const storageSlot = GameUtils.findEmptySlot(storageBox.items);
+                    if (storageSlot !== -1) {
+                        storageBox.items[storageSlot] = item;
+                        this.villager.inventory[i] = null;
 
-                    if (!isNeeded) {
-                        // Find empty slot in storage
-                        const storageSlot = GameUtils.findEmptySlot(storageBox.items);
-                        if (storageSlot !== -1) {
-                            storageBox.items[storageSlot] = item;
-                            this.villager.inventory[i] = null;
-
-                            if (window.summaryLoggingEnabled) {
-                                console.log(`[Villager] ${this.villager.name} STORE SUCCESS: Stored ${item.type}${item.emoji} in storage slot ${storageSlot}`);
-                                this.logNearbyObjects();
-                            }
-                            return true;
-                        } else {
-                            if (window.summaryLoggingEnabled) {
-                                console.log(`[Villager] ${this.villager.name} STORE FAILED: Storage box full`);
-                                this.logNearbyObjects();
-                            }
-                            return false;
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.villager.name} STORE SUCCESS: Stored ${item.type}${item.emoji} in storage slot ${storageSlot}`);
+                            this.logNearbyObjects();
                         }
+                        return true;
+                    } else {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.villager.name} STORE FAILED: Storage box full`);
+                            this.logNearbyObjects();
+                        }
+                        return false;
                     }
                 }
             }
 
             if (window.summaryLoggingEnabled) {
-                console.log(`[Villager] ${this.villager.name} STORE FAILED: No items to store (all items are needed)`);
+                console.log(`[Villager] ${this.villager.name} STORE FAILED: No items to store`);
                 this.logNearbyObjects();
             }
             return false;
+        }
+
+        // Store ALL items when inventory threshold is reached
+        storeAllItemsInStorage(storageBox) {
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Villager] ${this.villager.name} STORE_ALL_ATTEMPT: Storing all items when threshold reached`);
+            }
+
+            let itemsStored = 0;
+            let storageFull = false;
+
+            // Store all items when inventory is getting full
+            for (let i = 0; i < this.villager.inventory.length; i++) {
+                const item = this.villager.inventory[i];
+                if (item) {
+                    // Find empty slot in storage
+                    const storageSlot = GameUtils.findEmptySlot(storageBox.items);
+                    if (storageSlot !== -1) {
+                        storageBox.items[storageSlot] = item;
+                        this.villager.inventory[i] = null;
+                        itemsStored++;
+
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.villager.name} STORE_ALL_SUCCESS: Stored ${item.type}${item.emoji} in storage slot ${storageSlot} (${itemsStored} total)`);
+                        }
+                    } else {
+                        storageFull = true;
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.villager.name} STORE_ALL_STOPPED: Storage box full after storing ${itemsStored} items`);
+                        }
+                        break; // Storage is full, stop storing
+                    }
+                }
+            }
+
+            if (itemsStored > 0) {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.villager.name} STORE_ALL_COMPLETE: Stored ${itemsStored} items total`);
+                    this.logNearbyObjects();
+                }
+                return itemsStored;
+            } else {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.villager.name} STORE_ALL_FAILED: No items to store`);
+                    this.logNearbyObjects();
+                }
+                return 0;
+            }
+        }
+
+        // Missing method that was being called but not implemented
+        storeItemsInIdle(deltaTime) {
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Villager] ${this.villager.name} STORE_ITEMS_IN_IDLE: Attempting to store items during idle`);
+            }
+
+            // Check if we have items to store
+            if (!this.hasItemsToStore()) {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.villager.name} STORE_ITEMS_IN_IDLE: No items to store`);
+                }
+                return true; // No items to store, consider it successful
+            }
+
+            // Try personal storage first
+            const personalStorage = this.findOwnStorageBox();
+            if (personalStorage) {
+                const distanceToStorage = GameUtils.distance(this.villager.position, personalStorage.position);
+
+                if (distanceToStorage <= GameConfig.player.interactionThreshold) {
+                    // At storage, try to store items
+                    const itemsStored = this.storeItemsInStorage(personalStorage);
+                    if (itemsStored) {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.villager.name} STORE_ITEMS_IN_IDLE: Stored items in personal storage`);
+                        }
+                        return true;
+                    }
+                } else {
+                    // Move towards personal storage
+                    this.villager.moveTowards(personalStorage.position, deltaTime);
+                    return false; // Still moving
+                }
+            }
+
+            // Try communal storage if personal is full or unavailable
+            const communalStorage = this.findCommunalStorageBox();
+            if (communalStorage) {
+                const distanceToStorage = GameUtils.distance(this.villager.position, communalStorage.position);
+
+                if (distanceToStorage <= GameConfig.player.interactionThreshold) {
+                    // At storage, try to store items
+                    const itemsStored = this.storeItemsInStorage(communalStorage);
+                    if (itemsStored) {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.villager.name} STORE_ITEMS_IN_IDLE: Stored items in communal storage`);
+                        }
+                        return true;
+                    }
+                } else {
+                    // Move towards communal storage
+                    this.villager.moveTowards(communalStorage.position, deltaTime);
+                    return false; // Still moving
+                }
+            }
+
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Villager] ${this.villager.name} STORE_ITEMS_IN_IDLE: No storage available`);
+            }
+            return false; // No storage available
         }
 
         // Generic method to find nearest resource source (storage or world)
