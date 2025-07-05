@@ -21,9 +21,18 @@ window.GameConfig = {
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 25 }, // Offset for village storage from center
         villageWellOffset: { x: 25, y: 50 }, // Offset for village well from center
-        campRadius: 400, // Distance from village center to camps (doubled from 150)
         campSpacing: { x: 40, y: 60 }, // Spacing between camp facilities (doubled from 20,30)
-        playerStartOffset: { x: 40, y: 0 }, // Player start position relative to their camp,
+
+        // Organic camp placement settings
+        campPlacement: {
+            baseRadius: 400, // Base distance from village center to camps
+            minDistanceBetweenCamps: 300, // Minimum distance between camps in pixels
+            angleVariationRange: 1.5, // ±radians for angle variation from noise
+            radiusVariationRange: 200, // Maximum radius variation in pixels
+            additionalRandomAngle: 0.8, // ±radians for additional random angle variation
+            additionalRandomRadius: 100, // ±pixels for additional random radius variation
+            maxPlacementAttempts: 10 // Maximum attempts to place a camp without overlap
+        },
 
         // Villager spawning
         villagerSpawnRadius: 5000, // Maximum distance from village center for villager spawning

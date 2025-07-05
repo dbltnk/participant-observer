@@ -475,7 +475,7 @@ console.log('Phaser main loaded');
                 const currentStateName = this.stateMachine.getStateName(this.stateMachine.currentState);
                 console.log(`[Villager] ${this.name} CRITICAL ACTION LOG: State=${currentStateName}, Hour=${t.hour.toFixed(1)}`);
                 console.log(`[Villager] ${this.name} CRITICAL ACTION LOG: Position=(${Math.round(this.position.x)}, ${Math.round(this.position.y)}), Camp=(${Math.round(this.campPosition.x)}, ${Math.round(this.campPosition.y)})`);
-                console.log(`[Villager] ${this.name} CRITICAL ACTION LOG: Inventory=[${this.inventory.map(item => item ? item.type : 'empty').join(', ')}], IsAtCamp=${this.isAtCamp()}`);
+                console.log(`[Villager] ${this.name} CRITICAL ACTION LOG: Inventory=[${this.inventory.map(item => item ? item.type : 'empty').join(', ')}]`);
             }
 
             // Use state machine
@@ -621,10 +621,6 @@ console.log('Phaser main loaded');
                     console.log(`[Villager] ${this.name} MOVEMENT: Moving towards (${Math.round(target.x)}, ${Math.round(target.y)}), Distance: ${Math.round(distance)}px, Speed: ${this.moveSpeed}px/s, Delta: ${deltaTime}ms, MoveDistance: ${Math.round(moveDistance)}px`);
                 }
             }
-        }
-
-        isAtCamp() {
-            return GameUtils.distance(this.position, this.campPosition) <= GameConfig.technical.distances.campRadius;
         }
 
         getCurrentTime(gameTime) {
@@ -1784,9 +1780,6 @@ console.log('Phaser main loaded');
         }
 
         // === UTILITY METHODS ===
-        isAtCamp() {
-            return GameUtils.distance(this.villager.position, this.villager.campPosition) <= GameConfig.technical.distances.campRadius;
-        }
 
         hasWoodInInventory() {
             return this.villager.inventory.some(item => item && item.type === GameConfig.entityTypes.tree);
@@ -2331,20 +2324,67 @@ console.log('Phaser main loaded');
                 type: GameConfig.entityTypes.storage_box, emoji: '📦', capacity: GameConfig.storage.communalCapacity, items: new Array(GameConfig.storage.communalCapacity).fill(null)
             };
             this.entities.push(communalStorage);
-            // --- Camps and facilities (organic placement, not perfect circle) ---
+            // --- Camps and facilities (organic placement using Perlin noise) ---
             this.camps = [];
-            for (let i = 0; i < cfg.villagerCount; i++) {
-                // Create more organic placement with some randomness
-                const baseAngle = (i / cfg.villagerCount) * 2 * Math.PI;
-                const angleVariation = (this.seededRandom.random() - 0.5) * 0.5; // ±0.25 radians variation
-                const radiusVariation = (this.seededRandom.random() - 0.5) * 50; // ±25 pixels radius variation
-                const angle = baseAngle + angleVariation;
-                const radius = cfg.campRadius + radiusVariation;
 
-                const x = centerX + Math.cos(angle) * radius;
-                const y = centerY + Math.sin(angle) * radius;
+            // Use Perlin noise to create organic camp placement
+            const noiseScale = GameConfig.world.noiseScale;
+            const noiseBias = GameConfig.world.noiseBias;
+
+            for (let i = 0; i < cfg.villagerCount; i++) {
+                // Start with a base circular pattern but heavily modify with noise
+                const baseAngle = (i / cfg.villagerCount) * 2 * Math.PI;
+
+                // Use Perlin noise to create organic variations
+                const noiseX = Math.cos(baseAngle) * noiseScale;
+                const noiseY = Math.sin(baseAngle) * noiseScale;
+                const noiseValue = this.noise.noise2D(noiseX, noiseY);
+
+                // Apply noise to both angle and radius for organic placement
+                const angleVariation = noiseValue * cfg.campPlacement.angleVariationRange;
+                const radiusVariation = (noiseValue * 0.5 + 0.5) * cfg.campPlacement.radiusVariationRange;
+
+                const angle = baseAngle + angleVariation;
+                const radius = cfg.campPlacement.baseRadius + radiusVariation;
+
+                // Add additional randomness for even more organic feel
+                const finalAngleVariation = (this.seededRandom.random() - 0.5) * cfg.campPlacement.additionalRandomAngle;
+                const finalRadiusVariation = (this.seededRandom.random() - 0.5) * cfg.campPlacement.additionalRandomRadius;
+
+                let finalAngle = angle + finalAngleVariation;
+                let finalRadius = radius + finalRadiusVariation;
+
+                // Ensure camps don't get too close to each other
+                let attempts = 0;
+                let x, y;
+                let tooClose = false;
+
+                do {
+                    x = centerX + Math.cos(finalAngle) * finalRadius;
+                    y = centerY + Math.sin(finalAngle) * finalRadius;
+
+                    // Check distance from other camps
+                    tooClose = false;
+                    for (const existingCamp of this.camps) {
+                        const dist = GameUtils.distance({ x, y }, existingCamp.position);
+                        if (dist < cfg.campPlacement.minDistanceBetweenCamps) {
+                            tooClose = true;
+                            break;
+                        }
+                    }
+
+                    // If too close, try a slightly different position
+                    if (tooClose) {
+                        finalAngle += (this.seededRandom.random() - 0.5) * 0.5;
+                        finalRadius += (this.seededRandom.random() - 0.5) * 50;
+                    }
+
+                    attempts++;
+                } while (tooClose && attempts < cfg.campPlacement.maxPlacementAttempts);
+
                 const camp = { position: { x, y }, type: 'camp', villagerId: i };
                 this.camps.push(camp);
+
                 // Don't add camp to entities since we don't want to render it
 
                 // Fireplace
@@ -2355,11 +2395,14 @@ console.log('Phaser main loaded');
                 // Personal storage
                 this.entities.push({ position: { x: x, y: y + cfg.campSpacing.y }, type: GameConfig.entityTypes.storage_box, emoji: '📦', capacity: GameConfig.storage.personalCapacity, items: new Array(GameConfig.storage.personalCapacity).fill(null), isPersonal: true, villagerId: i });
             }
-            // --- Player start position (center of camp 0) ---
-            const playerCamp = this.camps[0];
+            // --- Player start position (bottom left of village well) ---
+            const wellPosition = {
+                x: centerX + cfg.villageWellOffset.x,
+                y: centerY + cfg.villageWellOffset.y
+            };
             this.playerStartPosition = {
-                x: playerCamp.position.x,
-                y: playerCamp.position.y
+                x: wellPosition.x - 60, // 60 pixels to the left of well
+                y: wellPosition.y + 60  // 60 pixels below the well
             };
 
             // === ADD RANDOM INITIAL ITEMS TO STORAGE BOXES ===
@@ -2630,10 +2673,12 @@ console.log('Phaser main loaded');
                 let fontSize;
                 if (entity.type === 'camp') {
                     fontSize = 28;
-                } else if (entity.type === 'fireplace' || entity.type === 'sleeping_bag') {
+                } else if (entity.type === 'fireplace') {
                     fontSize = 28;
+                } else if (entity.type === 'sleeping_bag') {
+                    fontSize = 40;
                 } else if (entity.type === 'storage_box') {
-                    fontSize = 24;
+                    fontSize = 28;
                 } else if (entity.type === 'tree') {
                     fontSize = 44; // 200% larger (22 * 2 = 44)
                 } else if (entity.type === 'well') {
