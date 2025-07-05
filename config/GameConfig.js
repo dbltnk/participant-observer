@@ -173,7 +173,24 @@ window.GameConfig = {
             water: { min: 60, max: 90 }, // Water range at game start
             calories: { min: 60, max: 90 }, // Calories range at game start
             vitamins: { min: 50, max: 80 } // Vitamin range at game start (applies to all vitamins A-E)
-        }
+        },
+
+        // Villager names for random generation
+        villagerNames: [
+            'Alaric', 'Brigid', 'Cormac', 'Deirdre', 'Eamon', 'Fiona', 'Gareth', 'Helena',
+            'Ivar', 'Jocelyn', 'Kieran', 'Luna', 'Mael', 'Niamh', 'Oisin', 'Pádraig',
+            'Quinn', 'Róisín', 'Seamus', 'Tara', 'Ulf', 'Vera', 'Wynn', 'Yara',
+            'Zara', 'Aiden', 'Brenna', 'Cian', 'Dara', 'Eira', 'Finn', 'Gwen',
+            'Hale', 'Iona', 'Jace', 'Kara', 'Liam', 'Maya', 'Nash', 'Orla',
+            'Pax', 'Raven', 'Sage', 'Teagan', 'Uma', 'Vale', 'Wren', 'Xander',
+            'Yuki', 'Zane', 'Aria', 'Blake', 'Cora', 'Dax', 'Echo', 'Faye',
+            'Gray', 'Haven', 'Indigo', 'Jade', 'Kai', 'Lark', 'Moss', 'Nova',
+            'Ocean', 'Pine', 'Quill', 'River', 'Sky', 'Thorne', 'Unity', 'Vale',
+            'Willow', 'Xero', 'Yarrow', 'Zephyr', 'Ash', 'Birch', 'Cedar', 'Dove',
+            'Elm', 'Fern', 'Grove', 'Hazel', 'Ivy', 'Juniper', 'Kestrel', 'Linden',
+            'Maple', 'Nettle', 'Oak', 'Poppy', 'Quince', 'Rowan', 'Sage', 'Thistle',
+            'Umber', 'Violet', 'Wisteria', 'Yew', 'Zinnia', 'Alder', 'Bramble', 'Clover'
+        ],
     },
 
     // Animal behavior settings
@@ -262,21 +279,6 @@ window.GameConfig = {
         wood: 'wood',
         food: 'food',
         water: 'water'
-    },
-
-    // Villager states - Centralized state definitions
-    villagerStates: {
-        SLEEP: 1,
-        EMERGENCY_DRINK: 2,
-        EMERGENCY_EAT: 3,
-        EMERGENCY_WARM_UP: 4,
-        EMERGENCY_FIRE_REFILL: 5,
-        REGULAR_DRINK: 6,
-        REGULAR_WARM_UP: 7,
-        REGULAR_EAT: 8,
-        REGULAR_FIRE_REFILL: 9,
-        STORAGE_MANAGEMENT: 10,
-        IDLE: 11
     },
 
     // Emoji definitions - Centralized emoji assignments
@@ -495,13 +497,6 @@ window.GameConfig = {
         serverUrl: 'http://localhost:3000' // Server URL for logging
     },
 
-    // Game loop settings
-    gameLoop: {
-        targetFPS: 60, // Target frames per second
-        maxDeltaTime: 200, // Maximum delta time per frame (milliseconds)
-        timestep: 1000 / 60 // Fixed timestep for consistent physics
-    },
-
     // Storage settings
     storage: {
         communalCapacity: 20, // Capacity of communal storage box
@@ -592,18 +587,6 @@ window.GameConfig = {
             maxDeltaTime: 200 // Maximum delta time per frame
         },
 
-        // Random and probability constants
-        random: {
-            baseChance: 0.5, // 50% base chance
-            clusterChance: 0.8, // 80% chance for cluster consistency
-            spamChanceLow: 0.05, // 5% chance for spam logging
-            spamChanceHigh: 0.1, // 10% chance for spam logging
-            wakeUpTimeVariance: 1.0, // ±1 hour wake up time variance
-            directionChangeInterval: { min: 2000, max: 5000 }, // 2-5 seconds
-            wanderSpeedRange: { min: 0.3, max: 0.5 }, // 30-50% speed
-            fleeSpeedMultiplier: 0.8 // 80% speed for fleeing
-        },
-
         // Time constants
         time: {
             hoursPerDay: 24, // Hours in a day
@@ -642,7 +625,7 @@ window.GameConfig = {
             storageGridColumns: 5, // Number of columns in storage grid
             storageGridRows: 2, // Number of rows in storage grid
             storageSlotSize: 50, // Size of storage slots
-            storageBackgroundHeight: { communal: 450, personal: 300 }, // Storage background heights
+            storageBackgroundHeight: { ss: 450, personal: 300 }, // Storage background heights
             storageBackgroundWidth: 300, // Storage background width
             storageTitleOffset: 150, // Offset for storage titles
             storageInstructionsOffset: 60, // Offset for storage instructions
@@ -650,53 +633,7 @@ window.GameConfig = {
             storageSlotGridOffset: { x: 150, y: 80 }, // Offset for storage slot grid
             storageSlotGridSpacing: { x: 60, y: 60 } // Spacing for storage slot grid
         },
-
-        // Color constants for different states
-        colors: {
-            // Health states
-            healthCritical: 50, // Critical health threshold
-            healthWarning: 80, // Warning health threshold
-            healthGood: 80, // Good health threshold
-
-            // Need thresholds
-            needCritical: 20, // Critical need threshold
-            needWarning: 50, // Warning need threshold
-            needGood: 80, // Good need threshold
-
-            // Temperature thresholds
-            temperatureCritical: 50, // Critical temperature threshold
-            temperatureWarning: 80, // Warning temperature threshold
-
-            // Water thresholds
-            waterCritical: 50, // Critical water threshold
-            waterWarning: 80, // Warning water threshold
-
-            // Calorie thresholds
-            calorieCritical: 50, // Critical calorie threshold
-            calorieWarning: 80, // Warning calorie threshold
-
-            // Vitamin thresholds
-            vitaminCritical: 50, // Critical vitamin threshold
-            vitaminWarning: 80 // Warning vitamin threshold
-        }
     },
-
-    // Villager names for random generation
-    villagerNames: [
-        'Alaric', 'Brigid', 'Cormac', 'Deirdre', 'Eamon', 'Fiona', 'Gareth', 'Helena',
-        'Ivar', 'Jocelyn', 'Kieran', 'Luna', 'Mael', 'Niamh', 'Oisin', 'Pádraig',
-        'Quinn', 'Róisín', 'Seamus', 'Tara', 'Ulf', 'Vera', 'Wynn', 'Yara',
-        'Zara', 'Aiden', 'Brenna', 'Cian', 'Dara', 'Eira', 'Finn', 'Gwen',
-        'Hale', 'Iona', 'Jace', 'Kara', 'Liam', 'Maya', 'Nash', 'Orla',
-        'Pax', 'Raven', 'Sage', 'Teagan', 'Uma', 'Vale', 'Wren', 'Xander',
-        'Yuki', 'Zane', 'Aria', 'Blake', 'Cora', 'Dax', 'Echo', 'Faye',
-        'Gray', 'Haven', 'Indigo', 'Jade', 'Kai', 'Lark', 'Moss', 'Nova',
-        'Ocean', 'Pine', 'Quill', 'River', 'Sky', 'Thorne', 'Unity', 'Vale',
-        'Willow', 'Xero', 'Yarrow', 'Zephyr', 'Ash', 'Birch', 'Cedar', 'Dove',
-        'Elm', 'Fern', 'Grove', 'Hazel', 'Ivy', 'Juniper', 'Kestrel', 'Linden',
-        'Maple', 'Nettle', 'Oak', 'Poppy', 'Quince', 'Rowan', 'Sage', 'Thistle',
-        'Umber', 'Violet', 'Wisteria', 'Yew', 'Zinnia', 'Alder', 'Bramble', 'Clover'
-    ],
 
     // Visual temperature display settings (purely cosmetic)
     visualTemperature: {

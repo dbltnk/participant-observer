@@ -1953,25 +1953,9 @@ console.log('Phaser main loaded');
         }
     }
 
-    // Villager name generator
-    const villagerNames = [
-        'Alaric', 'Brigid', 'Cormac', 'Deirdre', 'Eamon', 'Fiona', 'Gareth', 'Helena',
-        'Ivar', 'Jocelyn', 'Kieran', 'Luna', 'Mael', 'Niamh', 'Oisin', 'Pádraig',
-        'Quinn', 'Róisín', 'Seamus', 'Tara', 'Ulf', 'Vera', 'Wynn', 'Yara',
-        'Zara', 'Aiden', 'Brenna', 'Cian', 'Dara', 'Eira', 'Finn', 'Gwen',
-        'Hale', 'Iona', 'Jace', 'Kara', 'Liam', 'Maya', 'Nash', 'Orla',
-        'Pax', 'Raven', 'Sage', 'Teagan', 'Uma', 'Vale', 'Wren', 'Xander',
-        'Yuki', 'Zane', 'Aria', 'Blake', 'Cora', 'Dax', 'Echo', 'Faye',
-        'Gray', 'Haven', 'Indigo', 'Jade', 'Kai', 'Lark', 'Moss', 'Nova',
-        'Ocean', 'Pine', 'Quill', 'River', 'Sky', 'Thorne', 'Unity', 'Vale',
-        'Willow', 'Xero', 'Yarrow', 'Zephyr', 'Ash', 'Birch', 'Cedar', 'Dove',
-        'Elm', 'Fern', 'Grove', 'Hazel', 'Ivy', 'Juniper', 'Kestrel', 'Linden',
-        'Maple', 'Nettle', 'Oak', 'Poppy', 'Quince', 'Rowan', 'Sage', 'Thistle',
-        'Umber', 'Violet', 'Wisteria', 'Yew', 'Zinnia', 'Alder', 'Bramble', 'Clover'
-    ];
 
     function generateVillagerName() {
-        return villagerNames[Math.floor(Math.random() * villagerNames.length)];
+        return GameConfig.villager.villagerNames[Math.floor(Math.random() * GameConfig.villager.villagerNames.length)];
     }
     // === END: Villager AI System ===
 
@@ -2164,7 +2148,6 @@ console.log('Phaser main loaded');
                 // Set initial state based on game start time
                 const startHour = GameConfig.time.gameStartHour;
                 if (startHour >= GameConfig.time.dayStartHour && startHour < GameConfig.time.nightStartHour) {
-                    villager.state = GameConfig.villagerStates.FORAGING;
                     if (window.summaryLoggingEnabled) {
                         console.log(`[MainScene] Villager ${villagerName} starting in FORAGING state (daytime)`);
                     }
@@ -2879,7 +2862,6 @@ console.log('Phaser main loaded');
                 if (isDead) {
                     // Mark as dead and create corpse
                     villager.isDead = true;
-                    villager.state = 'DEAD';
 
                     // Free sleeping bag if occupied
                     if (villager.sleepingBag) {
