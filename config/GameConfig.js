@@ -214,15 +214,6 @@ window.GameConfig = {
             // Resources (non-food)
             'tree': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, emoji: '🌲' }
         },
-
-        // Food types available for random selection (used in storage initialization and resource generation)
-        // All food types from foodData (excluding non-food resources like 'tree')
-        foodTypes: [
-            'blackberry', 'mushroom', 'herb', 'blueberry', 'raspberry', 'elderberry', 'wild_garlic',
-            'dandelion', 'nettle', 'sorrel', 'watercress', 'wild_onion', 'chickweed', 'plantain', 'yarrow',
-            'rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk',
-            'marten', 'grouse', 'woodcock', 'beaver', 'otter'
-        ],
     },
 
     // Entity types - Centralized entity type definitions
@@ -528,10 +519,5 @@ window.GameConfig = {
         dayChangeChance: 0.25
     }
 };
-
-
-// Assert world is much larger than viewport
-console.assert(window.GameConfig.world.width >= window.innerWidth * 10, '[GameConfig] World width should be at least 10x viewport width');
-console.assert(window.GameConfig.world.height >= window.innerHeight * 10, '[GameConfig] World height should be at least 10x viewport height');
 
 console.log('[GameConfig.js] Loaded at', new Date().toISOString(), 'cache-bust:', Math.random()); 
