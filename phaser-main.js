@@ -498,7 +498,7 @@ console.log('Phaser main loaded');
                 this.position.y += dy * ratio;
 
                 // Log movement occasionally (1% chance per frame, behind spam gate)
-                if (Math.random() < 0.01 && window.summaryLoggingEnabled) {
+                if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) {
                     console.log(`[Villager] ${this.name} MOVEMENT: Moving towards (${Math.round(target.x)}, ${Math.round(target.y)}), Distance: ${Math.round(distance)}px, Speed: ${this.moveSpeed}px/s, Delta: ${deltaTime}ms, MoveDistance: ${Math.round(moveDistance)}px`);
                 }
             }
@@ -769,7 +769,7 @@ console.log('Phaser main loaded');
             const hour = t.hour;
 
             // Log evaluation context (but only occasionally to avoid spam, behind spam gate)
-            const shouldLogEvaluation = Math.random() < 0.01 && window.summaryLoggingEnabled; // 1% chance per frame
+            const shouldLogEvaluation = Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled; // 1% chance per frame
             if (shouldLogEvaluation) {
                 console.log(`[VillagerStateMachine] ${this.villager.name} evaluating state at hour ${hour.toFixed(1)}`);
                 console.log(`[VillagerStateMachine] ${this.villager.name} current needs: T${this.villager.needs.temperature.toFixed(1)} W${this.villager.needs.water.toFixed(1)} C${this.villager.needs.calories.toFixed(1)} V[${this.villager.needs.vitamins.map(v => v.toFixed(1)).join(',')}]`);
@@ -986,14 +986,14 @@ console.log('Phaser main loaded');
             if (this.stateData.sleepingBag) {
                 this.villager.moveTowards(this.stateData.sleepingBag.position, deltaTime);
                 // Log occasionally to see if they're moving (behind spam gate)
-                if (Math.random() < 0.01 && window.summaryLoggingEnabled) { // 1% chance per frame
+                if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) { // 1% chance per frame
                     console.log(`[VillagerStateMachine] ${this.villager.name} SLEEPING: Moving to sleeping bag at (${Math.round(this.stateData.sleepingBag.position.x)}, ${Math.round(this.stateData.sleepingBag.position.y)})`);
                 }
             } else {
                 // No sleeping bag, stay at camp
                 this.villager.moveTowards(this.villager.campPosition, deltaTime);
                 // Log occasionally to see if they're moving (behind spam gate)
-                if (Math.random() < 0.01 && window.summaryLoggingEnabled) { // 1% chance per frame
+                if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) { // 1% chance per frame
                     console.log(`[VillagerStateMachine] ${this.villager.name} SLEEPING: Moving to camp at (${Math.round(this.villager.campPosition.x)}, ${Math.round(this.villager.campPosition.y)})`);
                 }
             }
@@ -1125,14 +1125,11 @@ console.log('Phaser main loaded');
         // These methods eliminate code duplication between emergency and regular states
 
         executeFireRefill(isEmergency, deltaTime, entities, storageBoxes) {
-            // --- FIRE REFILL TASK PRIORITY ---
-            // When in fire refill state, prioritize completing the fire refill task
-            // Only handle storage if we're completely stuck (no target wood)
             if (!this.stateData) this.stateData = {};
+            const stateName = isEmergency ? 'EMERGENCY_FIRE_REFILL' : 'REGULAR_FIRE_REFILL';
 
             // If we have no target wood and have items to store, handle storage
             if (!this.stateData.targetWood && this.hasItemsToStore()) {
-                const stateName = isEmergency ? 'EMERGENCY_FIRE_REFILL' : 'REGULAR_FIRE_REFILL';
                 if (window.summaryLoggingEnabled) {
                     console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: No target wood, handling storage before continuing`);
                 }
@@ -1142,15 +1139,15 @@ console.log('Phaser main loaded');
                 }
             }
 
-            // Count how much wood we have collected
+            // Use helper for clarity
             const woodCount = this.villager.inventory.filter(item => item && item.type === GameConfig.entityTypes.tree).length;
-            const stateName = isEmergency ? 'EMERGENCY_FIRE_REFILL' : 'REGULAR_FIRE_REFILL';
+            const hasWood = this.hasWoodInInventory();
             if (window.summaryLoggingEnabled) {
-                console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Wood count: ${woodCount}/${this.stateData.woodTarget}`);
+                console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Wood count: ${woodCount}/${this.stateData.woodTarget}, hasWoodInInventory: ${hasWood}`);
             }
 
             // If we have enough wood, return to fire
-            if (woodCount >= this.stateData.woodTarget) {
+            if (hasWood && woodCount >= this.stateData.woodTarget) {
                 if (window.summaryLoggingEnabled) {
                     console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Have enough wood (${woodCount}), returning to fire`);
                 }
@@ -1773,56 +1770,18 @@ console.log('Phaser main loaded');
             if (!item) return false;
 
             const inventoryCount = this.villager.inventory.filter(i => i !== null).length;
-            const hasWood = this.hasWoodInInventory();
-            const woodCount = this.villager.inventory.filter(i => i && i.type === GameConfig.entityTypes.tree).length;
+            const maxItems = GameConfig.player.inventorySize;
 
             if (window.summaryLoggingEnabled) {
-                console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Checking ${item.type}${item.emoji}, Inventory count: ${inventoryCount}, Has wood: ${hasWood}, Wood count: ${woodCount}, Inventory: [${this.villager.inventory.map(i => i ? i.type : 'null').join(', ')}]`);
+                console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Checking ${item.type}${item.emoji}, Inventory count: ${inventoryCount}/${maxItems}, Inventory: [${this.villager.inventory.map(i => i ? i.type : 'null').join(', ')}]`);
             }
 
-            // Check inventory reservations - Fixed logic
-            const maxItems = GameConfig.player.inventorySize;
-            const reservedWoodSlots = GameConfig.villager.inventoryReservations.woodSlots;
-            const reservedFoodSlots = GameConfig.villager.inventoryReservations.foodSlots;
-
-            // If inventory is completely empty, can pick up anything
-            if (inventoryCount === 0) {
+            // Simple logic: can pick up anything if inventory has space
+            if (inventoryCount < maxItems) {
                 if (window.summaryLoggingEnabled) {
-                    console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Can pick up anything (inventory empty)`);
+                    console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Can pick up ${item.type} (inventory has space)`);
                 }
-                return true; // Can pick up anything
-            }
-            // If inventory is mostly empty, can pick up anything
-            else if (inventoryCount < maxItems - reservedWoodSlots - reservedFoodSlots) {
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Can pick up anything (inventory < ${maxItems - reservedWoodSlots - reservedFoodSlots})`);
-                }
-                return true; // Can pick up anything
-            }
-            // If inventory is getting full but still has room for wood and food
-            else if (inventoryCount < maxItems - reservedFoodSlots && woodCount < reservedWoodSlots) {
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Only wood allowed (inventory < ${maxItems - reservedFoodSlots} and wood count < ${reservedWoodSlots})`);
-                }
-                return item.type === GameConfig.entityTypes.tree; // Only wood
-            }
-            // If inventory is getting full, check if we're in a state that needs wood
-            else if (inventoryCount < maxItems) {
-                // Check if we're in a state that needs wood (fire refill states)
-                const needsWood = this.currentState === VILLAGER_STATES.EMERGENCY_FIRE_REFILL ||
-                    this.currentState === VILLAGER_STATES.REGULAR_FIRE_REFILL;
-
-                if (needsWood && item.type === GameConfig.entityTypes.tree) {
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: In fire refill state, allowing wood collection`);
-                    }
-                    return true; // Allow wood collection in fire refill states
-                }
-
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[Villager] ${this.villager.name} IS_ITEM_NEEDED: Only food allowed (inventory < ${maxItems})`);
-                }
-                return GameUtils.isFood(item.type); // Only food
+                return true;
             }
 
             if (window.summaryLoggingEnabled) {
@@ -2037,7 +1996,7 @@ console.log('Phaser main loaded');
             if (!this.isItemNeeded(entity)) {
                 if (window.summaryLoggingEnabled) {
                     console.log(`[Villager] ${this.villager.name} COLLECT FAILED: Don't need ${entity.type}${entity.emoji}`);
-                    console.log(`[Villager] ${this.villager.name} COLLECT DEBUG: Inventory count: ${this.villager.inventory.filter(i => i !== null).length}, Has wood: ${this.hasWoodInInventory()}, Inventory: [${this.villager.inventory.map(i => i ? i.type : 'null').join(', ')}]`);
+                    console.log(`[Villager] ${this.villager.name} COLLECT DEBUG: Inventory count: ${this.villager.inventory.filter(i => i !== null).length}, Inventory: [${this.villager.inventory.map(i => i ? i.type : 'null').join(', ')}]`);
                     this.logNearbyObjects();
                 }
                 return false; // Don't need this item
@@ -2143,7 +2102,7 @@ console.log('Phaser main loaded');
             let nearestDistance = Infinity;
             let sourceType = null; // 'storage' or 'world'
 
-            if (window.summaryLoggingEnabled) {
+            if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) { // 1% chance per frame when spam enabled
                 console.log(`[VillagerStateMachine] ${this.villager.name} FIND_RESOURCE: Looking for ${resourceType} (emergency: ${isEmergency})`);
             }
 
@@ -3106,7 +3065,7 @@ console.log('Phaser main loaded');
             const storageBoxes = this.entities.filter(e => e.type === 'storage_box');
 
             // Debug: Log entity count occasionally (behind log spam gate)
-            if (window.summaryLoggingEnabled && Math.random() < 0.01) { // 1% chance per frame when spam enabled
+            if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) { // 1% chance per frame when spam enabled
                 const resourceEntities = this.entities.filter(e => [...GameUtils.ALL_FOOD_TYPES, 'tree'].includes(e.type));
                 const uncollectedResources = resourceEntities.filter(e => !e.collected);
                 console.log(`[MainScene] Total entities: ${this.entities.length}, Resources: ${resourceEntities.length}, Uncollected: ${uncollectedResources.length}`);
@@ -4070,7 +4029,7 @@ console.log('Phaser main loaded');
             );
 
             // Debug: Log animal count occasionally
-            if (window.summaryLoggingEnabled && Math.random() < 0.01) { // 1% chance per frame when spam enabled
+            if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) { // 1% chance per frame when spam enabled
                 console.log(`[Animals] Processing ${animals.length} animals with delta ${delta}ms`);
             }
 

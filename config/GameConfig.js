@@ -136,11 +136,6 @@ window.GameConfig = {
             variance: 1          // ±1 hour daily variation
         },
 
-        inventoryReservations: {
-            woodSlots: 2,        // Reserve 2 slots for wood
-            foodSlots: 4         // Reserve 4 slots for food
-        },
-
         // Villager names for random generation
         villagerNames: [
             'Alaric', 'Brigid', 'Cormac', 'Deirdre', 'Eamon', 'Fiona', 'Gareth', 'Helena',
@@ -405,7 +400,8 @@ window.GameConfig = {
         domSnapshotInterval: 5000, // Capture DOM every 5 seconds
         domElementLimit: 1000, // Maximum DOM elements to capture
         serverPort: 3000, // Local server port for logging
-        serverUrl: 'http://localhost:3000' // Server URL for logging
+        serverUrl: 'http://localhost:3000', // Server URL for logging
+        loggingChance: 0.01 // 1% chance per frame
     },
 
     // Storage settings
