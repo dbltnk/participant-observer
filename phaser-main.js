@@ -1281,9 +1281,28 @@ console.log('Phaser main loaded');
                 return;
             }
 
+            // If we have food but can't eat (not near fire), move to fire
+            if (this.hasFoodInInventory()) {
+                const targetFire = this.findNearestBurningFire();
+                if (targetFire) {
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Has food but not near fire, moving to fire at (${Math.round(targetFire.position.x)}, ${Math.round(targetFire.position.y)})`);
+                    }
+                    this.villager.moveTowards(targetFire.position, deltaTime);
+                    return;
+                } else {
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Has food but no fire found`);
+                    }
+                }
+            }
+
             // Then try to retrieve food from storage
             if (this.retrieveFromStorage(storageBoxes)) {
-                return;
+                // After retrieving food, try to eat it immediately
+                if (this.eatFood()) {
+                    return;
+                }
             }
 
             // Finally, try to find and collect food
@@ -1699,9 +1718,18 @@ console.log('Phaser main loaded');
 
         findNearestBurningFire() {
             if (!this.villager.gameEntities) return null;
-            return GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity =>
-                entity.type === GameConfig.entityTypes.fireplace && entity.isBurning && entity.wood > 0
-            );
+
+            // Use fire range (3x interaction threshold) for fire interactions
+            const fireRange = GameConfig.player.interactionThreshold * 3;
+
+            return GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity => {
+                if (entity.type === GameConfig.entityTypes.fireplace && entity.isBurning && entity.wood > 0) {
+                    // Check if within fire range
+                    const distance = GameUtils.distance(this.villager.position, entity.position);
+                    return distance <= fireRange;
+                }
+                return false;
+            });
         }
 
 
@@ -1725,6 +1753,10 @@ console.log('Phaser main loaded');
 
         hasWoodInInventory() {
             return this.villager.inventory.some(item => item && item.type === GameConfig.entityTypes.tree);
+        }
+
+        hasFoodInInventory() {
+            return this.villager.inventory.some(item => item && GameUtils.isFood(item.type));
         }
 
         hasItemsToStore() {
