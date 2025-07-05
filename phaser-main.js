@@ -675,7 +675,7 @@ console.log('Phaser main loaded');
             this.phaserText.setPosition(this.position.x, this.position.y);
 
             // Update name text (always show just the name, no stats)
-            this.nameText.setPosition(this.position.x, this.position.y - 20);
+            this.nameText.setPosition(this.position.x, this.position.y - 40);
             this.nameText.setText(this.name);
 
             // Update state text with action and task emojis (only show if debug enabled)
@@ -766,7 +766,7 @@ console.log('Phaser main loaded');
             }).setOrigin(0.5);
 
             // Create name text
-            this.nameText = scene.add.text(this.position.x, this.position.y - 40, this.name, {
+            this.nameText = scene.add.text(this.position.x, this.position.y - 60, this.name, {
                 fontSize: '12px',
                 fontFamily: 'Arial',
                 color: '#ffffff'
