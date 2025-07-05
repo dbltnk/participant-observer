@@ -93,7 +93,7 @@ function writeLogs(logs) {
             if (log.callStack && log.callStack.length > 0) {
                 const stackInfo = formatCallStack(log.callStack);
                 if (stackInfo) {
-                    entry += `\n  ${stackInfo}`;
+                    entry += ` ${stackInfo}`;
                 }
             }
 
