@@ -247,23 +247,28 @@ console.log('Phaser main loaded');
     // === END: Logging System ===
 
     // === BEGIN: PerlinNoise and utility functions (copied from game/Utils.js) ===
+    // Perlin noise constants - these are technical constants, not configurable game values
+    const PERLIN_PERMUTATION_SIZE = 256;
+    const PERLIN_MASK = 255;
+    const PERLIN_HASH_CONSTANT = 0x45d9f3b;
+
     class PerlinNoise {
         constructor(seed) {
             this.seed = seed;
             this.permutation = this.generatePermutation();
         }
         generatePermutation() {
-            const p = new Array(GameConfig.technical.perlinPermutationSize);
-            for (let i = 0; i < GameConfig.technical.perlinPermutationSize; i++) p[i] = i;
-            for (let i = GameConfig.technical.perlinPermutationSize - 1; i > 0; i--) {
+            const p = new Array(PERLIN_PERMUTATION_SIZE);
+            for (let i = 0; i < PERLIN_PERMUTATION_SIZE; i++) p[i] = i;
+            for (let i = PERLIN_PERMUTATION_SIZE - 1; i > 0; i--) {
                 const j = this.hash(this.seed + i) % (i + 1);
                 [p[i], p[j]] = [p[j], p[i]];
             }
             return [...p, ...p];
         }
         hash(x) {
-            x = ((x >> 16) ^ x) * GameConfig.technical.perlinHashConstant;
-            x = ((x >> 16) ^ x) * GameConfig.technical.perlinHashConstant;
+            x = ((x >> 16) ^ x) * PERLIN_HASH_CONSTANT;
+            x = ((x >> 16) ^ x) * PERLIN_HASH_CONSTANT;
             x = (x >> 16) ^ x;
             return x;
         }
@@ -275,8 +280,8 @@ console.log('Phaser main loaded');
             return ((h & 8) === 0 ? grad1 : -grad1) * x + ((h & 4) === 0 ? grad1 : -grad1) * y;
         }
         noise2D(x, y) {
-            const X = Math.floor(x) & GameConfig.technical.perlinMask;
-            const Y = Math.floor(y) & GameConfig.technical.perlinMask;
+            const X = Math.floor(x) & PERLIN_MASK;
+            const Y = Math.floor(y) & PERLIN_MASK;
             x -= Math.floor(x);
             y -= Math.floor(y);
             const u = this.fade(x);

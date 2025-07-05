@@ -437,15 +437,6 @@ window.GameConfig = {
 
     // Technical constants
     technical: {
-        // Perlin noise constants
-        perlinPermutationSize: 256,
-        perlinMask: 255,
-        perlinHashConstant: 0x45d9f3b,
-
-        // Math constants
-        pi: Math.PI,
-        sqrt2: Math.sqrt(2),
-
         // Distance constants
         distances: {
             wellDetection: 200, // Distance to detect nearby wells
