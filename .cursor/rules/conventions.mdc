@@ -70,53 +70,24 @@ sustain/
 - **Files**: `kebab-case` (e.g., `phaser-main.js`)
 
 ### **Comments & Documentation**
-- **ALWAYS** comment complex logic
+- **NEVER** comment functions and variable names that are obvious (like `this.findUsagePatterns(); // Find usage patterns`)
+- **ALWAYS** comment complex logic and explain the underlying assumptions that are hard to see from just reading the code
 - **ALWAYS** document assumptions with `assert()` statements
 - **ALWAYS** explain WHY, not just WHAT
 - Use JSDoc for public APIs
 
-## 🎮 Game Development Rules
-
-### **Entity System**
-- All entities must have consistent structure
-- Entity types MUST be defined in `GameConfig.entityTypes`
-- NO hardcoded entity type strings in game logic
-- Use centralized emoji assignments from `GameConfig.emojis`
-
-### **Villager AI**
-- All behavior parameters in `GameConfig.villager`
-- State transitions must be explicit and documented
-- NO hardcoded timing or threshold values
-- Use clear state constants from `GameConfig.villagerStates`
-
-### **Resource Management**
-- All resource limits in `GameConfig.resources.maxCounts`
-- Propagation settings in `GameConfig.resources`
-- NO hardcoded resource counts or spawn rates
-
-### **UI Development**
-- All UI dimensions in `GameConfig.ui`
-- NO hardcoded colors, sizes, or positions
-- Use consistent z-index values from config
-- Responsive design NOT required (desktop-optimized)
-
 ## 🔧 Technical Rules
 
 ### **Performance**
-- Optimize hot paths (game loop, rendering)
+- **ONLY** optimize performance when required by the user (but use sensible defaults) 
+- **NEVER** prematurely over-optimize something that might not matter or be cut anyways
+- When asked: Optimize hot paths (game loop, rendering)
 - Use efficient data structures
 - Minimize DOM queries and updates
-- Profile before optimizing
-
-### **Memory Management**
-- Clean up event listeners
-- Destroy Phaser objects properly
-- Avoid memory leaks in long-running sessions
 
 ### **Debugging & Logging**
 - Use structured logging with clear prefixes
 - Include relevant context in log messages
-- NO console.log spam in production
 - Use the built-in logging system for debugging
 
 ## 🚫 ABSOLUTE PROHIBITIONS
