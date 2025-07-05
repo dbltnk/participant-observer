@@ -21,72 +21,73 @@ console.log('Phaser main loaded');
             return Math.sqrt(dx * dx + dy * dy);
         },
 
-        // All food types extracted from GameConfig for easy access
-        ALL_FOOD_TYPES: Object.keys(GameConfig.resources.foodData).filter(type => GameConfig.resources.foodData[type].calories > 0),
-
-        // Check if an item type is food
-        isFood(type) {
-            return this.ALL_FOOD_TYPES.includes(type);
+        // Check if a position is within interaction distance of another
+        isWithinInteractionDistance(pos1, pos2, threshold = null) {
+            const dist = this.distance(pos1, pos2);
+            const interactionThreshold = threshold || GameConfig.player.interactionThreshold;
+            return dist <= interactionThreshold;
         },
 
-        // Get nutrition data for a food type
+        // Check if it's night time (corrected logic)
+        isNightTime(hour) {
+            // Night is from nightStartHour (20:00) to gameStartHour (12:00) the next day
+            // This means: 20:00-23:59 (hour 20-23) and 00:00-11:59 (hour 0-11)
+            return hour >= GameConfig.time.nightStartHour || hour < GameConfig.time.gameStartHour;
+        },
+
+        // Food type checking
+        isFood(type) {
+            return GameConfig.resources.foodData[type] !== undefined;
+        },
+
+        // Get nutrition values for a food type
         getNutrition(foodType) {
-            if (GameConfig.resources.foodData[foodType]) {
-                return GameConfig.resources.foodData[foodType];
-            }
-            throw new Error(`[getNutrition] Unknown food type: ${foodType}. Please check GameConfig.resources.foodData.`);
+            const foodData = GameConfig.resources.foodData[foodType];
+            assert(foodData, `Food type ${foodType} not found in GameConfig.resources.foodData`);
+            return foodData;
         },
 
         // Apply nutrition to a target (player or villager)
         applyNutrition(target, foodType) {
             const nutrition = this.getNutrition(foodType);
-            if (nutrition) {
-                target.needs.calories = Math.min(GameConfig.needs.fullValue, target.needs.calories + nutrition.calories);
-                target.needs.water = Math.min(GameConfig.needs.fullValue, target.needs.water + nutrition.water);
 
-                for (let i = 0; i < nutrition.vitamins.length; i++) {
-                    target.needs.vitamins[i] = Math.min(GameConfig.needs.fullValue, target.needs.vitamins[i] + nutrition.vitamins[i]);
-                }
+            // Apply calories
+            target.needs.calories = Math.min(GameConfig.needs.fullValue, target.needs.calories + nutrition.calories);
+
+            // Apply water
+            target.needs.water = Math.min(GameConfig.needs.fullValue, target.needs.water + nutrition.water);
+
+            // Apply vitamins
+            for (let i = 0; i < nutrition.vitamins.length; i++) {
+                target.needs.vitamins[i] = Math.min(GameConfig.needs.fullValue, target.needs.vitamins[i] + nutrition.vitamins[i]);
             }
         },
 
-        // Generic function to find nearest entity matching criteria
+        // Find nearest entity with optional filter function
         findNearestEntity(entities, fromPosition, filterFn) {
-            assert(entities && Array.isArray(entities), 'findNearestEntity: entities must be an array');
-            assert(fromPosition && typeof fromPosition.x === 'number' && typeof fromPosition.y === 'number', 'findNearestEntity: fromPosition must have x,y coordinates');
-            assert(typeof filterFn === 'function', 'findNearestEntity: filterFn must be a function');
-
             let nearest = null;
-            let nearestDistance = Infinity;
+            let nearestDist = Infinity;
 
             for (const entity of entities) {
-                if (filterFn(entity)) {
-                    const dist = GameUtils.distance(fromPosition, entity.position);
-                    if (dist < nearestDistance) {
-                        nearest = entity;
-                        nearestDistance = dist;
-                    }
+                if (filterFn && !filterFn(entity)) continue;
+
+                const dist = this.distance(fromPosition, entity.position);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearest = entity;
                 }
             }
 
             return nearest;
         },
 
-        // Find first empty slot in an array (for inventory/storage)
+        // Find empty slot in inventory
         findEmptySlot(items) {
-            assert(items && Array.isArray(items), 'findEmptySlot: items must be an array');
-            return items.findIndex(slot => slot === null);
+            return items.findIndex(item => item === null);
         },
 
-        // Check if two positions are within interaction distance
-        isWithinInteractionDistance(pos1, pos2, threshold = null) {
-            assert(pos1 && typeof pos1.x === 'number' && typeof pos1.y === 'number', 'isWithinInteractionDistance: pos1 must have x,y coordinates');
-            assert(pos2 && typeof pos2.x === 'number' && typeof pos2.y === 'number', 'isWithinInteractionDistance: pos2 must have x,y coordinates');
-
-            const distance = GameUtils.distance(pos1, pos2);
-            const interactionThreshold = threshold || GameConfig.player.interactionThreshold;
-            return distance <= interactionThreshold;
-        }
+        // All food types extracted from GameConfig for easy access
+        ALL_FOOD_TYPES: Object.keys(GameConfig.resources.foodData).filter(type => GameConfig.resources.foodData[type].calories > 0)
     };
 
     function assert(condition, message) {
@@ -387,7 +388,7 @@ console.log('Phaser main loaded');
             const inGameMinutes = deltaTime * inGameMinutesPerMs;
 
             const t = this.getCurrentTime(gameTime);
-            const isNight = (t.hour < GameConfig.time.gameStartHour || t.hour >= GameConfig.time.nightStartHour);
+            const isNight = GameUtils.isNightTime(t.hour);
 
             // Store old values for comparison
             const oldNeeds = {
@@ -3782,7 +3783,7 @@ console.log('Phaser main loaded');
 
         applyFireTemperatureEffects(delta) {
             const t = getCurrentTime(this.playerState);
-            const isNight = (t.hour < GameConfig.time.gameStartHour || t.hour >= GameConfig.time.nightStartHour);
+            const isNight = GameUtils.isNightTime(t.hour);
 
             // Only apply fire effects at night when temperature would normally decrease
             if (!isNight) return;
@@ -4263,7 +4264,7 @@ console.log('Phaser main loaded');
         const inGameMinutesPerMs = (24 * 60) / (realSecondsPerGameDay * 1000);
         const inGameMinutes = delta * inGameMinutesPerMs;
         const t = getCurrentTime(playerState);
-        const isNight = (t.hour < GameConfig.time.gameStartHour || t.hour >= GameConfig.time.nightStartHour);
+        const isNight = GameUtils.isNightTime(t.hour);
 
         // Calculate decay rates from config (per in-game minute)
         if (!playerState.dailyDecay) {
