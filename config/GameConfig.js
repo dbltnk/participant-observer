@@ -161,8 +161,7 @@ window.GameConfig = {
 
     // Animal behavior settings
     animals: {
-        fleeSpeedMultiplier: 0.8, // Animals flee at 80% of player speed
-        wanderSpeedRange: { min: 0.3, max: 0.5 }, // 30-50% of player speed
+        moveSpeed: 80, // Fixed animal movement speed in pixels per second
         directionChangeInterval: { min: 2000, max: 5000 }, // 2-5 seconds between direction changes
     },
 

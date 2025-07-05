@@ -4072,14 +4072,13 @@ console.log('Phaser main loaded');
 
         fleeFromTarget(animal, targetPosition, delta) {
             // Calculate direction away from target
-            // This means animals run faster if multiple people chase them, happy accident and I love it!
             const dx = animal.position.x - targetPosition.x;
             const dy = animal.position.y - targetPosition.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
             if (dist > 0) {
-                // Move away at 80% speed using actual delta time
-                const fleeSpeed = GameConfig.player.moveSpeed * GameConfig.animals.fleeSpeedMultiplier * (delta / 1000); // 80% speed, actual delta
+                // Move away at fixed animal speed using actual delta time
+                const fleeSpeed = GameConfig.animals.moveSpeed * (delta / 1000); // Fixed animal speed, actual delta
                 const moveX = (dx / dist) * fleeSpeed;
                 const moveY = (dy / dist) * fleeSpeed;
 
@@ -4103,7 +4102,7 @@ console.log('Phaser main loaded');
             if (!animal.wanderState) {
                 animal.wanderState = {
                     targetPosition: null,
-                    wanderSpeed: GameConfig.player.moveSpeed * (GameConfig.animals.wanderSpeedRange.min + Math.random() * (GameConfig.animals.wanderSpeedRange.max - GameConfig.animals.wanderSpeedRange.min)), // 30-50% speed
+                    wanderSpeed: GameConfig.animals.moveSpeed, // Fixed animal speed
                     changeDirectionTimer: 0,
                     changeDirectionInterval: GameConfig.animals.directionChangeInterval.min + Math.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min) // 2-5 seconds
                 };
@@ -4128,9 +4127,8 @@ console.log('Phaser main loaded');
                 wander.targetPosition.x = Math.max(0, Math.min(GameConfig.world.width, wander.targetPosition.x));
                 wander.targetPosition.y = Math.max(0, Math.min(GameConfig.world.height, wander.targetPosition.y));
 
-                // Reset timer and pick new random speed
+                // Reset timer (speed stays constant)
                 wander.changeDirectionTimer = 0;
-                wander.wanderSpeed = GameConfig.player.moveSpeed * (GameConfig.animals.wanderSpeedRange.min + Math.random() * (GameConfig.animals.wanderSpeedRange.max - GameConfig.animals.wanderSpeedRange.min)); // 30-50% speed
                 wander.changeDirectionInterval = GameConfig.animals.directionChangeInterval.min + Math.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min); // 2-5 seconds
             }
 
