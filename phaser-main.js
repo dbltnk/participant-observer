@@ -3361,7 +3361,8 @@ console.log('Phaser main loaded');
                     return `Sleeping Bag ${entity.isOccupied ? '(Occupied)' : '(Free)'}`;
                 case 'storage_box':
                     const capacity = entity.isPersonal ? GameConfig.storage.personalCapacity : GameConfig.storage.communalCapacity;
-                    return `${entity.isPersonal ? 'Personal' : 'Communal'} Storage (${entity.items.length}/${capacity})`;
+                    const itemCount = entity.items.filter(item => item !== null).length;
+                    return `${entity.isPersonal ? 'Personal' : 'Communal'} Storage (${itemCount}/${capacity})`;
                 case 'blackberry':
                 case 'mushroom':
                 case 'herb':
