@@ -761,12 +761,12 @@ console.log('Phaser main loaded');
                 GameConfig.characters.states.standing;
 
             this.phaserText = scene.add.text(this.position.x, this.position.y, defaultEmoji, {
-                fontSize: '22px',
+                fontSize: GameConfig.player.fontSize,
                 fontFamily: 'Arial'
             }).setOrigin(0.5);
 
             // Create name text
-            this.nameText = scene.add.text(this.position.x, this.position.y - 20, this.name, {
+            this.nameText = scene.add.text(this.position.x, this.position.y - 40, this.name, {
                 fontSize: '12px',
                 fontFamily: 'Arial',
                 color: '#ffffff'
@@ -2351,7 +2351,7 @@ console.log('Phaser main loaded');
                 const initialWood = this.seededRandom.randomRange(GameConfig.fires.initialWoodRange.min, GameConfig.fires.initialWoodRange.max);
                 this.entities.push({ position: { x: x + cfg.campSpacing.x, y: y }, type: GameConfig.entityTypes.fireplace, emoji: '🔥', isBurning: true, wood: initialWood, maxWood: GameConfig.fires.maxWood, villagerId: i });
                 // Sleeping bag
-                this.entities.push({ position: { x: x - cfg.campSpacing.x, y: y }, type: GameConfig.entityTypes.sleeping_bag, emoji: '🛏️', isOccupied: false, villagerId: i });
+                this.entities.push({ position: { x: x - cfg.campSpacing.x, y: y - 30 }, type: GameConfig.entityTypes.sleeping_bag, emoji: '🛏️', isOccupied: false, villagerId: i });
                 // Personal storage
                 this.entities.push({ position: { x: x, y: y + cfg.campSpacing.y }, type: GameConfig.entityTypes.storage_box, emoji: '📦', capacity: GameConfig.storage.personalCapacity, items: new Array(GameConfig.storage.personalCapacity).fill(null), isPersonal: true, villagerId: i });
             }
@@ -2626,7 +2626,31 @@ console.log('Phaser main loaded');
             // --- Render all entities as Phaser text objects ---
             this.worldEntities = [];
             for (const entity of this.entities) {
-                let fontSize = entity.type === 'camp' ? 28 : entity.type === 'fireplace' || entity.type === 'sleeping_bag' ? 24 : entity.type === 'storage_box' ? 24 : ['well', ...GameUtils.ALL_FOOD_TYPES, 'tree'].includes(entity.type) ? 22 : 22;
+                // Determine base font size based on entity type
+                let fontSize;
+                if (entity.type === 'camp') {
+                    fontSize = 28;
+                } else if (entity.type === 'fireplace' || entity.type === 'sleeping_bag') {
+                    fontSize = 28;
+                } else if (entity.type === 'storage_box') {
+                    fontSize = 24;
+                } else if (entity.type === 'tree') {
+                    fontSize = 44; // 200% larger (22 * 2 = 44)
+                } else if (entity.type === 'well') {
+                    fontSize = 22; // Wells keep same size
+                } else if (GameUtils.ALL_FOOD_TYPES.includes(entity.type)) {
+                    // Check if it's an animal (has calories > 0 and water = 0)
+                    const foodData = GameConfig.resources.foodData[entity.type];
+                    if (foodData && foodData.calories > 0 && foodData.water === 0) {
+                        // It's an animal - make 50% larger
+                        fontSize = 28; // 22 * 1.5 = 33
+                    } else {
+                        // It's a plant - keep same size
+                        fontSize = 22;
+                    }
+                } else {
+                    fontSize = 22; // Default size
+                }
 
                 // Make communal storage 2x larger
                 if (entity.type === 'storage_box' && !entity.isPersonal) {
@@ -2804,6 +2828,9 @@ console.log('Phaser main loaded');
             const playerEmoji = this.characterCustomization.getStateEmoji('standing');
             this.player = this.add.text(this.playerState.position.x, this.playerState.position.y, playerEmoji, { fontSize: GameConfig.player.fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
             assert(this.player, 'Failed to create player emoji.');
+
+            // Create player name text
+            this.playerName = this.add.text(this.playerState.position.x, this.playerState.position.y - 40, 'You', { fontSize: '12px', fontFamily: 'Arial', color: '#ffffff' }).setOrigin(0.5);
             // Camera - follow player with smooth interpolation, no bounds restriction
             this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
             // Remove camera bounds to allow free exploration of the large world
@@ -3161,6 +3188,9 @@ console.log('Phaser main loaded');
                 this.player.setScale(1, 1); // Reset scale for non-running states
             }
             this.player.setPosition(this.playerState.position.x, this.playerState.position.y);
+
+            // Update player name position
+            this.playerName.setPosition(this.playerState.position.x, this.playerState.position.y - 40);
 
             // --- Visual Temperature State Update ---
             const t = getCurrentTime(this.playerState);
@@ -4273,9 +4303,20 @@ console.log('Phaser main loaded');
                 animal.position.x = Math.max(0, Math.min(GameConfig.world.width, animal.position.x));
                 animal.position.y = Math.max(0, Math.min(GameConfig.world.height, animal.position.y));
 
-                // Update visual position
+                // Update visual position and direction
                 if (animal._phaserText && animal._phaserText.setPosition) {
                     animal._phaserText.setPosition(animal.position.x, animal.position.y);
+
+                    // Flip animal based on movement direction (only horizontal movement matters)
+                    if (Math.abs(moveX) > 0.1) {
+                        if (moveX > 0) {
+                            // Moving right - flip horizontally
+                            animal._phaserText.setScale(-1, 1);
+                        } else {
+                            // Moving left - no flip (natural direction)
+                            animal._phaserText.setScale(1, 1);
+                        }
+                    }
                 }
             }
         }
@@ -4335,9 +4376,20 @@ console.log('Phaser main loaded');
                     animal.position.x = Math.max(0, Math.min(GameConfig.world.width, animal.position.x));
                     animal.position.y = Math.max(0, Math.min(GameConfig.world.height, animal.position.y));
 
-                    // Update visual position
+                    // Update visual position and direction
                     if (animal._phaserText && animal._phaserText.setPosition) {
                         animal._phaserText.setPosition(animal.position.x, animal.position.y);
+
+                        // Flip animal based on movement direction (only horizontal movement matters)
+                        if (Math.abs(moveX) > 0.1) {
+                            if (moveX > 0) {
+                                // Moving right - flip horizontally
+                                animal._phaserText.setScale(-1, 1);
+                            } else {
+                                // Moving left - no flip (natural direction)
+                                animal._phaserText.setScale(1, 1);
+                            }
+                        }
                     }
                 }
             }

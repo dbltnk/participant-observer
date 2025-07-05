@@ -97,7 +97,7 @@ window.GameConfig = {
         fireHeatingRange: 144, // Distance threshold for fire heating effects (pixels) - 3x interaction threshold
 
         // Rendering
-        fontSize: 32, // Player emoji font size
+        fontSize: 48, // Player emoji font size
 
         // Random starting stats ranges
         startingStats: {
