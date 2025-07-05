@@ -274,7 +274,7 @@ process.stdin.on('data', (key) => {
     // Ctrl+D (ASCII 4)
     if (key === '\u0004') {
         console.log('\n🗑️ Deleting log files...');
-        deleteLogFiles();
+        clearFiles()
     }
 });
 
