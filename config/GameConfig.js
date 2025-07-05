@@ -19,7 +19,8 @@ window.GameConfig = {
         maxResourcesPerType: 500, // Global cap on resources per type (prevents overpopulation) 
 
         // Village and camp generation
-        villageCenterOffset: { x: 50, y: 0 }, // Offset for village well from center
+        villageCenterOffset: { x: 50, y: 25 }, // Offset for village storage from center
+        villageWellOffset: { x: 25, y: 50 }, // Offset for village well from center
         campRadius: 400, // Distance from village center to camps (doubled from 150)
         campSpacing: { x: 40, y: 60 }, // Spacing between camp facilities (doubled from 20,30)
         playerStartOffset: { x: 40, y: 0 }, // Player start position relative to their camp,
@@ -125,8 +126,8 @@ window.GameConfig = {
         },
 
         fireThresholds: {
-            emergency: 3,        // <3 logs triggers emergency refill
-            regular: 10          // <10 logs triggers regular refill
+            emergency: 2,        // <3 logs triggers emergency refill
+            regular: 8          // <10 logs triggers regular refill
         },
 
         sleepSchedule: {

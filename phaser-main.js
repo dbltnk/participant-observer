@@ -534,15 +534,9 @@ console.log('Phaser main loaded');
             // Update villager emoji
             this.phaserText.setPosition(this.position.x, this.position.y);
 
-            // Update name text with stats when debug is enabled
+            // Update name text (always show just the name, no stats)
             this.nameText.setPosition(this.position.x, this.position.y - 20);
-            if (window.villagerDebugEnabled) {
-                // Show stats above name: T W C V[A,B,C,D,E]
-                const stats = `T${this.needs.temperature.toFixed(0)} W${this.needs.water.toFixed(0)} C${this.needs.calories.toFixed(0)} V[${this.needs.vitamins.map(v => v.toFixed(0)).join(',')}]`;
-                this.nameText.setText(`${this.name}\n${stats}`);
-            } else {
-                this.nameText.setText(this.name);
-            }
+            this.nameText.setText(this.name);
 
             // Update state text with action and task emojis (only show if debug enabled)
             this.stateText.setPosition(this.position.x, this.position.y + 30);
@@ -554,6 +548,31 @@ console.log('Phaser main loaded');
                 this.stateText.setVisible(false);
             }
 
+            // Update stats debug text when debug is enabled
+            if (window.villagerDebugEnabled) {
+                if (!this.statsText) {
+                    // Create stats text if it doesn't exist
+                    this.statsText = this.phaserText.scene.add.text(this.position.x, this.position.y - 40, '', {
+                        fontSize: '10px',
+                        fontFamily: 'monospace',
+                        color: '#ffff00',
+                        backgroundColor: '#000',
+                        padding: { left: 2, right: 2, top: 1, bottom: 1 }
+                    }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug);
+                }
+
+                // Show stats: T W C V[A,B,C,D,E]
+                const stats = `T${this.needs.temperature.toFixed(2)} W${this.needs.water.toFixed(2)} C${this.needs.calories.toFixed(2)} V[${this.needs.vitamins.map(v => v.toFixed(2)).join(',')}]`;
+                this.statsText.setText(stats);
+                this.statsText.setPosition(this.position.x, this.position.y - 40);
+                this.statsText.setVisible(true);
+            } else {
+                // Hide stats text when debug is disabled
+                if (this.statsText) {
+                    this.statsText.setVisible(false);
+                }
+            }
+
             // Update inventory text when debug is enabled
             if (window.villagerDebugEnabled) {
                 if (!this.inventoryText) {
@@ -561,8 +580,10 @@ console.log('Phaser main loaded');
                     this.inventoryText = this.phaserText.scene.add.text(this.position.x, this.position.y + 50, '', {
                         fontSize: '10px',
                         fontFamily: 'monospace',
-                        color: '#00ff00'
-                    }).setOrigin(0.5);
+                        color: '#00ff00',
+                        backgroundColor: '#000',
+                        padding: { left: 2, right: 2, top: 1, bottom: 1 }
+                    }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug);
                 }
 
                 // Show inventory slots as emojis (empty slots show nothing)
@@ -611,15 +632,28 @@ console.log('Phaser main loaded');
             this.stateText = scene.add.text(this.position.x, this.position.y + 30, '', {
                 fontSize: '10px',
                 fontFamily: 'Arial',
-                color: '#ffff00'
-            }).setOrigin(0.5).setVisible(false);
+                color: '#ffff00',
+                backgroundColor: '#000',
+                padding: { left: 2, right: 2, top: 1, bottom: 1 }
+            }).setOrigin(0.5).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
+
+            // Create stats text (hidden by default, will be shown when debug is enabled)
+            this.statsText = scene.add.text(this.position.x, this.position.y - 40, '', {
+                fontSize: '10px',
+                fontFamily: 'monospace',
+                color: '#ffff00',
+                backgroundColor: '#000',
+                padding: { left: 2, right: 2, top: 1, bottom: 1 }
+            }).setOrigin(0.5).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
 
             // Create inventory text (hidden by default, will be shown when debug is enabled)
             this.inventoryText = scene.add.text(this.position.x, this.position.y + 50, '', {
                 fontSize: '10px',
                 fontFamily: 'monospace',
-                color: '#00ff00'
-            }).setOrigin(0.5).setVisible(false);
+                color: '#00ff00',
+                backgroundColor: '#000',
+                padding: { left: 2, right: 2, top: 1, bottom: 1 }
+            }).setOrigin(0.5).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
 
             // Mark visuals as created
             this.visualsCreated = true;
@@ -629,6 +663,7 @@ console.log('Phaser main loaded');
                 entity: this.phaserText,
                 nameText: this.nameText,
                 stateText: this.stateText,
+                statsText: this.statsText,
                 inventoryText: this.inventoryText
             };
         }
@@ -645,6 +680,10 @@ console.log('Phaser main loaded');
             if (this.stateText) {
                 this.stateText.destroy();
                 this.stateText = null;
+            }
+            if (this.statsText) {
+                this.statsText.destroy();
+                this.statsText = null;
             }
             if (this.inventoryText) {
                 this.inventoryText.destroy();
@@ -2179,7 +2218,7 @@ console.log('Phaser main loaded');
             const villageCenter = { position: { x: centerX, y: centerY }, type: 'village_center' };
             // --- Village well ---
             const villageWell = {
-                position: { x: centerX + cfg.villageCenterOffset.x, y: centerY + cfg.villageCenterOffset.y },
+                position: { x: centerX + cfg.villageWellOffset.x, y: centerY + cfg.villageWellOffset.y },
                 type: GameConfig.entityTypes.well, emoji: '💧', waterLevel: GameConfig.wells.initialWaterLevel
             };
             this.entities.push(villageWell);
@@ -2529,7 +2568,6 @@ console.log('Phaser main loaded');
                     textObj.setAlpha(1 - scaleFactor);
                     entity._phaserText = textObj;
                     this.worldEntities.push(textObj);
-                    continue;
                 } else {
                     textObj = this.add.text(entity.position.x, entity.position.y, entity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
                 }
@@ -2570,8 +2608,8 @@ console.log('Phaser main loaded');
                         const dist = GameUtils.distance(this.playerState.position, entity.position);
                         assert(dist <= GameConfig.player.interactionThreshold, 'Tried to drink from well out of range');
 
-                        // Check if well has water
-                        if (entity.waterLevel <= 0) {
+                        // Check if well has sufficient water (minimum 1.0 unit)
+                        if (entity.waterLevel < 1.0) {
                             this.showTempMessage('Well is empty!', GameConfig.technical.messageDurations.short);
                             return;
                         }
@@ -2599,8 +2637,8 @@ console.log('Phaser main loaded');
                         // Check if player has wood to add
                         const woodSlot = this.playerState.inventory.findIndex(item => item && item.type === GameConfig.entityTypes.tree);
                         if (woodSlot !== -1 && entity.wood < entity.maxWood) {
-                            // Add wood to fire
-                            entity.wood++;
+                            // Add wood to fire (enforce max limit)
+                            entity.wood = Math.min(entity.maxWood, entity.wood + 1);
                             this.playerState.inventory[woodSlot] = null;
                             entity.isBurning = true;
 
@@ -2729,7 +2767,8 @@ console.log('Phaser main loaded');
                         if (item.type === GameConfig.entityTypes.tree) {
                             const nearbyFire = this.findNearbyFire();
                             if (nearbyFire && nearbyFire.wood < nearbyFire.maxWood) {
-                                nearbyFire.wood++;
+                                // Add wood to fire (enforce max limit)
+                                nearbyFire.wood = Math.min(nearbyFire.maxWood, nearbyFire.wood + 1);
                                 nearbyFire.isBurning = true;
                                 this.playerState.inventory[i] = null;
 
@@ -2848,7 +2887,7 @@ console.log('Phaser main loaded');
             this.currentSeedValue = getCurrentSeed();
 
             // FPS counter (above debug button) - fixed to camera viewport
-            this.ui.fpsCounter = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.fpsCounterOffset, 'FPS: 60', { fontSize: GameConfig.ui.fontSizes.fps, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.fpsBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0).setVisible(false);
+            this.ui.fpsCounter = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.fpsCounterOffset, 'FPS: 60', { fontSize: GameConfig.ui.fontSizes.fps, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.fpsBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
             this.uiContainer.add(this.ui.fpsCounter);
 
 
@@ -3138,7 +3177,7 @@ console.log('Phaser main loaded');
         }
         showTempMessage(msg, duration = GameConfig.ui.tempMessageDuration) {
             if (this._tempMsg) this._tempMsg.destroy();
-            this._tempMsg = this.add.text(this.player.x, this.player.y - GameConfig.ui.dimensions.tempMessageOffset, msg, { fontSize: GameConfig.ui.fontSizes.overlayMessage, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.buttonPadding.medium }).setOrigin(0.5);
+            this._tempMsg = this.add.text(this.player.x, this.player.y - GameConfig.ui.dimensions.tempMessageOffset, msg, { fontSize: GameConfig.ui.fontSizes.overlayMessage, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.buttonPadding.medium }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug);
             this.time.delayedCall(duration, () => { if (this._tempMsg) { this._tempMsg.destroy(); this._tempMsg = null; } });
         }
         showGameOverOverlay(reason) {
@@ -3285,13 +3324,13 @@ console.log('Phaser main loaded');
         }
 
         addDebugElements(entity) {
-            // Add debug text above entity
+            // Add debug text above entity with proper z-index
             const debugText = this.add.text(
                 entity.position.x,
                 entity.position.y - 40,
                 this.getDebugText(entity),
                 { fontSize: '10px', fontFamily: 'monospace', color: '#00ff00', backgroundColor: '#000', padding: { left: 2, right: 2, top: 1, bottom: 1 } }
-            ).setOrigin(0.5).setVisible(false);
+            ).setOrigin(0.5).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
 
             // Add interaction distance circle
             const interactionCircle = this.add.circle(
@@ -3300,7 +3339,7 @@ console.log('Phaser main loaded');
                 GameConfig.player.interactionThreshold,
                 0x00ff00,
                 0.1 // Very transparent
-            ).setOrigin(0.5).setVisible(false);
+            ).setOrigin(0.5).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
 
             // Add fire warmth range circle for fireplaces
             let warmthCircle = null;
@@ -3311,7 +3350,7 @@ console.log('Phaser main loaded');
                     GameConfig.player.interactionThreshold * 3, // Triple the range
                     0xff6600, // Orange color for warmth
                     0.05 // Very transparent
-                ).setOrigin(0.5).setVisible(false);
+                ).setOrigin(0.5).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
             }
 
             // Store references for toggling
@@ -3323,9 +3362,9 @@ console.log('Phaser main loaded');
         getDebugText(entity) {
             switch (entity.type) {
                 case 'well':
-                    return `Well (${entity.waterLevel} water)`;
+                    return `Well (${entity.waterLevel.toFixed(2)} water)`;
                 case 'fireplace':
-                    return `Fire (${entity.wood}/${entity.maxWood} wood) ${entity.isBurning ? '🔥' : '❄️'}`;
+                    return `Fire (${Math.round(entity.wood)}/${entity.maxWood} wood) ${entity.isBurning ? '🔥' : '❄️'}`;
                 case 'sleeping_bag':
                     return `Sleeping Bag ${entity.isOccupied ? '(Occupied)' : '(Free)'}`;
                 case 'storage_box':
@@ -3334,8 +3373,33 @@ console.log('Phaser main loaded');
                 case 'blackberry':
                 case 'mushroom':
                 case 'herb':
+                case 'blueberry':
+                case 'raspberry':
+                case 'elderberry':
+                case 'wild_garlic':
+                case 'dandelion':
+                case 'nettle':
+                case 'sorrel':
+                case 'watercress':
+                case 'wild_onion':
+                case 'chickweed':
+                case 'plantain':
+                case 'yarrow':
                 case 'rabbit':
                 case 'deer':
+                case 'squirrel':
+                case 'pheasant':
+                case 'duck':
+                case 'goose':
+                case 'hare':
+                case 'fox':
+                case 'boar':
+                case 'elk':
+                case 'marten':
+                case 'grouse':
+                case 'woodcock':
+                case 'beaver':
+                case 'otter':
                 case 'tree':
                     const status = entity.collected ? '(Collected)' : entity.isChild ? '(Child)' : '(Adult)';
                     return `${entity.type} ${status}`;
@@ -3495,7 +3559,7 @@ console.log('Phaser main loaded');
                     color: color,
                     backgroundColor: '#000',
                     padding: { left: 5, right: 5, top: 2, bottom: 2 }
-                }).setOrigin(0, 0).setScrollFactor(0).setDepth(1000);
+                }).setOrigin(0, 0).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.debug);
 
                 this.uiContainer.add(textObj);
                 this.resourceCountTexts.push(textObj);
@@ -3526,7 +3590,7 @@ console.log('Phaser main loaded');
             this.sleepTimeAcceleration = 25; // 25x faster
 
             // Show ZZZ above player
-            this.sleepZZZ = this.add.text(this.player.x, this.player.y - 60, '💤', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setDepth(1000);
+            this.sleepZZZ = this.add.text(this.player.x, this.player.y - 60, '💤', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug);
 
             this.showTempMessage('Sleeping... (time accelerated)', GameConfig.ui.tempMessageDuration);
         }
