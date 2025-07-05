@@ -40,22 +40,21 @@ window.GameConfig = {
 
     // Time settings - Controls how fast game time passes relative to real time
     time: {
+        // Time conversion settings
         realSecondsPerGameDay: 600, // 1 game day = 10 minutes real time (600 seconds)
         // Formula: gameTime = realTime * (86400 / realSecondsPerGameDay)
         // Example: 1 real second = 144 game seconds (86400/600)
 
-        dayStartHour: 8, // Hour when villagers wake up and start foraging
-        nightStartHour: 18, // Hour when villagers return to camp
-        sleepAcceleration: 10, // Seconds to reach 8:00 when sleeping (time acceleration multiplier)
-
-        // Time constants
+        // Time constants (standard time units)
         secondsPerDay: 86400, // Seconds in a game day (24 * 60 * 60)
         secondsPerHour: 3600, // Seconds in a game hour (60 * 60)
         secondsPerMinute: 60, // Seconds in a game minute
+        minutesPerHour: 60, // Minutes in an hour
+        millisecondsPerSecond: 1000, // Milliseconds in a second
 
         // Game start time
         gameStartHour: 12, // Hour when the game starts (12:00)
-        gameStartTime: 12 * 3600 // Seconds from midnight when game starts
+        nightStartHour: 20, // Hour when night starts (20:00)
     },
 
     // Needs system constants
@@ -66,12 +65,6 @@ window.GameConfig = {
 
         // Decay calculation constants
         decayCalculationFactor: 100, // Used in: 100 / (hoursToEmpty * 60)
-        minutesPerHour: 60, // Minutes in an hour
-        hoursPerDay: 24, // Hours in a day
-
-        // UI thresholds
-        criticalThreshold: 20, // Value below which needs are critical (red)
-        warningThreshold: 50, // Value below which needs show warning (orange)
 
         // Vitamin count
         vitaminCount: 5 // Number of vitamins (A, B, C, D, E)
@@ -95,34 +88,14 @@ window.GameConfig = {
         // Formula: newPosition = oldPosition + (moveSpeed * deltaTime / 1000)
         inventorySize: 6, // Number of inventory slots (Minecraft-style hotbar)
 
-        needsDecayRate: {
-            temperature: 5, // Temperature loss per minute of real time
-            // Formula: temperature -= decayRate * (deltaTime / 60000)
-            // Higher values = faster temperature loss
-
-            water: 10, // Water loss per minute of real time
-            // Formula: water -= decayRate * (deltaTime / 60000)
-            // Higher values = faster dehydration
-
-            calories: 15, // Calorie loss per minute of real time
-            // Formula: calories -= decayRate * (deltaTime / 60000)
-            // Higher values = faster hunger
-
-            vitamins: 2 // Vitamin loss per minute of real time (applies to all vitamins A-E)
-            // Formula: vitamins[i] -= decayRate * (deltaTime / 60000)
-            // Higher values = faster vitamin deficiency
-        },
-
         // Movement constants
         diagonalMovementFactor: 0.707, // 1/√2 for normalized diagonal movement
-        millisecondsPerSecond: 1000, // Conversion factor for deltaTime
 
         // Interaction constants
         interactionThreshold: 48, // Distance threshold for interactions (pixels) - increased by 50%
 
         // Rendering
         fontSize: 32, // Player emoji font size
-        zIndex: 100, // Player rendering z-index
 
         // Random starting stats ranges
         startingStats: {
@@ -167,14 +140,6 @@ window.GameConfig = {
             foodSlots: 4         // Reserve 4 slots for food
         },
 
-        // Random starting stats ranges (same as player)
-        startingStats: {
-            temperature: { min: 80, max: 100 }, // Temperature range at game start
-            water: { min: 60, max: 90 }, // Water range at game start
-            calories: { min: 60, max: 90 }, // Calories range at game start
-            vitamins: { min: 50, max: 80 } // Vitamin range at game start (applies to all vitamins A-E)
-        },
-
         // Villager names for random generation
         villagerNames: [
             'Alaric', 'Brigid', 'Cormac', 'Deirdre', 'Eamon', 'Fiona', 'Gareth', 'Helena',
@@ -204,8 +169,6 @@ window.GameConfig = {
     // Resource settings - Controls how resources spawn and spread
     resources: {
         propagationRadius: 80, // Distance within which resources can spawn new ones - reduced for tighter clustering
-        propagationChance: 0.15, // Probability of resource spawning a new one overnight - increased for faster growth
-        maxDensity: 8, // Maximum resources per area (prevents overcrowding) - increased for denser clusters
 
         // Resource type limits
         maxCounts: {
@@ -213,15 +176,6 @@ window.GameConfig = {
             default: 10 // Other resources cap at 10
         },
 
-        // Food types available for random selection (used in storage initialization and resource generation)
-        foodTypes: [
-            // Plants
-            'blackberry', 'mushroom', 'herb', 'blueberry', 'raspberry', 'elderberry', 'wild_garlic', 'dandelion', 'nettle', 'sorrel',
-            'watercress', 'wild_onion', 'chickweed', 'plantain', 'yarrow',
-            // Animals
-            'rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk',
-            'marten', 'grouse', 'woodcock', 'beaver', 'otter'
-        ],
 
         // === DESIGNER BALANCING SECTION ===
         // All food/resource types with complete data (easier to maintain)
@@ -260,7 +214,16 @@ window.GameConfig = {
             'otter': { calories: 28, vitamins: [10, 0, 10, 10, 0], water: 0, emoji: '🦦' },
             // Resources (non-food)
             'tree': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, emoji: '🌲' }
-        }
+        },
+
+        // Food types available for random selection (used in storage initialization and resource generation)
+        // All food types from foodData (excluding non-food resources like 'tree')
+        foodTypes: [
+            'blackberry', 'mushroom', 'herb', 'blueberry', 'raspberry', 'elderberry', 'wild_garlic',
+            'dandelion', 'nettle', 'sorrel', 'watercress', 'wild_onion', 'chickweed', 'plantain', 'yarrow',
+            'rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk',
+            'marten', 'grouse', 'woodcock', 'beaver', 'otter'
+        ],
     },
 
     // Entity types - Centralized entity type definitions
@@ -274,11 +237,6 @@ window.GameConfig = {
 
         // Resources
         tree: 'tree',
-
-        // Tasks
-        wood: 'wood',
-        food: 'food',
-        water: 'water'
     },
 
     // Emoji definitions - Centralized emoji assignments
@@ -536,12 +494,6 @@ window.GameConfig = {
         pi: Math.PI,
         sqrt2: Math.sqrt(2),
 
-        // Time constants
-        millisecondsPerSecond: 1000,
-        secondsPerMinute: 60,
-        minutesPerHour: 60,
-        hoursPerDay: 24,
-
         // Distance constants
         distances: {
             wellDetection: 200, // Distance to detect nearby wells
@@ -562,45 +514,6 @@ window.GameConfig = {
         messageDurations: {
             short: 1200, // Short message duration
             medium: 1500, // Medium message duration
-            long: 2000 // Long message duration
-        },
-
-        // Font sizes for entities
-        entityFontSizes: {
-            child: 16, // Child entity size
-            adult: 22, // Adult entity size
-            camp: 28, // Camp size
-            fireplace: 24, // Fireplace size
-            sleepingBag: 24, // Sleeping bag size
-            storageBox: 24, // Storage box size
-            well: 22, // Well size
-            resource: 22, // Resource size
-            tree: 22, // Tree size
-            large: 48 // Large size (2x normal)
-        },
-
-        // Animation and movement constants
-        animation: {
-            cameraFollowLerp: 0.1, // Camera follow interpolation
-            diagonalMovementFactor: 0.707, // 1/√2 for normalized diagonal movement
-            fixedDeltaTime: 16, // Fixed delta time for consistent movement
-            maxDeltaTime: 200 // Maximum delta time per frame
-        },
-
-        // Time constants
-        time: {
-            hoursPerDay: 24, // Hours in a day
-            minutesPerHour: 60, // Minutes in an hour
-            secondsPerMinute: 60, // Seconds in a minute
-            millisecondsPerSecond: 1000, // Milliseconds in a second
-            gameStartHour: 8, // Hour when game starts
-            wakeUpHour: 8, // Hour when villagers wake up
-            returnHour: 18, // Hour when villagers return
-            nightStartHour: 18, // Hour when night starts
-            dayStartHour: 8, // Hour when day starts
-            sleepAcceleration: 10, // Time acceleration when sleeping
-            dayNightTransition: { evening: 18, morning: 8 }, // Day/night transition hours
-            dayNightDuration: { evening: 3, morning: 3 } // Duration of transitions
         },
 
         // UI constants
@@ -654,6 +567,7 @@ window.GameConfig = {
         dayChangeChance: 0.25
     }
 };
+
 
 // Assert world is much larger than viewport
 console.assert(window.GameConfig.world.width >= window.innerWidth * 10, '[GameConfig] World width should be at least 10x viewport width');

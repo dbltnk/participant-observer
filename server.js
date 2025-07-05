@@ -61,26 +61,6 @@ function clearFiles() {
     }
 }
 
-// Delete log files completely
-function deleteLogFiles() {
-    try {
-        if (fs.existsSync(LOGS_FILE)) {
-            fs.unlinkSync(LOGS_FILE);
-        }
-        if (fs.existsSync(DOM_FILE)) {
-            fs.unlinkSync(DOM_FILE);
-        }
-
-        // Generate new session ID
-        sessionId = `session-${Date.now()}`;
-        sessionStartTime = new Date().toISOString();
-
-        console.log('🗑️ Deleted log files completely');
-    } catch (err) {
-        console.error('❌ Failed to delete log files:', err.message);
-    }
-}
-
 // Format timestamp for LLM efficiency (HH:MM:SS)
 function formatTimestamp(timestamp) {
     const date = new Date(timestamp);
@@ -220,9 +200,9 @@ const server = http.createServer(async (req, res) => {
                 res.end(JSON.stringify({ success: true, message: 'Logs cleared' }));
 
             } else if (req.url === '/delete') {
-                deleteLogFiles();
+                clearFiles();
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, message: 'Log files deleted' }));
+                res.end(JSON.stringify({ success: true, message: 'Log files cleared' }));
 
             } else {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -251,7 +231,7 @@ server.listen(PORT, () => {
     console.log('');
     console.log('💡 Open index.html in your browser to start logging');
     console.log('🔄 Press Ctrl+C to stop the server');
-    console.log('🗑️ Press Ctrl+D to delete log files');
+    console.log('🗑️ Press Ctrl+D to clear log files');
     console.log('⏸️ Press Ctrl+P to pause/resume logging');
 });
 
@@ -285,7 +265,7 @@ process.on('SIGINT', () => {
     }, 3000);
 });
 
-// Handle delete logs hotkey (Ctrl+D)
+// Handle clear logs hotkey (Ctrl+D)
 process.stdin.setRawMode(true);
 process.stdin.resume();
 process.stdin.setEncoding('utf8');
