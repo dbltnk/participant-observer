@@ -231,50 +231,55 @@ server.listen(PORT, () => {
     console.log('');
     console.log('💡 Open index.html in your browser to start logging');
     console.log('🔄 Press Ctrl+C to stop the server');
-    console.log('🗑️ Press Ctrl+D to clear log files');
-    console.log('⏸️ Press Ctrl+P to pause/resume logging');
+    console.log('🗑️  Press Ctrl+D to clear log files');
+    console.log('⏸️  Press Ctrl+P to pause/resume logging');
 });
 
-// Handle graceful shutdown
-process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down server...');
+// Note: SIGINT (Ctrl+C) is now handled in the raw mode stdin handler above
 
-    // Write session end marker
-    try {
-        const sessionEnd = `\n=== SESSION END: ${sessionId} ===\n`;
-        fs.appendFileSync(LOGS_FILE, sessionEnd);
-    } catch (err) {
-        console.error('Failed to write session end marker:', err.message);
-    }
-
-    // Close all active connections
-    connections.forEach(connection => {
-        connection.destroy();
-    });
-
-    // Close server and force exit after timeout
-    server.close(() => {
-        console.log('✅ Server stopped gracefully');
-        process.exit(0);
-    });
-
-    // Force exit after 3 seconds if graceful shutdown fails
-    setTimeout(() => {
-        console.log('⚠️ Force shutting down server...');
-        process.exit(1);
-    }, 3000);
-});
-
-// Handle clear logs hotkey (Ctrl+D)
+// Handle clear logs hotkey (Ctrl+D) and pause/resume (Ctrl+P)
 process.stdin.setRawMode(true);
 process.stdin.resume();
 process.stdin.setEncoding('utf8');
 
 process.stdin.on('data', (key) => {
-    // Ctrl+D (ASCII 4)
+    // Ctrl+D (ASCII 4) - Clear logs
     if (key === '\u0004') {
         console.log('\n🗑️ Deleting log files...');
-        clearFiles()
+        clearFiles();
+    }
+    // Ctrl+C (ASCII 3) - Exit gracefully
+    else if (key === '\u0003') {
+        console.log('\n🛑 Shutting down server...');
+
+        // Write session end marker
+        try {
+            const sessionEnd = `\n=== SESSION END: ${sessionId} ===\n`;
+            fs.appendFileSync(LOGS_FILE, sessionEnd);
+        } catch (err) {
+            console.error('Failed to write session end marker:', err.message);
+        }
+
+        // Close all active connections
+        connections.forEach(connection => {
+            connection.destroy();
+        });
+
+        // Close server and exit
+        server.close(() => {
+            console.log('✅ Server stopped gracefully');
+            process.exit(0);
+        });
+
+        // Force exit after 3 seconds if graceful shutdown fails
+        setTimeout(() => {
+            console.log('⚠️ Force shutting down server...');
+            process.exit(1);
+        }, 3000);
+    }
+    // Ctrl+P (ASCII 16) - Pause/resume
+    else if (key === '\u0010') {
+        togglePause();
     }
 });
 
