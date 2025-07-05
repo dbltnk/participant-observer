@@ -302,6 +302,7 @@ console.log('Phaser main loaded');
     // === BEGIN: Villager AI System ===
     class Villager {
         constructor(name, campPosition, villagerId, seededRandom = null) {
+            this.seededRandom = seededRandom; // Ensure seededRandom is available immediately
             this.name = name;
             this.campPosition = campPosition;
             this.villagerId = villagerId;
@@ -372,13 +373,14 @@ console.log('Phaser main loaded');
         }
 
         generateDailyDecay() {
-            // Generate unique daily decay rates for this villager
+            // Generate unique daily decay rates for this villager using seeded random
             const variance = GameConfig.needsVariance;
+            assert(this.seededRandom, 'SeededRandom required for generateDailyDecay');
             return {
-                temperature: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.temperature * GameConfig.time.minutesPerHour) * (1 + (Math.random() - 0.5) * variance),
-                water: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.water * GameConfig.time.minutesPerHour) * (1 + (Math.random() - 0.5) * variance),
-                calories: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.calories * GameConfig.time.minutesPerHour) * (1 + (Math.random() - 0.5) * variance),
-                vitamins: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.vitamins * GameConfig.time.minutesPerHour) * (1 + (Math.random() - 0.5) * variance)
+                temperature: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.temperature * GameConfig.time.minutesPerHour) * (1 + (this.seededRandom.random() - 0.5) * variance),
+                water: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.water * GameConfig.time.minutesPerHour) * (1 + (this.seededRandom.random() - 0.5) * variance),
+                calories: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.calories * GameConfig.time.minutesPerHour) * (1 + (this.seededRandom.random() - 0.5) * variance),
+                vitamins: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.vitamins * GameConfig.time.minutesPerHour) * (1 + (this.seededRandom.random() - 0.5) * variance)
             };
         }
 
@@ -1849,8 +1851,9 @@ console.log('Phaser main loaded');
 
             // Collect any resource if we have space (no complex "needed" logic)
 
-            // Success chance (80% for villagers)
-            if (Math.random() < 0.8) {
+            // Success chance (80% for villagers) - use seeded random for consistency
+            assert(this.villager.seededRandom, 'Villager SeededRandom required for resource collection');
+            if (this.villager.seededRandom.random() < 0.8) {
                 // Mark as collected BEFORE adding to inventory to prevent race conditions
                 entity.collected = true;
                 entity.collectedAt = this.villager.currentGameTime || 0;
@@ -2125,8 +2128,9 @@ console.log('Phaser main loaded');
     }
 
 
-    function generateVillagerName() {
-        return GameConfig.villager.villagerNames[Math.floor(Math.random() * GameConfig.villager.villagerNames.length)];
+    function generateVillagerName(seededRandom) {
+        assert(seededRandom, 'SeededRandom instance required for generateVillagerName');
+        return GameConfig.villager.villagerNames[seededRandom.randomInt(0, GameConfig.villager.villagerNames.length - 1)];
     }
     // === END: Villager AI System ===
 
@@ -2274,7 +2278,7 @@ console.log('Phaser main loaded');
 
             for (let i = 1; i < cfg.villagerCount; i++) { // Start from 1, skip camp 0
                 const camp = this.camps[i];
-                const villagerName = generateVillagerName();
+                const villagerName = generateVillagerName(this.seededRandom);
 
                 // Spawn villager randomly within config radius of village center
                 const villageCenter = { x: centerX, y: centerY };
@@ -3876,8 +3880,8 @@ console.log('Phaser main loaded');
                         const maxCount = entity.type === GameConfig.entityTypes.tree ? GameConfig.resources.maxCounts.tree : GameConfig.resources.maxCounts.default; // Trees cap at 50, others at 10
                         const finalChance = Math.max(0, baseChance * (1 - globalCount / maxCount)); // Decreases to 0% at max count
 
-                        // Attempt to spawn new resource nearby
-                        if (Math.random() < finalChance) {
+                        // Attempt to spawn new resource nearby using seeded random
+                        if (this.seededRandom.random() < finalChance) {
                             const newPosition = this.findPropagationPosition(entity.position, entity.type);
                             if (newPosition) {
                                 const newEntity = {
@@ -3956,9 +3960,10 @@ console.log('Phaser main loaded');
             const propagationRadius = GameConfig.resources.propagationRadius;
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                // Generate position within propagation radius
-                const angle = Math.random() * 2 * Math.PI;
-                const dist = Math.random() * propagationRadius;
+                // Generate position within propagation radius using seeded random
+                assert(this.seededRandom, 'SeededRandom required for resource propagation');
+                const angle = this.seededRandom.random() * 2 * Math.PI;
+                const dist = this.seededRandom.random() * propagationRadius;
                 const newX = originalPosition.x + Math.cos(angle) * dist;
                 const newY = originalPosition.y + Math.sin(angle) * dist;
 
@@ -4061,7 +4066,7 @@ console.log('Phaser main loaded');
                     targetPosition: null,
                     wanderSpeed: GameConfig.animals.moveSpeed, // Fixed animal speed
                     changeDirectionTimer: 0,
-                    changeDirectionInterval: GameConfig.animals.directionChangeInterval.min + Math.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min) // 2-5 seconds
+                    changeDirectionInterval: GameConfig.animals.directionChangeInterval.min + this.seededRandom.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min) // 2-5 seconds
                 };
             }
 
@@ -4072,9 +4077,9 @@ console.log('Phaser main loaded');
             if (wander.changeDirectionTimer >= wander.changeDirectionInterval ||
                 (wander.targetPosition && GameUtils.distance(animal.position, wander.targetPosition) < 20)) {
 
-                // Pick new random direction
-                const angle = Math.random() * 2 * Math.PI;
-                const distance = GameConfig.technical.distances.animalWanderRange.min + Math.random() * (GameConfig.technical.distances.animalWanderRange.max - GameConfig.technical.distances.animalWanderRange.min); // 50-150 pixels away
+                // Pick new random direction using seeded random
+                const angle = this.seededRandom.random() * 2 * Math.PI;
+                const distance = GameConfig.technical.distances.animalWanderRange.min + this.seededRandom.random() * (GameConfig.technical.distances.animalWanderRange.max - GameConfig.technical.distances.animalWanderRange.min); // 50-150 pixels away
                 wander.targetPosition = {
                     x: animal.position.x + Math.cos(angle) * distance,
                     y: animal.position.y + Math.sin(angle) * distance
@@ -4086,7 +4091,7 @@ console.log('Phaser main loaded');
 
                 // Reset timer (speed stays constant)
                 wander.changeDirectionTimer = 0;
-                wander.changeDirectionInterval = GameConfig.animals.directionChangeInterval.min + Math.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min); // 2-5 seconds
+                wander.changeDirectionInterval = GameConfig.animals.directionChangeInterval.min + this.seededRandom.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min); // 2-5 seconds
             }
 
             // Move towards target if we have one
