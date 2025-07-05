@@ -2714,6 +2714,7 @@ console.log('Phaser main loaded');
                 }
             }
             // --- Player ---
+            let gameStartTime = GameConfig.time.gameStartHour * GameConfig.time.secondsPerHour;
             this.playerState = {
                 position: { ...this.playerStartPosition },
                 needs: {
@@ -2723,7 +2724,7 @@ console.log('Phaser main loaded');
                     vitamins: new Array(GameConfig.needs.vitaminCount).fill(0).map(() => this.seededRandom.randomRange(GameConfig.player.startingStats.vitamins.min, GameConfig.player.startingStats.vitamins.max))
                 },
                 inventory: new Array(GameConfig.player.inventorySize).fill(null),
-                currentTime: GameConfig.time.gameStartTime
+                currentTime: gameStartTime,
             };
             this.player = this.add.text(this.playerState.position.x, this.playerState.position.y, '👤', { fontSize: GameConfig.player.fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
             assert(this.player, 'Failed to create player emoji.');
