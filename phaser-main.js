@@ -2576,7 +2576,7 @@ console.log('Phaser main loaded');
 
                 // Add some randomness to distance
                 const distanceVariation = (this.seededRandom.random() - 0.5) * 200;
-                const actualDistance = Math.max(GameConfig.technical.distances.explorationTarget, distanceFromVillage + distanceVariation);
+                const actualDistance = Math.max(GameConfig.world.resourceVillageMinDistance, distanceFromVillage + distanceVariation);
 
                 // Generate cluster center position
                 let clusterCenter;
@@ -3470,7 +3470,7 @@ console.log('Phaser main loaded');
         createGroundTexture() {
             try {
                 // Create a subtle ground texture using Perlin noise for natural variation
-                const tileSize = 64; // Size of each texture tile
+                const tileSize = GameConfig.world.tileSize; // Size of each texture tile
                 const worldWidth = GameConfig.world.width;
                 const worldHeight = GameConfig.world.height;
 

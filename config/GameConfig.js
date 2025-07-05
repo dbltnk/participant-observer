@@ -13,10 +13,10 @@ window.GameConfig = {
     world: {
         width: window.innerWidth * 10, // 10x viewport width
         height: window.innerHeight * 10, // 10x viewport height
-        tileSize: 32, // Size of each "tile" for spatial calculations (used in distance checks)
+        tileSize: 64, // Size of each "tile" for spatial calculations (used in distance checks)
         villagerCount: 8, // Total camps (7 AI villagers + 1 player camp)
-        resourcesPerVillager: 50, // Initial resources spawned per villager (including player) 
-        maxResourcesPerType: 500, // Global cap on resources per type (prevents overpopulation) 
+        resourcesPerVillager: 20, // Initial resources spawned per villager (including player) 
+        maxResourcesPerType: 20, // Global cap on resources per type (prevents overpopulation) 
 
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 25 }, // Offset for village storage from center
@@ -38,13 +38,13 @@ window.GameConfig = {
         villagerSpawnRadius: 5000, // Maximum distance from village center for villager spawning
 
         // Resource generation
-        resourceVillageMinDistance: 700, // Minimum distance from village center for resources
-        wellMinDistance: 3000, // Minimum distance between wells
+        resourceVillageMinDistance: 1200, // Minimum distance from village center for resources
+        wellMinDistance: 2000, // Minimum distance between wells
         wellCount: 30, // Number of additional wells beyond village well
         wellMaxAttempts: 50, // Maximum attempts to place a well
 
         // Perlin noise settings
-        noiseScale: 5, // Scale factor for Perlin noise in resource placement - reduced for better clustering
+        noiseScale: 10, // Scale factor for Perlin noise in resource placement - reduced for better clustering
         noiseBias: 0.7 // Bias factor for noise-based positioning - increased for better clustering
     },
 
@@ -458,18 +458,9 @@ window.GameConfig = {
     technical: {
         // Distance constants
         distances: {
-            wellDetection: 200, // Distance to detect nearby wells
-            fireDetection: 100, // Distance to detect nearby fires
-            campRadius: 50, // Distance considered "at camp"
-            campMinDistance: 200, // Minimum distance from camps for resources
-            explorationTarget: 100, // Distance for exploration targets
-            explorationRange: { min: 150, max: 250 }, // Range for exploration distances
             animalFleeDistance: 100, // Distance at which animals flee
             animalWanderRange: { min: 50, max: 150 }, // Range for animal wandering
             resourcePlacementAttempts: 100, // Max attempts to place resources
-            groundTextureScale: 200, // Scale for ground texture noise
-            tileSize: 64, // Size of ground texture tiles
-            noiseScale: 200 // Scale for noise calculations
         },
 
         // Message durations
