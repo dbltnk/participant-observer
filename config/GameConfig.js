@@ -281,6 +281,7 @@ window.GameConfig = {
             barBackground: 0x333333, // Need bar background
             debugBackground: '#444', // Debug panel background
             fpsBackground: '#444', // FPS counter background
+            boxBackground: '#222', // Dark text color´
 
             // Border and stroke colors
             border: 0x666666, // Default border color

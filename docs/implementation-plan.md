@@ -1,7 +1,7 @@
-# Alpine Sustainability - Implementation Plan
+# Participant Observer - Implementation Plan
 
 ## Game Overview
-**Alpine Sustainability** is a resource management game where players and AI villagers must survive in an alpine environment by managing their needs (hunger, thirst, warmth, rest, health) while collecting and managing resources.
+**Participant Observer** is a resource management game where players and AI villagers must survive in an alpine environment by managing their needs (hunger, thirst, warmth, rest, health) while collecting and managing resources.
 
 ## Project Structure
 

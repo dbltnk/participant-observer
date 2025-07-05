@@ -1,6 +1,4 @@
 console.log('Phaser main loaded');
-// Alpine Sustainability - Phaser Migration Entry Point
-// Phaser best practices: MainScene class, all state/UI on this, config from GameConfig, no DOM overlays
 
 (function () {
     if (typeof Phaser === 'undefined') {
@@ -2658,17 +2656,18 @@ console.log('Phaser main loaded');
             this.uiContainer = this.add.container(0, 0).setScrollFactor(0);
             // Use margin for all UI elements
             const margin = GameConfig.ui.uiMargin;
-            // Needs bars (top left)
+            // Needs bars (top right)
             this.ui.needsBars = [];
             const needTypes = ['temperature', 'water', 'calories', 'vitaminA', 'vitaminB', 'vitaminC', 'vitaminD', 'vitaminE'];
             const needLabels = ['🌡️', '💧', '🍽️', 'A', 'B', 'C', 'D', 'E'];
             const iconWidth = 25; // Width reserved for icons
-            const barStartX = margin + iconWidth + 5; // Start bars after icons with 5px spacing
+            const barStartX = window.innerWidth - margin - GameConfig.ui.barWidth - GameConfig.ui.dimensions.valueOffset - iconWidth - 5; // Start bars from right side
 
             for (let i = 0; i < needLabels.length; i++) {
                 const barBg = this.add.rectangle(barStartX + GameConfig.ui.barWidth / 2, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing), GameConfig.ui.barWidth, GameConfig.ui.barHeight, GameConfig.ui.colors.barBackground).setOrigin(0.5, 0).setScrollFactor(0);
                 const barFill = this.add.rectangle(barStartX + GameConfig.ui.barWidth / 2, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing), GameConfig.ui.barWidth, GameConfig.ui.barHeight, getPhaserBarColor(needTypes[i])).setOrigin(0.5, 0).setScrollFactor(0);
-                const label = this.add.text(margin, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, needLabels[i], { fontSize: GameConfig.ui.fontSizes.needLabel, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0, 0.5).setScrollFactor(0);
+                let x_dist = needTypes[i] === 'vitaminA' || needTypes[i] === 'vitaminB' || needTypes[i] === 'vitaminC' || needTypes[i] === 'vitaminD' || needTypes[i] === 'vitaminE' ? 10 : 14;
+                const label = this.add.text(barStartX - iconWidth + x_dist, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, needLabels[i], { fontSize: GameConfig.ui.fontSizes.needLabel, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(1, 0.5).setScrollFactor(0);
                 const value = this.add.text(barStartX + GameConfig.ui.barWidth + GameConfig.ui.dimensions.valueOffset, margin + i * (GameConfig.ui.barHeight + GameConfig.ui.needBarSpacing) + GameConfig.ui.barHeight / 2, '100', { fontSize: GameConfig.ui.fontSizes.needValue, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0, 0.5).setScrollFactor(0);
                 this.uiContainer.add([barBg, barFill, label, value]);
                 this.ui.needsBars.push({ barBg, barFill, label, value });
@@ -2734,16 +2733,35 @@ console.log('Phaser main loaded');
                 });
             }
 
-            // Time display (top right) - fixed to camera viewport
-            this.ui.timeText = this.add.text(window.innerWidth - margin, margin, '', { fontSize: GameConfig.ui.fontSizes.time, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(1, 0).setScrollFactor(0);
+            // Time display (top left) - fixed to camera viewport
+            this.ui.timeText = this.add.text(margin, margin, '', {
+                fontSize: GameConfig.ui.fontSizes.time,
+                fontFamily: 'monospace',
+                color: GameConfig.ui.colors.textPrimary,
+                backgroundColor: GameConfig.ui.colors.boxBackground,
+                padding: GameConfig.ui.dimensions.textPadding.large
+            }).setOrigin(0, 0).setScrollFactor(0);
             this.uiContainer.add(this.ui.timeText);
+
             // --- Visual Temperature State Tracking ---
             this._visualTempState = null; // Track current state
             this._visualTempDayState = null; // Track current day state ("moderate" or "warm")
             this._visualTempLastHour = null; // Track last hour for update
             this._visualTempSeededRandom = new SeededRandom(getCurrentSeed() + 12345); // Offset for temp randomness
+
+            // Game title (top center) - fixed to camera viewport
+            this.ui.titleText = this.add.text(window.innerWidth / 2, margin, 'Participant Observer', {
+                fontSize: '24px',
+                fontFamily: 'Courier New, monospace',
+                fontWeight: 'bold',
+                color: '#ffffff',
+                backgroundColor: GameConfig.ui.colors.boxBackground,
+                padding: GameConfig.ui.dimensions.textPadding.large
+            }).setOrigin(0.5, 0).setScrollFactor(0);
+            this.uiContainer.add(this.ui.titleText);
+
             // Info box (bottom left) - fixed to camera viewport
-            this.ui.infoBox = this.add.text(margin, window.innerHeight - margin, 'Alpine Sustainability v1.0\nControls: WASD to move\nClick inventory slots to select', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0);
+            this.ui.infoBox = this.add.text(margin, window.innerHeight - margin, 'Participant Observer v0.1\nControls: WASD to move\nClick objects or inventory to use', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.boxBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0);
             this.uiContainer.add(this.ui.infoBox);
             // Debug toggle (bottom left, above log spam button) - fixed to camera viewport
             this.ui.debugBtn = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.debugButtonOffset, '⚪ Debug: OFF', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.debugBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);

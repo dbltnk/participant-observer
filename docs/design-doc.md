@@ -1,6 +1,6 @@
 ---
 
-## Game Design Document: Alpine Sustainability
+## Game Design Document: Participant Observer
 
 ### I. Core Concept
 

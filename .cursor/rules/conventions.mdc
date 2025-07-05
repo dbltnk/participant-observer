@@ -3,7 +3,7 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Alpine Sustainability - Development Conventions & Rules
+# Participant Observer - Development Conventions & Rules
 
 **⚠️ CRITICAL: These rules are NOT suggestions. They are MANDATORY requirements for maintaining code quality and consistency.**
 
