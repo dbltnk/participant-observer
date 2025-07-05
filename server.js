@@ -13,6 +13,9 @@ const connections = new Set();
 let sessionId = null;
 let sessionStartTime = null;
 
+// Pause state tracking
+let isPaused = false;
+
 // Ensure logs directory exists
 if (!fs.existsSync(LOGS_DIR)) {
     fs.mkdirSync(LOGS_DIR, { recursive: true });
@@ -21,6 +24,22 @@ if (!fs.existsSync(LOGS_DIR)) {
 // File paths
 const LOGS_FILE = path.join(LOGS_DIR, 'logs.txt');
 const DOM_FILE = path.join(LOGS_DIR, 'dom-snapshot.json');
+
+// Toggle pause state
+function togglePause() {
+    isPaused = !isPaused;
+    const status = isPaused ? '⏸️ PAUSED' : '▶️ RESUMED';
+    console.log(`\n${status} - Log and DOM updates are now ${isPaused ? 'paused' : 'active'}`);
+
+    // Write pause/resume marker to log file
+    try {
+        const timestamp = new Date().toISOString();
+        const marker = `\n=== ${isPaused ? 'PAUSED' : 'RESUMED'} AT ${timestamp} ===\n`;
+        fs.appendFileSync(LOGS_FILE, marker);
+    } catch (err) {
+        console.error('Failed to write pause/resume marker:', err.message);
+    }
+}
 
 // Clear files on startup
 function clearFiles() {
@@ -42,6 +61,26 @@ function clearFiles() {
     }
 }
 
+// Delete log files completely
+function deleteLogFiles() {
+    try {
+        if (fs.existsSync(LOGS_FILE)) {
+            fs.unlinkSync(LOGS_FILE);
+        }
+        if (fs.existsSync(DOM_FILE)) {
+            fs.unlinkSync(DOM_FILE);
+        }
+
+        // Generate new session ID
+        sessionId = `session-${Date.now()}`;
+        sessionStartTime = new Date().toISOString();
+
+        console.log('🗑️ Deleted log files completely');
+    } catch (err) {
+        console.error('❌ Failed to delete log files:', err.message);
+    }
+}
+
 // Format timestamp for LLM efficiency (HH:MM:SS)
 function formatTimestamp(timestamp) {
     const date = new Date(timestamp);
@@ -60,6 +99,8 @@ function formatCallStack(callStack) {
 
 // Write logs to file
 function writeLogs(logs) {
+    if (isPaused) return; // Skip writing if paused
+
     try {
         let logEntries = '';
 
@@ -87,6 +128,8 @@ function writeLogs(logs) {
 
 // Write DOM snapshot to file
 function writeDomSnapshot(snapshot) {
+    if (isPaused) return; // Skip writing if paused
+
     try {
         // Calculate DOM statistics
         const elementCount = snapshot.elements.length;
@@ -155,18 +198,31 @@ const server = http.createServer(async (req, res) => {
                 const data = await parseJsonBody(req);
                 writeLogs(data.logs);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, logsProcessed: data.logs.length }));
+                res.end(JSON.stringify({
+                    success: true,
+                    logsProcessed: data.logs.length,
+                    paused: isPaused
+                }));
 
             } else if (req.url === '/dom-snapshot') {
                 const snapshot = await parseJsonBody(req);
                 writeDomSnapshot(snapshot);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, elementsCaptured: snapshot.elements.length }));
+                res.end(JSON.stringify({
+                    success: true,
+                    elementsCaptured: snapshot.elements.length,
+                    paused: isPaused
+                }));
 
             } else if (req.url === '/clear') {
                 clearFiles();
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, message: 'Logs cleared' }));
+
+            } else if (req.url === '/delete') {
+                deleteLogFiles();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, message: 'Log files deleted' }));
 
             } else {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -195,6 +251,8 @@ server.listen(PORT, () => {
     console.log('');
     console.log('💡 Open index.html in your browser to start logging');
     console.log('🔄 Press Ctrl+C to stop the server');
+    console.log('🗑️ Press Ctrl+D to delete log files');
+    console.log('⏸️ Press Ctrl+P to pause/resume logging');
 });
 
 // Handle graceful shutdown
@@ -225,6 +283,19 @@ process.on('SIGINT', () => {
         console.log('⚠️ Force shutting down server...');
         process.exit(1);
     }, 3000);
+});
+
+// Handle delete logs hotkey (Ctrl+D)
+process.stdin.setRawMode(true);
+process.stdin.resume();
+process.stdin.setEncoding('utf8');
+
+process.stdin.on('data', (key) => {
+    // Ctrl+D (ASCII 4)
+    if (key === '\u0004') {
+        console.log('\n🗑️ Deleting log files...');
+        deleteLogFiles();
+    }
 });
 
 // Also handle SIGTERM for container environments
