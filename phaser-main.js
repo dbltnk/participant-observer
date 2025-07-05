@@ -411,7 +411,7 @@ console.log('Phaser main loaded');
                 for (const entity of this.gameEntities) {
                     if (entity.type === GameConfig.entityTypes.fireplace && entity.isBurning && entity.wood > 0) {
                         const dist = GameUtils.distance(this.position, entity.position);
-                        const fireRange = GameConfig.player.interactionThreshold * 3; // Triple the range
+                        const fireRange = GameConfig.player.fireHeatingRange; // Use config-defined heating range
 
                         if (dist <= fireRange) {
                             // Calculate temperature gain (same rate as night decay)
@@ -1716,16 +1716,9 @@ console.log('Phaser main loaded');
         findNearestBurningFire() {
             if (!this.villager.gameEntities) return null;
 
-            // Use fire range (3x interaction threshold) for fire interactions
-            const fireRange = GameConfig.player.interactionThreshold * 3;
-
+            // Search entire world for burning fires - no range limit
             return GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity => {
-                if (entity.type === GameConfig.entityTypes.fireplace && entity.isBurning && entity.wood > 0) {
-                    // Check if within fire range
-                    const distance = GameUtils.distance(this.villager.position, entity.position);
-                    return distance <= fireRange;
-                }
-                return false;
+                return entity.type === GameConfig.entityTypes.fireplace && entity.isBurning && entity.wood > 0;
             });
         }
 
@@ -3029,8 +3022,21 @@ console.log('Phaser main loaded');
             let tempEmoji = '❄️';
 
             // Override: If near a burning fire, always show "hot"
-            const nearbyFire = this.findNearbyFire();
-            if (nearbyFire && nearbyFire.isBurning && nearbyFire.wood > 0) {
+            // Use heating range for temperature display
+            const fireRange = GameConfig.player.fireHeatingRange;
+            let nearbyFire = null;
+
+            for (const entity of this.entities) {
+                if (entity.type === 'fireplace' && entity.isBurning && entity.wood > 0) {
+                    const dist = GameUtils.distance(this.playerState.position, entity.position);
+                    if (dist <= fireRange) {
+                        nearbyFire = entity;
+                        break;
+                    }
+                }
+            }
+
+            if (nearbyFire) {
                 tempState = 'hot';
             }
 
@@ -3340,7 +3346,7 @@ console.log('Phaser main loaded');
                 warmthCircle = this.add.circle(
                     entity.position.x,
                     entity.position.y,
-                    GameConfig.player.interactionThreshold * 3, // Triple the range
+                    GameConfig.player.fireHeatingRange, // Use config-defined heating range
                     0xff6600, // Orange color for warmth
                     0.05 // Very transparent
                 ).setOrigin(0.5).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
@@ -3848,7 +3854,7 @@ console.log('Phaser main loaded');
             for (const entity of this.entities) {
                 if (entity.type === 'fireplace' && entity.isBurning && entity.wood > 0) {
                     const dist = GameUtils.distance(this.playerState.position, entity.position);
-                    const fireRange = GameConfig.player.interactionThreshold * 3; // Triple the range
+                    const fireRange = GameConfig.player.fireHeatingRange; // Use config-defined heating range
 
                     if (dist <= fireRange) {
                         // Calculate temperature gain (same rate as night decay)

@@ -94,6 +94,7 @@ window.GameConfig = {
 
         // Interaction constants
         interactionThreshold: 48, // Distance threshold for interactions (pixels) - increased by 50%
+        fireHeatingRange: 144, // Distance threshold for fire heating effects (pixels) - 3x interaction threshold
 
         // Rendering
         fontSize: 32, // Player emoji font size
