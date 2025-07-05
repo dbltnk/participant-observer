@@ -48,6 +48,44 @@ console.log('Phaser main loaded');
                     target.needs.vitamins[i] = Math.min(GameConfig.needs.fullValue, target.needs.vitamins[i] + nutrition.vitamins[i]);
                 }
             }
+        },
+
+        // Generic function to find nearest entity matching criteria
+        findNearestEntity(entities, fromPosition, filterFn) {
+            assert(entities && Array.isArray(entities), 'findNearestEntity: entities must be an array');
+            assert(fromPosition && typeof fromPosition.x === 'number' && typeof fromPosition.y === 'number', 'findNearestEntity: fromPosition must have x,y coordinates');
+            assert(typeof filterFn === 'function', 'findNearestEntity: filterFn must be a function');
+
+            let nearest = null;
+            let nearestDistance = Infinity;
+
+            for (const entity of entities) {
+                if (filterFn(entity)) {
+                    const dist = GameUtils.distance(fromPosition, entity.position);
+                    if (dist < nearestDistance) {
+                        nearest = entity;
+                        nearestDistance = dist;
+                    }
+                }
+            }
+
+            return nearest;
+        },
+
+        // Find first empty slot in an array (for inventory/storage)
+        findEmptySlot(items) {
+            assert(items && Array.isArray(items), 'findEmptySlot: items must be an array');
+            return items.findIndex(slot => slot === null);
+        },
+
+        // Check if two positions are within interaction distance
+        isWithinInteractionDistance(pos1, pos2, threshold = null) {
+            assert(pos1 && typeof pos1.x === 'number' && typeof pos1.y === 'number', 'isWithinInteractionDistance: pos1 must have x,y coordinates');
+            assert(pos2 && typeof pos2.x === 'number' && typeof pos2.y === 'number', 'isWithinInteractionDistance: pos2 must have x,y coordinates');
+
+            const distance = GameUtils.distance(pos1, pos2);
+            const interactionThreshold = threshold || GameConfig.player.interactionThreshold;
+            return distance <= interactionThreshold;
         }
     };
 
@@ -1031,7 +1069,7 @@ console.log('Phaser main loaded');
         executeStorageManagement(deltaTime, storageBoxes) {
             if (this.stateData.storageBox) {
                 this.villager.moveTowards(this.stateData.storageBox.position, deltaTime);
-                if (GameUtils.distance(this.villager.position, this.stateData.storageBox.position) <= GameConfig.player.interactionThreshold) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.storageBox.position)) {
                     this.storeItemsInStorage(this.stateData.storageBox);
                 }
             } else {
@@ -1075,7 +1113,7 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(this.stateData.ownFire.position, deltaTime);
 
                 // Check if close enough to add wood
-                if (GameUtils.distance(this.villager.position, this.stateData.ownFire.position) <= GameConfig.player.interactionThreshold) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.ownFire.position)) {
                     if (window.summaryLoggingEnabled) {
                         console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Adding wood to fire`);
                     }
@@ -1098,7 +1136,7 @@ console.log('Phaser main loaded');
                     this.villager.moveTowards(this.stateData.targetWood.storageBox.position, deltaTime);
 
                     // Check if close enough to retrieve
-                    if (GameUtils.distance(this.villager.position, this.stateData.targetWood.storageBox.position) <= GameConfig.player.interactionThreshold) {
+                    if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.targetWood.storageBox.position)) {
                         if (window.summaryLoggingEnabled) {
                             console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Close enough to retrieve wood from storage`);
                         }
@@ -1124,7 +1162,7 @@ console.log('Phaser main loaded');
                     this.villager.moveTowards(this.stateData.targetWood.position, deltaTime);
 
                     // Check if close enough to collect
-                    if (GameUtils.distance(this.villager.position, this.stateData.targetWood.position) <= GameConfig.player.interactionThreshold) {
+                    if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.targetWood.position)) {
                         if (window.summaryLoggingEnabled) {
                             console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Close enough to collect wood`);
                         }
@@ -1227,7 +1265,7 @@ console.log('Phaser main loaded');
             // Move toward target food if we have one
             if (this.stateData.targetFood) {
                 this.villager.moveTowards(this.stateData.targetFood.position, deltaTime);
-                if (GameUtils.distance(this.villager.position, this.stateData.targetFood.position) <= GameConfig.player.interactionThreshold) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.targetFood.position)) {
                     if (window.summaryLoggingEnabled) {
                         console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Collecting ${this.stateData.targetFood.type}`);
                     }
@@ -1252,7 +1290,7 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(this.stateData.targetWell.position, deltaTime);
 
                 // Check if close enough to drink
-                if (GameUtils.distance(this.villager.position, this.stateData.targetWell.position) <= GameConfig.player.interactionThreshold) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.targetWell.position)) {
                     if (window.summaryLoggingEnabled) {
                         console.log(`[VillagerStateMachine] ${this.villager.name} DRINK: Drinking from well`);
                     }
@@ -1524,7 +1562,7 @@ console.log('Phaser main loaded');
             if (this.stateData.targetResource) {
                 this.villager.moveTowards(this.stateData.targetResource.position, deltaTime);
 
-                if (GameUtils.distance(this.villager.position, this.stateData.targetResource.position) <= GameConfig.player.interactionThreshold) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.targetResource.position)) {
                     if (window.summaryLoggingEnabled) {
                         console.log(`[VillagerStateMachine] ${this.villager.name} IDLE: Collecting ${this.stateData.targetResource.type}`);
                     }
@@ -1560,39 +1598,16 @@ console.log('Phaser main loaded');
 
         // Helper method to find nearest uncollected resource
         findNearestResource(entities) {
-            let nearest = null;
-            let nearestDistance = Infinity;
-
-            for (const entity of entities) {
-                // Look for any collectible resource (food or trees)
-                if ((GameUtils.isFood(entity.type) || entity.type === GameConfig.entityTypes.tree) && !entity.collected) {
-                    const dist = GameUtils.distance(this.villager.position, entity.position);
-                    if (dist < nearestDistance) {
-                        nearest = entity;
-                        nearestDistance = dist;
-                    }
-                }
-            }
-
-            return nearest;
+            return GameUtils.findNearestEntity(entities, this.villager.position, entity =>
+                (GameUtils.isFood(entity.type) || entity.type === GameConfig.entityTypes.tree) && !entity.collected
+            );
         }
 
         // Helper method to find nearest uncollected resource of a specific type
         findNearestResourceOfType(entities, resourceType) {
-            let nearest = null;
-            let nearestDistance = Infinity;
-
-            for (const entity of entities) {
-                if (entity.type === resourceType && !entity.collected) {
-                    const dist = GameUtils.distance(this.villager.position, entity.position);
-                    if (dist < nearestDistance) {
-                        nearest = entity;
-                        nearestDistance = dist;
-                    }
-                }
-            }
-
-            return nearest;
+            return GameUtils.findNearestEntity(entities, this.villager.position, entity =>
+                entity.type === resourceType && !entity.collected
+            );
         }
 
         // === UTILITY METHODS ===
@@ -1628,20 +1643,9 @@ console.log('Phaser main loaded');
 
         findNearestWell() {
             if (!this.villager.gameEntities) return null;
-
-            let nearest = null;
-            let nearestDistance = Infinity;
-
-            for (const entity of this.villager.gameEntities) {
-                if (entity.type === GameConfig.entityTypes.well && entity.waterLevel >= 1) {
-                    const dist = GameUtils.distance(this.villager.position, entity.position);
-                    if (dist < nearestDistance) {
-                        nearest = entity;
-                        nearestDistance = dist;
-                    }
-                }
-            }
-            return nearest;
+            return GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity =>
+                entity.type === GameConfig.entityTypes.well && entity.waterLevel >= 1
+            );
         }
 
         findOwnFireplace() {
@@ -1651,20 +1655,9 @@ console.log('Phaser main loaded');
 
         findNearestBurningFire() {
             if (!this.villager.gameEntities) return null;
-
-            let nearest = null;
-            let nearestDistance = Infinity;
-
-            for (const entity of this.villager.gameEntities) {
-                if (entity.type === GameConfig.entityTypes.fireplace && entity.isBurning && entity.wood > 0) {
-                    const dist = GameUtils.distance(this.villager.position, entity.position);
-                    if (dist < nearestDistance) {
-                        nearest = entity;
-                        nearestDistance = dist;
-                    }
-                }
-            }
-            return nearest;
+            return GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity =>
+                entity.type === GameConfig.entityTypes.fireplace && entity.isBurning && entity.wood > 0
+            );
         }
 
 
@@ -1865,7 +1858,7 @@ console.log('Phaser main loaded');
 
             // Check nearby storage boxes for items to retrieve
             for (const storageBox of storageBoxes) {
-                if (GameUtils.distance(this.villager.position, storageBox.position) <= GameConfig.player.interactionThreshold) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, storageBox.position)) {
                     for (let i = 0; i < storageBox.items.length; i++) {
                         const item = storageBox.items[i];
                         if (item) {
@@ -1910,7 +1903,7 @@ console.log('Phaser main loaded');
             }
 
             for (const storageBox of storageBoxes) {
-                if (GameUtils.distance(this.villager.position, storageBox.position) <= GameConfig.player.interactionThreshold) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, storageBox.position)) {
                     for (let i = 0; i < storageBox.items.length; i++) {
                         const item = storageBox.items[i];
                         if (item && (itemType === null || item.type === itemType)) {
@@ -2040,7 +2033,7 @@ console.log('Phaser main loaded');
 
                     if (!isNeeded) {
                         // Find empty slot in storage
-                        const storageSlot = storageBox.items.findIndex(slot => slot === null);
+                        const storageSlot = GameUtils.findEmptySlot(storageBox.items);
                         if (storageSlot !== -1) {
                             storageBox.items[storageSlot] = item;
                             this.villager.inventory[i] = null;
@@ -2233,7 +2226,7 @@ console.log('Phaser main loaded');
 
             // Add wood to communal storage
             for (let i = 0; i < communalWoodCount; i++) {
-                const emptySlot = initialCommunalStorageBox.items.findIndex(slot => slot === null);
+                const emptySlot = GameUtils.findEmptySlot(initialCommunalStorageBox.items);
                 if (emptySlot !== -1) {
                     initialCommunalStorageBox.items[emptySlot] = { type: GameConfig.entityTypes.tree, emoji: GameConfig.emojis.tree };
                 }
@@ -2241,7 +2234,7 @@ console.log('Phaser main loaded');
 
             // Add random food items to communal storage
             for (let i = 0; i < communalFoodCount; i++) {
-                const emptySlot = initialCommunalStorageBox.items.findIndex(slot => slot === null);
+                const emptySlot = GameUtils.findEmptySlot(initialCommunalStorageBox.items);
                 if (emptySlot !== -1) {
                     const foodType = GameUtils.ALL_FOOD_TYPES[this.seededRandom.randomInt(0, GameUtils.ALL_FOOD_TYPES.length - 1)];
                     const foodData = GameConfig.resources.foodData[foodType];
@@ -2266,7 +2259,7 @@ console.log('Phaser main loaded');
 
                 // Add wood to personal storage
                 for (let j = 0; j < personalWoodCount; j++) {
-                    const emptySlot = personalStorageBox.items.findIndex(slot => slot === null);
+                    const emptySlot = GameUtils.findEmptySlot(personalStorageBox.items);
                     if (emptySlot !== -1) {
                         personalStorageBox.items[emptySlot] = { type: GameConfig.entityTypes.tree, emoji: GameConfig.emojis.tree };
                     }
@@ -2274,7 +2267,7 @@ console.log('Phaser main loaded');
 
                 // Add random food items to personal storage
                 for (let j = 0; j < personalFoodCount; j++) {
-                    const emptySlot = personalStorageBox.items.findIndex(slot => slot === null);
+                    const emptySlot = GameUtils.findEmptySlot(personalStorageBox.items);
                     if (emptySlot !== -1) {
                         const foodType = GameUtils.ALL_FOOD_TYPES[this.seededRandom.randomInt(0, GameUtils.ALL_FOOD_TYPES.length - 1)];
                         const foodData = GameConfig.resources.foodData[foodType];
@@ -3650,7 +3643,7 @@ console.log('Phaser main loaded');
             }
 
             // Find first empty slot in storage (consistent with villager logic)
-            const storageSlot = storageBox.items.findIndex(slot => slot === null);
+            const storageSlot = GameUtils.findEmptySlot(storageBox.items);
             if (storageSlot === -1) {
                 this.showTempMessage('Storage full!', 1200);
                 return;
