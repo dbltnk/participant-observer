@@ -2904,7 +2904,7 @@ console.log('Phaser main loaded');
             this.updateFireConsumption(effectiveDelta);
 
             // Update animal fleeing behavior
-            this.updateAnimalFleeing();
+            this.updateAnimalFleeing(effectiveDelta);
 
             // Needs (with sleep acceleration if sleeping)
             updateNeeds(this.playerState, effectiveDelta);
@@ -3246,7 +3246,7 @@ console.log('Phaser main loaded');
             }
 
             // Background overlay - fixed to camera viewport
-            const bg = this.add.rectangle(w / 2, h / 2, GameConfig.ui.dimensions.confirmationWidth, GameConfig.ui.dimensions.confirmationHeight, GameConfig.ui.colors.overlay, GameConfig.ui.alpha.overlay).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlay).setScrollFactor(0);
+            const bg = this.add.rectangle(w / 2, h / 2, GameConfig.ui.dimensions.confirmationWidth, GameConfig.ui.dimensions.confirmationHeight, GameConfig.ui.colors.overlay, 0.95).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlay).setScrollFactor(0);
 
             // Title - fixed to camera viewport
             const title = this.add.text(w / 2, h / 2 - GameConfig.ui.dimensions.titleOffset, 'Start New Game?', { fontSize: GameConfig.ui.fontSizes.overlayTitle, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
@@ -3776,17 +3776,16 @@ console.log('Phaser main loaded');
             // Consume wood from ALL burning fires globally (not just near player)
             for (const entity of this.entities) {
                 if (entity.type === 'fireplace' && entity.isBurning && entity.wood > 0) {
-                    // Consume wood over time (1 wood per day) - GLOBAL CONSUMPTION
+                    // Consume wood over time using hourly rate (0.167 per hour)
                     const realSecondsPerGameDay = GameConfig.time.realSecondsPerGameDay;
-                    const inGameMinutesPerMs = (24 * 60) / (realSecondsPerGameDay * 1000);
-                    const inGameMinutes = delta * inGameMinutesPerMs;
+                    const timeAcceleration = GameConfig.time.secondsPerDay / realSecondsPerGameDay;
+                    const gameTimeDelta = (delta / 1000) * timeAcceleration;
+                    const gameTimeHours = gameTimeDelta / GameConfig.time.secondsPerHour;
 
-                    const woodConsumptionRate = GameConfig.fires.dailyWoodConsumption / (24 * 60); // Wood per minute
-                    const woodConsumed = woodConsumptionRate * inGameMinutes;
+                    const woodToConsume = gameTimeHours * GameConfig.fires.hourlyConsumption;
 
-                    if (woodConsumed >= 1) {
+                    if (woodToConsume >= 1) {
                         entity.wood = Math.max(0, entity.wood - 1);
-
                         // Update fire visuals
                         this.updateFireVisuals(entity);
                     }
@@ -3972,12 +3971,17 @@ console.log('Phaser main loaded');
             return null; // Could not find suitable position
         }
 
-        updateAnimalFleeing() {
+        updateAnimalFleeing(delta) {
             // Get all animal entities (rabbit, deer, etc.)
             const animals = this.entities.filter(e =>
                 !e.collected &&
                 ['rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk', 'marten', 'grouse', 'woodcock', 'beaver', 'otter'].includes(e.type)
             );
+
+            // Debug: Log animal count occasionally
+            if (window.summaryLoggingEnabled && Math.random() < 0.01) { // 1% chance per frame when spam enabled
+                console.log(`[Animals] Processing ${animals.length} animals with delta ${delta}ms`);
+            }
 
             for (const animal of animals) {
                 let isFleeing = false;
@@ -3985,7 +3989,7 @@ console.log('Phaser main loaded');
                 // Check distance to player
                 const distToPlayer = distance(this.playerState.position, animal.position);
                 if (distToPlayer < GameConfig.technical.distances.animalFleeDistance) { // Flee if player is within 100 pixels
-                    this.fleeFromTarget(animal, this.playerState.position);
+                    this.fleeFromTarget(animal, this.playerState.position, delta);
                     isFleeing = true;
                 }
 
@@ -3994,7 +3998,7 @@ console.log('Phaser main loaded');
                     if (villager && !villager.isDead) {
                         const distToVillager = distance(villager.position, animal.position);
                         if (distToVillager < GameConfig.technical.distances.animalFleeDistance) { // Flee if villager is within 100 pixels
-                            this.fleeFromTarget(animal, villager.position);
+                            this.fleeFromTarget(animal, villager.position, delta);
                             isFleeing = true;
                             break; // Only flee from one threat at a time
                         }
@@ -4003,12 +4007,12 @@ console.log('Phaser main loaded');
 
                 // Wander if not fleeing
                 if (!isFleeing) {
-                    this.updateAnimalWandering(animal);
+                    this.updateAnimalWandering(animal, delta);
                 }
             }
         }
 
-        fleeFromTarget(animal, targetPosition) {
+        fleeFromTarget(animal, targetPosition, delta) {
             // Calculate direction away from target
             // This means animals run faster if multiple people chase them, happy accident and I love it!
             const dx = animal.position.x - targetPosition.x;
@@ -4016,8 +4020,8 @@ console.log('Phaser main loaded');
             const dist = Math.sqrt(dx * dx + dy * dy);
 
             if (dist > 0) {
-                // Move away at 80% speed
-                const fleeSpeed = GameConfig.player.moveSpeed * GameConfig.animals.fleeSpeedMultiplier * (GameConfig.animals.fixedDeltaTime / GameConfig.technical.millisecondsPerSecond); // 80% speed, 16ms delta
+                // Move away at 80% speed using actual delta time
+                const fleeSpeed = GameConfig.player.moveSpeed * GameConfig.animals.fleeSpeedMultiplier * (delta / 1000); // 80% speed, actual delta
                 const moveX = (dx / dist) * fleeSpeed;
                 const moveY = (dy / dist) * fleeSpeed;
 
@@ -4030,13 +4034,13 @@ console.log('Phaser main loaded');
                 animal.position.y = Math.max(0, Math.min(GameConfig.world.height, animal.position.y));
 
                 // Update visual position
-                if (animal._phaserText) {
+                if (animal._phaserText && animal._phaserText.setPosition) {
                     animal._phaserText.setPosition(animal.position.x, animal.position.y);
                 }
             }
         }
 
-        updateAnimalWandering(animal) {
+        updateAnimalWandering(animal, delta) {
             // Initialize wandering state if not exists
             if (!animal.wanderState) {
                 animal.wanderState = {
@@ -4048,7 +4052,7 @@ console.log('Phaser main loaded');
             }
 
             const wander = animal.wanderState;
-            wander.changeDirectionTimer += 16; // 16ms per frame
+            wander.changeDirectionTimer += delta; // Use actual delta time instead of fixed 16ms
 
             // Change direction periodically or if reached target
             if (wander.changeDirectionTimer >= wander.changeDirectionInterval ||
@@ -4079,8 +4083,8 @@ console.log('Phaser main loaded');
                 const dist = Math.sqrt(dx * dx + dy * dy);
 
                 if (dist > 0) {
-                    // Move at wandering speed
-                    const moveSpeed = wander.wanderSpeed * (GameConfig.animals.fixedDeltaTime / GameConfig.technical.millisecondsPerSecond); // Convert to per-frame movement
+                    // Move at wandering speed using actual delta time
+                    const moveSpeed = wander.wanderSpeed * (delta / 1000); // Convert to per-frame movement using actual delta
                     const moveX = (dx / dist) * moveSpeed;
                     const moveY = (dy / dist) * moveSpeed;
 
@@ -4093,7 +4097,7 @@ console.log('Phaser main loaded');
                     animal.position.y = Math.max(0, Math.min(GameConfig.world.height, animal.position.y));
 
                     // Update visual position
-                    if (animal._phaserText) {
+                    if (animal._phaserText && animal._phaserText.setPosition) {
                         animal._phaserText.setPosition(animal.position.x, animal.position.y);
                     }
                 }

@@ -163,7 +163,6 @@ window.GameConfig = {
         fleeSpeedMultiplier: 0.8, // Animals flee at 80% of player speed
         wanderSpeedRange: { min: 0.3, max: 0.5 }, // 30-50% of player speed
         directionChangeInterval: { min: 2000, max: 5000 }, // 2-5 seconds between direction changes
-        fixedDeltaTime: 16 // Fixed delta time for consistent animal movement
     },
 
     // Resource settings - Controls how resources spawn and spread
@@ -304,29 +303,11 @@ window.GameConfig = {
             // Text colors
             textPrimary: '#fff', // Primary text color
             textSecondary: '#ccc', // Secondary text color
-            textMuted: '#888888', // Muted text color
             textDark: '#222', // Dark text color
 
             // Button colors
             buttonPrimary: '#228B22', // Primary button (green)
             buttonSecondary: '#666', // Secondary button (gray)
-            buttonSuccess: '#228B22', // Success state (green)
-            buttonWarning: '#ff6600', // Warning state (orange)
-
-            // Status colors
-            healthGood: '#228B22', // Good health (green)
-            healthWarning: '#ff6600', // Warning health (orange)
-            healthCritical: '#ff0000', // Critical health (red)
-
-            // Special colors
-            warmth: 0xff6600, // Orange color for warmth
-            groundTexture: {
-                darkGreen: 0x4a5d23,
-                mediumGreen: 0x5a6d33,
-                lightGreen: 0x6a7d43,
-                lightGrey: 0x6b6b6b,
-                mediumGrey: 0x5a5a5a
-            }
         },
 
         // Font sizes - Centralized font size definitions
@@ -343,7 +324,6 @@ window.GameConfig = {
             massive: '32px', // Massive text
             entity: '22px', // Entity emoji size
             entityLarge: '48px', // Large entity emoji size
-            player: '32px', // Player emoji size
             inventory: '24px', // Inventory emoji size
             sleeping: '24px', // Sleeping emoji size
             debug: '13px', // Debug text size
@@ -415,16 +395,6 @@ window.GameConfig = {
             confirmationHeight: 200
         },
 
-        // Padding - Centralized padding definitions
-        padding: {
-            tiny: 1,
-            small: 2,
-            medium: 4,
-            large: 6,
-            xlarge: 8,
-            xxlarge: 12,
-            huge: 16
-        },
 
         // Z-indices - Centralized z-index definitions
         zIndex: {
@@ -436,14 +406,6 @@ window.GameConfig = {
             overlayContent: 1001,
             debug: 1002
         },
-
-        // Alpha values - Centralized transparency definitions
-        alpha: {
-            groundTexture: 0.3,
-            debugOverlay: 0.1,
-            debugCircle: 0.05,
-            overlay: 0.95
-        }
     },
 
     // Logging system settings
@@ -479,8 +441,7 @@ window.GameConfig = {
     fires: {
         maxWood: 10, // Maximum wood that can be stored in a fire
         initialWoodRange: { min: 7, max: 9 }, // Random initial wood range
-        hourlyConsumption: 0.167, // Wood consumed per hour (1 unit every 6 hours)
-        dailyWoodConsumption: 1 // Wood consumed per day when burning
+        hourlyConsumption: 0.167 // Wood consumed per hour (1 unit every 6 hours)
     },
 
     // Technical constants
