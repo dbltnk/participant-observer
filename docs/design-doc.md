@@ -8,6 +8,10 @@
 
 **V2 (Future):** The game evolves into a **mystery of survival** where players must learn through observation and experimentation. Every seed generates a unique world with different nutritional properties, poisonous plants, and survival strategies. The core gameplay becomes about **following your neighbors to learn from them** - observing what they eat, when they get sick, and why certain resources thrive or die out. Players must replay each seed multiple times to discover the secrets of survival and help their community thrive.
 
+**V3 (Future):** The game expands into a **movement and crafting mystery** where players must master both physical navigation and resource transformation. Every seed generates unique terrain patterns, crafting recipes, and movement challenges. The core gameplay becomes about **learning movement patterns and crafting techniques from your neighbors** - observing how they navigate difficult terrain, what they craft and when, and why certain crafting combinations succeed or fail. Players must experiment with movement mastery and crafting discovery to unlock the secrets of both physical and technological survival.
+
+**The Final Experience:** The player's journey follows a clear progression: first exploring independently and failing, then learning to watch their neighbors and imitate their successful strategies, then learning from neighbors when they actively teach, and ultimately surpassing their neighbors' knowledge and skills by innovating on their own. 
+
 ---
 
 ### II. Technical Specifications
