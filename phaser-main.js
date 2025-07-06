@@ -1548,7 +1548,7 @@ console.log('Phaser main loaded');
             // Execute action based on current action state
             switch (currentAction) {
                 case ACTION_STATES.WAIT:
-                    // Special case: Sleep actions go directly to SLEEP state
+                    // Special case: Sleep and drink actions go directly to their respective states
                     // since they don't need to find resources
                     if (actionType === 'sleep') {
                         if (window.summaryLoggingEnabled) {
@@ -1556,6 +1556,12 @@ console.log('Phaser main loaded');
                         }
                         this.transitionAction(ACTION_STATES.SLEEP);
                         this.actionExecutor.executeSleep(deltaTime, entities, storageBoxes);
+                    } else if (actionType === 'drink') {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} DRINK_DIRECT: Bypassing resource finding for drink action`);
+                        }
+                        this.transitionAction(ACTION_STATES.USE_FACILITY);
+                        this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
                     } else {
                         // Start action sequence for resource-based actions
                         this.startNewActionSequence(); // Clear data when starting new sequence
@@ -1566,14 +1572,20 @@ console.log('Phaser main loaded');
                     break;
 
                 case ACTION_STATES.FIND_RESOURCES:
-                    // Special case: If this is a sleep action, transition directly to SLEEP
-                    // since sleep doesn't need to find resources
+                    // Special case: If this is a sleep or drink action, transition directly to their respective states
+                    // since they don't need to find resources
                     if (actionType === 'sleep') {
                         if (window.summaryLoggingEnabled) {
                             console.log(`[HierarchicalVillagerAI] ${this.villager.name} SLEEP_DIRECT: Correcting from FIND_RESOURCES to SLEEP`);
                         }
                         this.transitionAction(ACTION_STATES.SLEEP);
                         this.actionExecutor.executeSleep(deltaTime, entities, storageBoxes);
+                    } else if (actionType === 'drink') {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} DRINK_DIRECT: Correcting from FIND_RESOURCES to USE_FACILITY`);
+                        }
+                        this.transitionAction(ACTION_STATES.USE_FACILITY);
+                        this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
                     } else {
                         // Check if we found a target
                         if (this.actionData.actionTargets.length > 0) {
@@ -1626,11 +1638,7 @@ console.log('Phaser main loaded');
                                 }
                             } else if (this.actionData.currentActionType === 'eat') {
                                 // For eating, find a nearby fire (same requirement as player)
-                                facilityTarget = this.villager.findNearbyFire();
-                                if (!facilityTarget) {
-                                    // No nearby fire, find the nearest fire to move to
-                                    facilityTarget = this.actionExecutor.findNearestBurningFire();
-                                }
+                                facilityTarget = this.actionExecutor.findNearestBurningFire();
                             }
 
                             if (facilityTarget) {
@@ -1898,7 +1906,7 @@ console.log('Phaser main loaded');
 
             switch (actionType) {
                 case 'drink':
-                    target = this.findNearestWell();
+                    target = this.findNearestWellWithWater();
                     break;
                 case 'eat':
                     target = this.findNearestFood(entities, storageBoxes, isEmergency);
@@ -2062,7 +2070,16 @@ console.log('Phaser main loaded');
                 return;
             }
 
-            const target = this.villager.hierarchicalAI.actionData.actionTargets[0];
+            let target = this.villager.hierarchicalAI.actionData.actionTargets[0];
+
+            // For drink actions, if no target is set, find the nearest well
+            if (!target && actionType === 'drink') {
+                target = this.findNearestWellWithWater();
+                if (target) {
+                    this.villager.hierarchicalAI.actionData.actionTargets = [target];
+                }
+            }
+
             if (!target) {
                 this.villager.hierarchicalAI.transitionAction(ACTION_STATES.FIND_RESOURCES);
                 return;
@@ -2070,7 +2087,8 @@ console.log('Phaser main loaded');
 
             // Check if we're close enough
             if (!GameUtils.isWithinInteractionDistance(this.villager.position, target.position, GameConfig.player.interactionThreshold)) {
-                this.villager.hierarchicalAI.transitionAction(ACTION_STATES.MOVE_TO_RESOURCE);
+                // Move towards the facility
+                this.villager.moveTowards(target.position, deltaTime);
                 return;
             }
 
@@ -2096,6 +2114,10 @@ console.log('Phaser main loaded');
 
             // Mark facility usage as complete
             this.villager.hierarchicalAI.actionData.actionProgress = 1.0;
+
+            // Complete the action sequence for facility usage
+            this.villager.hierarchicalAI.completeActionSequence();
+            this.villager.hierarchicalAI.transitionAction(ACTION_STATES.WAIT);
         }
 
         /**
@@ -2128,7 +2150,7 @@ console.log('Phaser main loaded');
             }
 
             // Find nearest well
-            const well = this.findNearestWell();
+            const well = this.findNearestWellWithWater();
             if (well) {
                 // Move towards well
                 this.villager.moveTowards(well.position, deltaTime);
@@ -2268,7 +2290,7 @@ console.log('Phaser main loaded');
         /**
          * Helper methods (adapted from existing VillagerStateMachine)
          */
-        findNearestWell() {
+        findNearestWellWithWater() {
             if (!this.villager.gameEntities) return null;
             return GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity =>
                 entity.type === GameConfig.entityTypes.well && entity.waterLevel >= 1
