@@ -1009,6 +1009,37 @@ console.log('Phaser main loaded');
             return true;
         }
 
+        eatFood() {
+            // Only allow eating if near a burning fire (same as player)
+            // Use ActionExecutor's findNearestBurningFire method
+            const nearbyFire = this.hierarchicalAI.actionExecutor.findNearestBurningFire();
+            if (nearbyFire && GameUtils.isWithinInteractionDistance(this.position, nearbyFire.position, GameConfig.player.interactionThreshold)) {
+                // Find food in inventory and eat it
+                for (let i = 0; i < this.inventory.length; i++) {
+                    const item = this.inventory[i];
+                    if (item && GameUtils.isFood(item.type)) {
+                        // Apply nutrition to villager
+                        GameUtils.applyNutrition(this, item.type);
+                        // Remove item from inventory
+                        this.inventory[i] = null;
+
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.name} ate ${item.type} near fire at (${Math.round(nearbyFire.position.x)}, ${Math.round(nearbyFire.position.y)})`);
+                        }
+                        return true; // Successfully ate food
+                    }
+                }
+                return false; // No food items found
+            } else {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} cannot eat - no nearby burning fire`);
+                }
+                return false; // No nearby fire
+            }
+        }
+
+
+
         createVisuals(scene) {
             // Create villager emoji with default standing emoji
             const defaultEmoji = this.characterCustomization ?
@@ -1285,6 +1316,8 @@ console.log('Phaser main loaded');
             this.actionData.actionTargets = [];
             this.actionData.actionProgress = 0;
             this.actionData.actionFailed = false;
+            // Store the current action type for use in collection logic
+            this.actionData.currentActionType = this.actionData.currentActionType;
         }
 
         /**
@@ -1506,6 +1539,7 @@ console.log('Phaser main loaded');
                     } else {
                         // Start action sequence for resource-based actions
                         this.startNewActionSequence(); // Clear data when starting new sequence
+                        this.actionData.currentActionType = actionType; // Store the action type
                         this.transitionAction(ACTION_STATES.FIND_RESOURCES);
                         this.actionExecutor.executeFindResources(actionType, deltaTime, entities, storageBoxes, isEmergency);
                     }
@@ -1553,8 +1587,46 @@ console.log('Phaser main loaded');
                 case ACTION_STATES.COLLECT_RESOURCE:
                     // Check if collection is complete
                     if (this.actionData.actionProgress >= 1.0) {
-                        this.transitionAction(ACTION_STATES.STORE_ITEMS);
-                        this.actionExecutor.executeStoreItems(deltaTime, entities, storageBoxes);
+                        // Determine if this action type requires immediate use or storage
+                        const immediateUseActions = ['fireRefill', 'eat'];
+                        const isImmediateUseAction = immediateUseActions.includes(this.actionData.currentActionType);
+
+                        if (isImmediateUseAction) {
+                            // For immediate use actions, go directly to USE_FACILITY
+                            // instead of storing items, since we want to use them immediately
+
+                            let facilityTarget = null;
+
+                            if (this.actionData.currentActionType === 'fireRefill') {
+                                // Find the villager's OWN fire to refill (not any fire)
+                                facilityTarget = this.villager.fireplace;
+                                if (facilityTarget && facilityTarget.wood >= GameConfig.fires.maxWood) {
+                                    // Fire is already full, no need to refill
+                                    facilityTarget = null;
+                                }
+                            } else if (this.actionData.currentActionType === 'eat') {
+                                // For eating, find a nearby fire (same requirement as player)
+                                facilityTarget = this.villager.findNearbyFire();
+                                if (!facilityTarget) {
+                                    // No nearby fire, find the nearest fire to move to
+                                    facilityTarget = this.actionExecutor.findNearestBurningFire();
+                                }
+                            }
+
+                            if (facilityTarget) {
+                                this.actionData.actionTargets = [facilityTarget];
+                                this.transitionAction(ACTION_STATES.USE_FACILITY);
+                                this.actionExecutor.executeUseFacility(this.actionData.currentActionType, deltaTime, entities, storageBoxes);
+                            } else {
+                                // No facility to use, complete the action sequence
+                                this.completeActionSequence();
+                                this.transitionAction(ACTION_STATES.WAIT);
+                            }
+                        } else {
+                            // For storage actions (forage), store items normally
+                            this.transitionAction(ACTION_STATES.STORE_ITEMS);
+                            this.actionExecutor.executeStoreItems(deltaTime, entities, storageBoxes);
+                        }
                     } else {
                         // Continue collecting
                         this.actionExecutor.executeCollectResource(deltaTime, entities, storageBoxes);
@@ -1702,7 +1774,7 @@ console.log('Phaser main loaded');
             if (this.villager.needs.temperature < GameConfig.villager.emergencyThresholds.temperature) return true;
 
             // Emergency fire refill
-            const ownFire = this.findOwnFireplace();
+            const ownFire = this.villager.fireplace;
             if (ownFire && ownFire.wood < GameConfig.villager.fireThresholds.emergency) return true;
 
             return false;
@@ -1729,7 +1801,7 @@ console.log('Phaser main loaded');
             if (this.villager.needs.calories < GameConfig.villager.regularThresholds.calories) return true;
 
             // Regular fire refill
-            const ownFire = this.findOwnFireplace();
+            const ownFire = this.villager.fireplace;
             if (ownFire && ownFire.wood < GameConfig.villager.fireThresholds.regular) return true;
 
             return false;
@@ -1760,11 +1832,7 @@ console.log('Phaser main loaded');
             }
         }
 
-        findOwnFireplace() {
-            assert(this.villager, 'Villager must exist to find own fireplace');
-            assert(this.villager.fireplace !== undefined, 'Villager fireplace property must be defined');
-            return this.villager.fireplace;
-        }
+
     }
 
     /**
@@ -1904,10 +1972,24 @@ console.log('Phaser main loaded');
                 return;
             }
 
+            // Determine what type of resource to collect based on the current action
+            const currentActionType = this.villager.hierarchicalAI.actionData.currentActionType;
+            let resourceType = null; // Default to null
+
+            // Map action types to resource types
+            if (currentActionType === 'fireRefill' || currentActionType === 'forageBurnable') {
+                resourceType = 'burnable';
+            } else if (currentActionType === 'eat' || currentActionType === 'forageFood') {
+                resourceType = 'food';
+            }
+
+            // Assert that we found a valid resource type
+            assert(resourceType !== null, `No resource type found for action type: ${currentActionType}`);
+
             // Perform the collection
             if (target.type === GameConfig.entityTypes.storage_box) {
-                // Retrieve from storage
-                this.villager.retrieveFromStorage(storageBoxes, 'food');
+                // Retrieve from storage with the correct resource type
+                this.villager.retrieveFromStorage(storageBoxes, resourceType);
             } else {
                 // Collect from world
                 this.villager.collectResource(target);
@@ -1931,7 +2013,7 @@ console.log('Phaser main loaded');
             // Check if inventory needs storing
             if (this.villager.isInventoryFull()) {
                 // Find storage box and store items
-                const storageBox = this.findOwnStorageBox();
+                const storageBox = this.villager.personalStorageBox;
                 if (storageBox) {
                     this.villager.storeItemsInStorage(storageBox);
                 }
@@ -1974,6 +2056,10 @@ console.log('Phaser main loaded');
                     break;
                 case 'fireRefill':
                     this.villager.addWoodToFire(target);
+                    break;
+                case 'eat':
+                    // Eat food from inventory (requires nearby fire)
+                    this.villager.eatFood();
                     break;
                 default:
                     console.warn(`[ActionExecutor] Unknown facility action: ${actionType}`);
@@ -2079,24 +2165,72 @@ console.log('Phaser main loaded');
          * Execute fire refill action (adapted from existing executeFireRefill)
          */
         executeFireRefill(isEmergency, deltaTime, entities, storageBoxes) {
-            if (!this.validateVillager(['moveTowards', 'retrieveFromStorage', 'collectResource'])) {
+            if (!this.validateVillager(['moveTowards', 'retrieveFromStorage', 'collectResource', 'addWoodToFire'])) {
                 return;
             }
 
-            // Find nearest wood source
-            const woodSource = this.findNearestBurnableAnywhere(entities, storageBoxes, isEmergency);
-            if (woodSource) {
-                // Move towards wood source
-                this.villager.moveTowards(woodSource.position, deltaTime);
+            // Check if we have wood in inventory first
+            let hasWoodInInventory = false;
+            for (let i = 0; i < this.villager.inventory.length; i++) {
+                const item = this.villager.inventory[i];
+                if (item && GameUtils.isBurnable(item.type)) {
+                    hasWoodInInventory = true;
+                    break;
+                }
+            }
 
-                // If close enough, interact
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, woodSource.position, GameConfig.player.interactionThreshold)) {
-                    if (woodSource.type === GameConfig.entityTypes.storage_box) {
-                        // Retrieve from storage
-                        this.villager.retrieveFromStorage(storageBoxes, 'burnable');
-                    } else {
-                        // Collect from world
-                        this.villager.collectResource(woodSource);
+            if (hasWoodInInventory) {
+                // We have wood, find a fire to refill
+                const fire = this.villager.fireplace;
+                if (fire && fire.wood < GameConfig.fires.maxWood) {
+                    // Move towards fire
+                    this.villager.moveTowards(fire.position, deltaTime);
+
+                    // If close enough, add wood to fire
+                    if (GameUtils.isWithinInteractionDistance(this.villager.position, fire.position, GameConfig.player.interactionThreshold)) {
+                        const success = this.villager.addWoodToFire(fire);
+                        if (success) {
+                            // Fire refilled successfully, action complete
+                            return;
+                        }
+                    }
+                }
+            } else {
+                // No wood in inventory, check if inventory is full of non-burnables
+                let inventoryFull = true;
+                let hasNonBurnables = false;
+                for (let i = 0; i < this.villager.inventory.length; i++) {
+                    const item = this.villager.inventory[i];
+                    if (!item) {
+                        inventoryFull = false;
+                        break;
+                    } else if (!GameUtils.isBurnable(item.type)) {
+                        hasNonBurnables = true;
+                    }
+                }
+
+                // If inventory is full of non-burnables, we need to store them first
+                if (inventoryFull && hasNonBurnables) {
+                    // This should be handled by the action sequence going to STORE_ITEMS
+                    // The executeStoreItems method will handle storing non-burnables
+                    return;
+                }
+
+                // Collect burnables
+                const woodSource = this.findNearestBurnableAnywhere(entities, storageBoxes, isEmergency);
+                if (woodSource) {
+                    // Move towards wood source
+                    this.villager.moveTowards(woodSource.position, deltaTime);
+
+                    // If close enough, interact
+                    if (GameUtils.isWithinInteractionDistance(this.villager.position, woodSource.position, GameConfig.player.interactionThreshold)) {
+                        if (woodSource.type === GameConfig.entityTypes.storage_box) {
+                            // Retrieve from storage
+                            this.villager.retrieveFromStorage(storageBoxes, 'burnable');
+                        } else {
+                            // Collect from world
+                            this.villager.collectResource(woodSource);
+                        }
                     }
                 }
             }
@@ -2306,12 +2440,7 @@ console.log('Phaser main loaded');
             );
         }
 
-        findOwnStorageBox() {
-            if (!this.villager.gameEntities) return null;
-            return GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity =>
-                entity.type === GameConfig.entityTypes.storage_box && entity === this.villager.personalStorageBox
-            );
-        }
+
 
         canCollectResourceWithGoldenRule(entity, entities) {
             // Golden rule: only collect if there are enough resources in the area
@@ -2491,7 +2620,7 @@ console.log('Phaser main loaded');
          * Check if fire should be refilled (adapted from existing shouldRefillFire)
          */
         shouldRefillFire(isEmergency, entities) {
-            const ownFire = this.findOwnFireplace();
+            const ownFire = this.villager.fireplace;
             const threshold = isEmergency ? GameConfig.villager.fireThresholds.emergency : GameConfig.villager.fireThresholds.regular;
 
             // If not currently in FIRE_REFILL, only enter if fire needs refilling
@@ -2508,7 +2637,7 @@ console.log('Phaser main loaded');
             }
 
             // Check communal storage for food
-            const communalStorage = this.findCommunalStorageBox();
+            const communalStorage = this.villager.communalStorageBox;
             if (communalStorage) {
                 const hasFoodInStorage = communalStorage.items.some(item => item && GameUtils.isFood(item.type));
                 if (hasFoodInStorage) {
@@ -2517,7 +2646,7 @@ console.log('Phaser main loaded');
             }
 
             // Check personal storage for food
-            const personalStorage = this.findOwnStorageBox();
+            const personalStorage = this.villager.personalStorageBox;
             if (personalStorage) {
                 const hasFoodInStorage = personalStorage.items.some(item => item && GameUtils.isFood(item.type));
                 if (hasFoodInStorage) {
@@ -2539,7 +2668,7 @@ console.log('Phaser main loaded');
             }
 
             // Check communal storage for burnable
-            const communalStorage = this.findCommunalStorageBox();
+            const communalStorage = this.villager.communalStorageBox;
             if (communalStorage) {
                 const hasBurnableInStorage = communalStorage.items.some(item => item && GameUtils.isBurnable(item.type));
                 if (hasBurnableInStorage) {
@@ -2548,7 +2677,7 @@ console.log('Phaser main loaded');
             }
 
             // Check personal storage for burnable
-            const personalStorage = this.findOwnStorageBox();
+            const personalStorage = this.villager.personalStorageBox;
             if (personalStorage) {
                 const hasBurnableInStorage = personalStorage.items.some(item => item && GameUtils.isBurnable(item.type));
                 if (hasBurnableInStorage) {
@@ -2560,23 +2689,6 @@ console.log('Phaser main loaded');
             return true;
         }
 
-        /**
-         * Helper methods (adapted from existing VillagerStateMachine)
-         */
-        findOwnFireplace() {
-            assert(this.villager.fireplace !== undefined, `Villager ${this.villager.name} missing fireplace property`);
-            return this.villager.fireplace;
-        }
-
-        findOwnStorageBox() {
-            assert(this.villager.personalStorageBox !== undefined, `Villager ${this.villager.name} missing personalStorageBox property`);
-            return this.villager.personalStorageBox;
-        }
-
-        findCommunalStorageBox() {
-            assert(this.villager.communalStorageBox !== undefined, `Villager ${this.villager.name} missing communalStorageBox property`);
-            return this.villager.communalStorageBox;
-        }
 
         hasWoodInInventory() {
             return this.villager.inventory.some(item => item && GameUtils.isBurnable(item.type));
@@ -3236,7 +3348,7 @@ console.log('Phaser main loaded');
                         if (GameUtils.isFood(item.type)) {
                             const nearbyFire = this.findNearbyFire();
                             if (nearbyFire) {
-                                this.eatFoodFromInventory(i, item);
+                                this.useResourceFromInventoryPlayer(i, item);
                                 return;
                             } else {
                                 this.showTempMessage('Must be near a burning fire to eat!', GameConfig.technical.messageDurations.medium);
@@ -4567,7 +4679,7 @@ console.log('Phaser main loaded');
             }
         }
 
-        eatFoodFromInventory(slot, item) {
+        useResourceFromInventoryPlayer(slot, item) {
             // Only allow eating if near a burning fire
             const nearbyFire = this.findNearbyFire();
             if (nearbyFire) {
