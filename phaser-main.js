@@ -107,16 +107,11 @@ console.log('Phaser main loaded');
     function assert(condition, message) {
         if (!condition) throw new Error('ASSERTION FAILED: ' + message);
     }
-    // Distance function now uses GameUtils.distance
 
     // === BEGIN: Logging System ===
     let logTransmissionInterval;
     let domSnapshotInterval;
     let lastDomSnapshot = '';
-
-    // ALL_FOOD_TYPES now available in GameUtils.ALL_FOOD_TYPES
-
-    // isFood function now uses GameUtils.isFood
 
     // Initialize logging system
     function initLogging() {
@@ -261,7 +256,7 @@ console.log('Phaser main loaded');
     });
     // === END: Logging System ===
 
-    // === BEGIN: PerlinNoise and utility functions (copied from game/Utils.js) ===
+    // === BEGIN: PerlinNoise and utility functions ===
     // Perlin noise constants - these are technical constants, not configurable game values
     const PERLIN_PERMUTATION_SIZE = 256;
     const PERLIN_MASK = 255;
@@ -1826,10 +1821,6 @@ console.log('Phaser main loaded');
             return inventoryCount > threshold;
         }
 
-        // isItemNeeded method removed - using simple inventory thresholds instead
-
-        // isFood and distance now use GameUtils methods
-
         // === ACTION METHODS ===
 
         // Helper method to log nearby objects and villager stats
@@ -1937,44 +1928,6 @@ console.log('Phaser main loaded');
             return false;
         }
 
-        retrieveFromStorage(storageBoxes) {
-            // Check if inventory has space
-            const emptySlot = this.villager.inventory.findIndex(i => i === null);
-            if (emptySlot === -1) {
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[Villager] ${this.villager.name} RETRIEVE_FAILED: Inventory full`);
-                    this.logNearbyObjects();
-                }
-                return false;
-            }
-
-            // Check nearby storage boxes for items to retrieve
-            for (const storageBox of storageBoxes) {
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, storageBox.position)) {
-                    for (let i = 0; i < storageBox.items.length; i++) {
-                        const item = storageBox.items[i];
-                        if (item) {
-                            // Retrieve any item if we have space
-                            this.villager.inventory[emptySlot] = item;
-                            storageBox.items[i] = null;
-
-                            if (window.summaryLoggingEnabled) {
-                                console.log(`[Villager] ${this.villager.name} RETRIEVE_SUCCESS: Retrieved ${item.type}${item.emoji} from storage to inventory slot ${emptySlot}`);
-                                this.logNearbyObjects();
-                            }
-                            return true;
-                        }
-                    }
-                }
-            }
-
-            if (window.summaryLoggingEnabled) {
-                console.log(`[Villager] ${this.villager.name} RETRIEVE_FAILED: No items in nearby storage`);
-                this.logNearbyObjects();
-            }
-            return false;
-        }
-
         // General function to retrieve items from storage
         retrieveFromStorage(storageBoxes, itemType = null) {
             if (window.summaryLoggingEnabled) {
@@ -2016,8 +1969,6 @@ console.log('Phaser main loaded');
             }
             return false;
         }
-
-        // applyNutrition now uses GameUtils.applyNutrition
 
         collectResource(entity) {
             // Safety check: prevent collecting already collected resources
