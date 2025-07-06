@@ -892,6 +892,13 @@ console.log('Phaser main loaded');
             assert(well, 'Well entity required for drinkFromWell');
             assert(well.type === GameConfig.entityTypes.well, 'Target must be a well');
 
+            // Check if villager is within interaction range (same as player system)
+            const dist = GameUtils.distance(this.position, well.position);
+            if (dist > GameConfig.player.interactionThreshold) {
+                console.warn(`[Villager] ${this.name} tried to drink from well but was out of range (${Math.round(dist)} > ${GameConfig.player.interactionThreshold})`);
+                return false;
+            }
+
             // Restore water need
             this.needs.water = Math.min(GameConfig.needs.fullValue, this.needs.water + GameConfig.player.wellWaterRestore);
 
@@ -1742,13 +1749,6 @@ console.log('Phaser main loaded');
             if (shouldLogEvaluation) {
                 console.log(`[GoalEvaluator] ${this.villager.name} evaluating goal at hour ${hour}`);
                 console.log(`[GoalEvaluator] ${this.villager.name} current needs: T${this.villager.needs.temperature.toFixed(1)} W${this.villager.needs.water.toFixed(1)} C${this.villager.needs.calories.toFixed(1)} V[${this.villager.needs.vitamins.map(v => v.toFixed(1)).join(',')}]`);
-            }
-
-            // === QUICK OVERRIDE HACK ===
-            // Force all villagers into a specific goal for testing
-            if (window.forceVillagerState) {
-                if (shouldLogEvaluation) console.log(`[GoalEvaluator] ${this.villager.name} FORCE_OVERRIDE: Using forced goal ${window.forceVillagerState}`);
-                return window.forceVillagerState;
             }
 
             // Evaluate goals in priority order
@@ -3471,28 +3471,6 @@ console.log('Phaser main loaded');
             }
             updateLogSpamBtn.call(this);
             this.uiContainer.add(this.ui.logSpamBtn);
-
-            // Force villager goal toggle (bottom left, above log spam button) - fixed to camera viewport
-            this.ui.forceStateBtn = this.add.text(margin + 150, window.innerHeight - margin - GameConfig.ui.dimensions.logSpamButtonOffset - 30, '⚪ Force MAINTAIN: OFF', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.debugBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-            this.ui.forceStateBtn.on('pointerdown', () => {
-                if (window.forceVillagerState) {
-                    window.forceVillagerState = null;
-                } else {
-                    // Force a specific goal for testing (using hierarchical system)
-                    window.forceVillagerState = GOAL_STATES.MAINTAIN;
-                }
-                updateForceStateBtn.call(this);
-            });
-            function updateForceStateBtn() {
-                if (window.forceVillagerState) {
-                    this.ui.forceStateBtn.setText('🟢 Force MAINTAIN: ON').setColor(GameConfig.ui.colors.textPrimary).setBackgroundColor(GameConfig.ui.colors.buttonSuccess);
-                } else {
-                    this.ui.forceStateBtn.setText('⚪ Force MAINTAIN: OFF').setColor(GameConfig.ui.colors.textSecondary).setBackgroundColor(GameConfig.ui.colors.debugBackground);
-                }
-            }
-            updateForceStateBtn.call(this);
-            this.uiContainer.add(this.ui.forceStateBtn);
-
 
 
             // Seed control box (bottom right) - use viewport dimensions
