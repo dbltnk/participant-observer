@@ -1826,7 +1826,15 @@ console.log('Phaser main loaded');
         evaluateContributeGoal(gameTime, entities, storageBoxes) {
             // Check if we should forage for food or burnable resources
             // Use the collection manager to evaluate foraging needs
-            return this.collectionManager.shouldForageFood(storageBoxes) || this.collectionManager.shouldForageBurnable(storageBoxes);
+            const shouldForageFood = this.collectionManager.shouldForageFood(storageBoxes);
+            const shouldForageBurnable = this.collectionManager.shouldForageBurnable(storageBoxes);
+
+            // Debug logging (occasional to avoid spam)
+            if (window.summaryLoggingEnabled && Math.random() < 0.05) { // 5% chance
+                console.log(`[GoalEvaluator] ${this.villager.name} CONTRIBUTE check: food=${shouldForageFood}, burnable=${shouldForageBurnable}`);
+            }
+
+            return shouldForageFood || shouldForageBurnable;
         }
 
         /**
@@ -2016,19 +2024,26 @@ console.log('Phaser main loaded');
          * Execute store items action (fourth step in action sequence)
          */
         executeStoreItems(deltaTime, entities, storageBoxes) {
-            if (!this.validateVillager(['isInventoryFull', 'storeItemsInStorage'])) {
+            if (!this.validateVillager(['moveTowards', 'storeItemsInStorage'])) {
                 assert(this.villager, 'Villager must exist to transition action');
                 assert(this.villager.hierarchicalAI, 'Villager hierarchicalAI must exist to transition action');
                 this.villager.hierarchicalAI.transitionAction(ACTION_STATES.WAIT);
                 return;
             }
 
-            // Check if inventory needs storing
-            if (this.villager.isInventoryFull()) {
-                // Find storage box and store items
+            // Check if villager has any items to store
+            const hasItems = this.villager.inventory.some(item => item !== null);
+            if (hasItems) {
+                // Find storage box and move to it
                 const storageBox = this.villager.personalStorageBox;
                 if (storageBox) {
-                    this.villager.storeItemsInStorage(storageBox);
+                    // Move towards storage box
+                    this.villager.moveTowards(storageBox.position, deltaTime);
+
+                    // If close enough, store items
+                    if (GameUtils.isWithinInteractionDistance(this.villager.position, storageBox.position, GameConfig.player.interactionThreshold)) {
+                        this.villager.storeItemsInStorage(storageBox);
+                    }
                 }
             }
 
@@ -2249,47 +2264,6 @@ console.log('Phaser main loaded');
             }
         }
 
-        /**
-         * Execute forage food action (adapted from existing executeForageFood)
-         */
-        executeForageFood(deltaTime, entities, storageBoxes) {
-            if (!this.validateVillager(['moveTowards', 'collectResource'])) {
-                return;
-            }
-
-            // Find nearest food resource
-            const foodResource = this.findNearestFoodResource(entities);
-            if (foodResource) {
-                // Move towards food resource
-                this.villager.moveTowards(foodResource.position, deltaTime);
-
-                // If close enough, collect
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, foodResource.position, GameConfig.player.interactionThreshold)) {
-                    this.villager.collectResource(foodResource);
-                }
-            }
-        }
-
-        /**
-         * Execute forage burnable action (adapted from existing executeForageBurnable)
-         */
-        executeForageBurnable(deltaTime, entities, storageBoxes) {
-            if (!this.validateVillager(['moveTowards', 'collectResource'])) {
-                return;
-            }
-
-            // Find nearest burnable resource
-            const burnableResource = this.findNearestBurnableOnGround(entities);
-            if (burnableResource) {
-                // Move towards burnable resource
-                this.villager.moveTowards(burnableResource.position, deltaTime);
-
-                // If close enough, collect
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, burnableResource.position, GameConfig.player.interactionThreshold)) {
-                    this.villager.collectResource(burnableResource);
-                }
-            }
-        }
 
         /**
          * Helper methods (adapted from existing VillagerStateMachine)
@@ -2656,26 +2630,40 @@ console.log('Phaser main loaded');
                 return false; // Already have food
             }
 
-            // Check communal storage for food
+            // Check if storage boxes are full - if not, we should forage to fill them
             const communalStorage = this.villager.communalStorageBox;
-            if (communalStorage) {
-                const hasFoodInStorage = communalStorage.items.some(item => item && GameUtils.isFood(item.type));
-                if (hasFoodInStorage) {
-                    return false; // Food available in storage
-                }
-            }
-
-            // Check personal storage for food
             const personalStorage = this.villager.personalStorageBox;
-            if (personalStorage) {
-                const hasFoodInStorage = personalStorage.items.some(item => item && GameUtils.isFood(item.type));
-                if (hasFoodInStorage) {
-                    return false; // Food available in storage
-                }
+
+            // Count food items in storage
+            let communalFoodCount = 0;
+            let personalFoodCount = 0;
+
+            if (communalStorage) {
+                communalFoodCount = communalStorage.items.filter(item => item && GameUtils.isFood(item.type)).length;
             }
 
-            // No food in inventory or storage, should forage
-            return true;
+            if (personalStorage) {
+                personalFoodCount = personalStorage.items.filter(item => item && GameUtils.isFood(item.type)).length;
+            }
+
+            // Check if storage is full (using GameConfig capacities)
+            const communalCapacity = GameConfig.storage.communalCapacity;
+            const personalCapacity = GameConfig.storage.personalCapacity;
+
+            // If either storage isn't full of food, we should forage
+            if (communalFoodCount < communalCapacity || personalFoodCount < personalCapacity) {
+                // Debug logging (occasional to avoid spam)
+                if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance
+                    console.log(`[CollectionManager] ${this.villager.name} shouldForageFood=true: communal=${communalFoodCount}/${communalCapacity}, personal=${personalFoodCount}/${personalCapacity}`);
+                }
+                return true;
+            }
+
+            // Both storages are full of food, no need to forage
+            if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance
+                console.log(`[CollectionManager] ${this.villager.name} shouldForageFood=false: storages full`);
+            }
+            return false;
         }
 
         /**
@@ -2687,26 +2675,40 @@ console.log('Phaser main loaded');
                 return false; // Already have burnable
             }
 
-            // Check communal storage for burnable
+            // Check if storage boxes are full - if not, we should forage to fill them
             const communalStorage = this.villager.communalStorageBox;
-            if (communalStorage) {
-                const hasBurnableInStorage = communalStorage.items.some(item => item && GameUtils.isBurnable(item.type));
-                if (hasBurnableInStorage) {
-                    return false; // Burnable available in storage
-                }
-            }
-
-            // Check personal storage for burnable
             const personalStorage = this.villager.personalStorageBox;
-            if (personalStorage) {
-                const hasBurnableInStorage = personalStorage.items.some(item => item && GameUtils.isBurnable(item.type));
-                if (hasBurnableInStorage) {
-                    return false; // Burnable available in storage
-                }
+
+            // Count burnable items in storage
+            let communalBurnableCount = 0;
+            let personalBurnableCount = 0;
+
+            if (communalStorage) {
+                communalBurnableCount = communalStorage.items.filter(item => item && GameUtils.isBurnable(item.type)).length;
             }
 
-            // No burnable in inventory or storage, should forage
-            return true;
+            if (personalStorage) {
+                personalBurnableCount = personalStorage.items.filter(item => item && GameUtils.isBurnable(item.type)).length;
+            }
+
+            // Check if storage is full (using GameConfig capacities)
+            const communalCapacity = GameConfig.storage.communalCapacity;
+            const personalCapacity = GameConfig.storage.personalCapacity;
+
+            // If either storage isn't full of burnable, we should forage
+            if (communalBurnableCount < communalCapacity || personalBurnableCount < personalCapacity) {
+                // Debug logging (occasional to avoid spam)
+                if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) { // 10% chance
+                    console.log(`[CollectionManager] ${this.villager.name} shouldForageBurnable=true: communal=${communalBurnableCount}/${communalCapacity}, personal=${personalBurnableCount}/${personalCapacity}`);
+                }
+                return true;
+            }
+
+            // Both storages are full of burnable, no need to forage
+            if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) { // 10% chance
+                console.log(`[CollectionManager] ${this.villager.name} shouldForageBurnable=false: storages full`);
+            }
+            return false;
         }
 
 
