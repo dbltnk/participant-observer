@@ -803,24 +803,94 @@ console.log('Phaser main loaded');
 
             // Update stats debug text when debug is enabled
             if (window.villagerDebugEnabled) {
-                if (!this.statsText) {
-                    // Create stats text if it doesn't exist
-                    this.statsText = this.phaserText.scene.add.text(this.position.x, this.position.y - 40, '', {
-                        fontSize: '10px',
-                        fontFamily: 'monospace',
-                        color: '#ffff00',
-                        backgroundColor: '#000',
-                        padding: { left: 2, right: 2, top: 1, bottom: 1 }
-                    }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug);
+                // Create individual stat text objects if they don't exist
+                if (!this.statTexts) {
+                    this.statTexts = {
+                        temperature: this.phaserText.scene.add.text(0, 0, '', {
+                            fontSize: '10px',
+                            fontFamily: 'monospace',
+                            backgroundColor: '#000',
+                            padding: { left: 2, right: 2, top: 1, bottom: 1 }
+                        }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug),
+                        water: this.phaserText.scene.add.text(0, 0, '', {
+                            fontSize: '10px',
+                            fontFamily: 'monospace',
+                            backgroundColor: '#000',
+                            padding: { left: 2, right: 2, top: 1, bottom: 1 }
+                        }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug),
+                        calories: this.phaserText.scene.add.text(0, 0, '', {
+                            fontSize: '10px',
+                            fontFamily: 'monospace',
+                            backgroundColor: '#000',
+                            padding: { left: 2, right: 2, top: 1, bottom: 1 }
+                        }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug),
+                        vitamins: this.phaserText.scene.add.text(0, 0, '', {
+                            fontSize: '10px',
+                            fontFamily: 'monospace',
+                            backgroundColor: '#000',
+                            padding: { left: 2, right: 2, top: 1, bottom: 1 }
+                        }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug)
+                    };
                 }
 
-                // Show stats: T W C V[A,B,C,D,E]
-                const stats = `T${this.needs.temperature.toFixed(2)} W${this.needs.water.toFixed(2)} C${this.needs.calories.toFixed(2)} V[${this.needs.vitamins.map(v => v.toFixed(2)).join(',')}]`;
-                this.statsText.setText(stats);
-                this.statsText.setPosition(this.position.x, this.position.y - 40);
-                this.statsText.setVisible(true);
+                // Helper function to get color based on threshold
+                const getStatColor = (value, regularThreshold, emergencyThreshold) => {
+                    if (value >= regularThreshold) return '#cccccc'; // Light grey - above regular threshold
+                    if (value >= emergencyThreshold) return '#ff8c00'; // Dark orange - below regular but above emergency
+                    return '#ff0000'; // Bright red - below emergency threshold
+                };
+
+                // Get threshold values from config
+                const thresholds = GameConfig.villager;
+
+                // Calculate values (no floating points)
+                const tempValue = Math.round(this.needs.temperature);
+                const waterValue = Math.round(this.needs.water);
+                const caloriesValue = Math.round(this.needs.calories);
+                const vitaminValues = this.needs.vitamins.map(v => Math.round(v));
+
+                // Set individual stat texts with their own colors
+                this.statTexts.temperature.setText(`T${tempValue}`);
+                this.statTexts.temperature.setColor(getStatColor(this.needs.temperature, thresholds.regularThresholds.temperature, thresholds.emergencyThresholds.temperature));
+
+                this.statTexts.water.setText(`W${waterValue}`);
+                this.statTexts.water.setColor(getStatColor(this.needs.water, thresholds.regularThresholds.water, thresholds.emergencyThresholds.water));
+
+                this.statTexts.calories.setText(`C${caloriesValue}`);
+                this.statTexts.calories.setColor(getStatColor(this.needs.calories, thresholds.regularThresholds.calories, thresholds.emergencyThresholds.calories));
+
+                this.statTexts.vitamins.setText(`V[${vitaminValues.join(',')}]`);
+                this.statTexts.vitamins.setColor('#cccccc'); // Vitamins always grey
+
+                // Position the stat texts horizontally with more spacing
+                const baseX = this.position.x - 40;
+                const baseY = this.position.y - 60;
+                const spacing = 35; // Increased spacing between each stat
+
+                this.statTexts.temperature.setPosition(baseX - spacing * 1.5, baseY);
+                this.statTexts.water.setPosition(baseX - spacing * 0.5, baseY);
+                this.statTexts.calories.setPosition(baseX + spacing * 0.5, baseY);
+                this.statTexts.vitamins.setPosition(baseX + spacing * 2.5, baseY);
+
+                // Show all stat texts
+                this.statTexts.temperature.setVisible(true);
+                this.statTexts.water.setVisible(true);
+                this.statTexts.calories.setVisible(true);
+                this.statTexts.vitamins.setVisible(true);
+
+                // Hide the old single stats text if it exists
+                if (this.statsText) {
+                    this.statsText.setVisible(false);
+                }
             } else {
-                // Hide stats text when debug is disabled
+                // Hide all stat texts when debug is disabled
+                if (this.statTexts) {
+                    this.statTexts.temperature.setVisible(false);
+                    this.statTexts.water.setVisible(false);
+                    this.statTexts.calories.setVisible(false);
+                    this.statTexts.vitamins.setVisible(false);
+                }
+                // Also hide the old single stats text if it exists
                 if (this.statsText) {
                     this.statsText.setVisible(false);
                 }
@@ -1138,6 +1208,22 @@ console.log('Phaser main loaded');
             if (this.inventoryText) {
                 this.inventoryText.destroy();
                 this.inventoryText = null;
+            }
+            // Clean up individual stat text objects
+            if (this.statTexts) {
+                if (this.statTexts.temperature) {
+                    this.statTexts.temperature.destroy();
+                }
+                if (this.statTexts.water) {
+                    this.statTexts.water.destroy();
+                }
+                if (this.statTexts.calories) {
+                    this.statTexts.calories.destroy();
+                }
+                if (this.statTexts.vitamins) {
+                    this.statTexts.vitamins.destroy();
+                }
+                this.statTexts = null;
             }
         }
     }
