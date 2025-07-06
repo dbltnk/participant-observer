@@ -9,7 +9,7 @@ x res are proc genned
 x grid cells are tagged as biomes
 x exclude the center as village biome
 x some animals are faster
-reproduction is possible if there are 2 of a type in a biome
+x reproduction is possible if there are 2 of a type in a biome
 force villager states for debug
 villager have perfect knowledge of what to eat (not poisonous, not too fast)
 villagers never take the last 2 of any type in a biomes

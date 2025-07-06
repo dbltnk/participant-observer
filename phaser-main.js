@@ -2339,11 +2339,6 @@ console.log('Phaser main loaded');
         }
         preload() { }
         create() {
-            // Keep world size large for exploration (10x viewport as configured)
-            // Don't override the large world dimensions from GameConfig
-            assert(GameConfig.world.width >= window.innerWidth * 10, 'World width should be at least 10x viewport width');
-            assert(GameConfig.world.height >= window.innerHeight * 10, 'World height should be at least 10x viewport height');
-
             // --- World/entities ---
             this.entities = [];
             const currentSeed = getCurrentSeed();
@@ -4008,31 +4003,65 @@ console.log('Phaser main loaded');
             const lines = displayText.split('\n');
             let currentY = 275;
             const lineHeight = 12;
+            const columnWidth = 200; // Width of each column
+            const leftColumnX = 20;
+            const rightColumnX = leftColumnX + columnWidth;
 
-            for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-                const line = lines[lineIndex];
+            // Separate header and total lines from resource lines
+            const headerLines = [];
+            const resourceLines = [];
+            const totalLines = [];
+
+            for (const line of lines) {
                 if (line.trim() === '') continue;
 
+                if (line.startsWith('Resource Counts:') || line.startsWith('Total:')) {
+                    // Header and total lines go in the left column
+                    headerLines.push(line);
+                } else if (line.includes(':')) {
+                    // Resource lines will be split between columns
+                    resourceLines.push(line);
+                }
+            }
+
+            // Display header lines in left column
+            for (const line of headerLines) {
+                const textObj = this.add.text(leftColumnX, currentY, line, {
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
+                    color: '#ffffff',
+                    backgroundColor: '#000',
+                    padding: { left: 5, right: 5, top: 2, bottom: 2 }
+                }).setOrigin(0, 0).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.debug);
+
+                this.uiContainer.add(textObj);
+                this.resourceCountTexts.push(textObj);
+                currentY += lineHeight;
+            }
+
+            // Split resource lines into two columns
+            const midPoint = Math.ceil(resourceLines.length / 2);
+            const leftColumnResources = resourceLines.slice(0, midPoint);
+            const rightColumnResources = resourceLines.slice(midPoint);
+
+            // Display left column resources
+            for (const line of leftColumnResources) {
                 // Check if this line should be grey (contains a resource with wild count = 0)
                 let isGrey = false;
-                if (line.includes(':')) {
-                    // Extract the wild count from the line (format: "emoji name: wild+stored")
-                    const match = line.match(/: (\d+)\+(\d+)/);
-                    if (match) {
-                        const wildCount = parseInt(match[1], 10);
-                        isGrey = wildCount === 0;
-                    }
+                const match = line.match(/: (\d+)\+(\d+)/);
+                if (match) {
+                    const wildCount = parseInt(match[1], 10);
+                    isGrey = wildCount === 0;
                 }
 
                 const color = isGrey ? '#888888' : '#ffffff';
 
                 // Debug: log the color assignment for resource lines
-                if (window.summaryLoggingEnabled && line.includes(':')) {
-                    console.log(`[ResourceCount] Line: "${line.trim()}", isGrey: ${isGrey}, color: ${color}`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[ResourceCount] Left column line: "${line.trim()}", isGrey: ${isGrey}, color: ${color}`);
                 }
 
-                // Create text object for this line
-                const textObj = this.add.text(20, currentY, line, {
+                const textObj = this.add.text(leftColumnX, currentY, line, {
                     fontSize: '10px',
                     fontFamily: 'monospace',
                     color: color,
@@ -4042,8 +4071,37 @@ console.log('Phaser main loaded');
 
                 this.uiContainer.add(textObj);
                 this.resourceCountTexts.push(textObj);
+                currentY += lineHeight;
+            }
 
-                // Move to next line
+            // Reset Y position for right column and display right column resources
+            currentY = 275 + (headerLines.length * lineHeight);
+            for (const line of rightColumnResources) {
+                // Check if this line should be grey (contains a resource with wild count = 0)
+                let isGrey = false;
+                const match = line.match(/: (\d+)\+(\d+)/);
+                if (match) {
+                    const wildCount = parseInt(match[1], 10);
+                    isGrey = wildCount === 0;
+                }
+
+                const color = isGrey ? '#888888' : '#ffffff';
+
+                // Debug: log the color assignment for resource lines
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[ResourceCount] Right column line: "${line.trim()}", isGrey: ${isGrey}, color: ${color}`);
+                }
+
+                const textObj = this.add.text(rightColumnX, currentY, line, {
+                    fontSize: '10px',
+                    fontFamily: 'monospace',
+                    color: color,
+                    backgroundColor: '#000',
+                    padding: { left: 5, right: 5, top: 2, bottom: 2 }
+                }).setOrigin(0, 0).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.debug);
+
+                this.uiContainer.add(textObj);
+                this.resourceCountTexts.push(textObj);
                 currentY += lineHeight;
             }
         }
@@ -4401,94 +4459,110 @@ console.log('Phaser main loaded');
                     console.log(`[Propagation] Starting propagation for day ${currentDay}`);
                 }
 
-                // Check each uncollected resource for propagation (both adults and children)
+                // Group resources by tile and type for simplified reproduction logic
+                const tileSize = GameConfig.world.tileSize;
+                const resourceGroups = new Map(); // Map: "tileX,tileY,type" -> array of entities
+
+                // Group uncollected resources by tile and type
                 for (const entity of this.entities) {
                     if (!entity.collected && (GameUtils.ALL_FOOD_TYPES.includes(entity.type) || GameUtils.ALL_BURNABLE_TYPES.includes(entity.type))) {
+                        const tileX = Math.floor(entity.position.x / tileSize);
+                        const tileY = Math.floor(entity.position.y / tileSize);
+                        const key = `${tileX},${tileY},${entity.type}`;
+
+                        if (!resourceGroups.has(key)) {
+                            resourceGroups.set(key, []);
+                        }
+                        resourceGroups.get(key).push(entity);
+                    }
+                }
+
+                // Check each group for reproduction (2+ of same type in same tile)
+                for (const [key, entities] of resourceGroups) {
+                    if (entities.length >= 2) {
+                        // Parse tile and type from key
+                        const [tileXStr, tileYStr, resourceType] = key.split(',');
+                        const tileX = parseInt(tileXStr);
+                        const tileY = parseInt(tileYStr);
+
                         // Calculate propagation chance based on global resource count
-                        const globalCount = this.getGlobalResourceCount(entity.type);
+                        const globalCount = this.getGlobalResourceCount(resourceType);
                         const baseChance = 0.5; // 50% base chance
-                        const maxCount = GameUtils.ALL_BURNABLE_TYPES.includes(entity.type) ? GameConfig.resources.maxCounts.tree : GameConfig.resources.maxCounts.default;
+                        const maxCount = GameUtils.ALL_BURNABLE_TYPES.includes(resourceType) ? GameConfig.resources.maxCounts.tree : GameConfig.resources.maxCounts.default;
                         const finalChance = Math.max(0, baseChance * (1 - globalCount / maxCount)); // Decreases to 0% at max count
 
-                        // Attempt to spawn new resource nearby using seeded random
+                        // Attempt to spawn new resource in the same tile
                         if (this.seededRandom.random() < finalChance) {
-                            const newPosition = this.findPropagationPosition(entity.position, entity.type);
-                            if (newPosition) {
-                                // Calculate which tile this new resource would be in
-                                const tileSize = GameConfig.world.tileSize;
-                                const tileX = Math.floor(newPosition.x / tileSize);
-                                const tileY = Math.floor(newPosition.y / tileSize);
+                            // Find a random position within the same tile
+                            const tileStartX = tileX * tileSize;
+                            const tileStartY = tileY * tileSize;
+                            const tileEndX = Math.min(tileStartX + tileSize, GameConfig.world.width);
+                            const tileEndY = Math.min(tileStartY + tileSize, GameConfig.world.height);
 
-                                // Check temperature compatibility for the new position
-                                const biome = this.getBiomeAtPosition(newPosition.x, newPosition.y);
-                                assert(biome, 'Failed to get biome for propagation position');
-                                assert(biome.temperature, `Biome missing temperature: ${biome.type}`);
+                            // Generate random position within tile bounds
+                            let newPosition;
+                            let attempts = 0;
+                            const maxAttempts = 20;
 
-                                // Check if the resource type exactly matches the biome temperature
-                                const resourceData = GameConfig.resources.resourceData[entity.type];
-                                assert(resourceData, `Missing resource data for: ${entity.type}`);
-                                assert(resourceData.temperature, `Resource missing temperature: ${entity.type}`);
+                            do {
+                                newPosition = {
+                                    x: this.seededRandom.randomRange(tileStartX, tileEndX),
+                                    y: this.seededRandom.randomRange(tileStartY, tileEndY)
+                                };
+                                attempts++;
+                            } while (this.isTooCloseToVillage(newPosition) && attempts < maxAttempts);
 
-                                const isCompatible = resourceData.temperature.includes(biome.temperature);
+                            // Skip if we couldn't find a valid position
+                            if (attempts >= maxAttempts) continue;
 
-                                if (!isCompatible) {
-                                    if (window.summaryLoggingEnabled) {
-                                        console.log(`[Propagation] Skipping ${entity.type} propagation - incompatible with ${biome.type} (${biome.temperature})`);
+                            // Check if position is already occupied
+                            const tooClose = this.entities.some(e =>
+                                !e.collected &&
+                                GameUtils.distance(newPosition, e.position) < 20
+                            );
+
+                            if (!tooClose) {
+                                const emoji = this.getResourceEmoji(resourceType);
+                                const newEntity = {
+                                    position: newPosition,
+                                    type: resourceType,
+                                    emoji: emoji,
+                                    collected: false,
+                                    isChild: true, // Mark as child
+                                    birthTime: this.playerState.currentTime, // Track when born
+                                    tileX: tileX,
+                                    tileY: tileY
+                                };
+
+                                // Create visual representation (smaller for children)
+                                const fontSize = 16; // Smaller size for children
+                                const textObj = this.add.text(newPosition.x, newPosition.y, newEntity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+                                newEntity._phaserText = textObj;
+                                this.worldEntities.push(textObj);
+
+                                // Add interaction
+                                textObj.setInteractive({ useHandCursor: true });
+                                textObj.on('pointerdown', () => {
+                                    if (newEntity.collected) return;
+                                    const dist = GameUtils.distance(this.playerState.position, newEntity.position);
+                                    assert(dist <= GameConfig.player.interactionThreshold, 'Tried to collect resource out of range');
+                                    const slot = this.playerState.inventory.findIndex(i => i === null);
+                                    if (slot === -1) {
+                                        this.showTempMessage('Inventory full!', 1500);
+                                        return;
                                     }
-                                    continue; // Skip this propagation attempt
-                                }
+                                    newEntity.collected = true;
+                                    newEntity.collectedAt = this.playerState.currentTime;
+                                    textObj.setVisible(false);
+                                    this.playerState.inventory[slot] = { type: newEntity.type, emoji: newEntity.emoji };
+                                    this.updatePhaserUI();
+                                    this.showTempMessage(`Collected ${newEntity.type}!`, 1200);
+                                });
 
-                                // Check if this tile already has too many resources
-                                const resourcesInTile = this.entities.filter(e =>
-                                    !e.collected &&
-                                    e.tileX === tileX &&
-                                    e.tileY === tileY
-                                ).length;
+                                this.entities.push(newEntity);
 
-                                const maxResourcesInTile = GameConfig.resources.density.resourcesPerTile + GameConfig.resources.density.variance;
-
-                                if (resourcesInTile < maxResourcesInTile) {
-                                    const newEntity = {
-                                        position: newPosition,
-                                        type: entity.type,
-                                        emoji: entity.emoji,
-                                        collected: false,
-                                        isChild: true, // Mark as child
-                                        birthTime: this.playerState.currentTime, // Track when born
-                                        tileX: tileX,
-                                        tileY: tileY
-                                    };
-
-                                    // Create visual representation (smaller for children)
-                                    const fontSize = entity.isChild ? 16 : 22; // Smaller size for children
-                                    const textObj = this.add.text(newPosition.x, newPosition.y, newEntity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
-                                    newEntity._phaserText = textObj;
-                                    this.worldEntities.push(textObj);
-
-                                    // Add interaction
-                                    textObj.setInteractive({ useHandCursor: true });
-                                    textObj.on('pointerdown', () => {
-                                        if (newEntity.collected) return;
-                                        const dist = GameUtils.distance(this.playerState.position, newEntity.position);
-                                        assert(dist <= GameConfig.player.interactionThreshold, 'Tried to collect resource out of range');
-                                        const slot = this.playerState.inventory.findIndex(i => i === null);
-                                        if (slot === -1) {
-                                            this.showTempMessage('Inventory full!', 1500);
-                                            return;
-                                        }
-                                        newEntity.collected = true;
-                                        newEntity.collectedAt = this.playerState.currentTime;
-                                        textObj.setVisible(false);
-                                        this.playerState.inventory[slot] = { type: newEntity.type, emoji: newEntity.emoji };
-                                        this.updatePhaserUI();
-                                        this.showTempMessage(`Collected ${newEntity.type}!`, 1200);
-                                    });
-
-                                    this.entities.push(newEntity);
-
-                                    if (window.summaryLoggingEnabled) {
-                                        console.log(`[Propagation] ${entity.type} spawned child at (${Math.round(newPosition.x)}, ${Math.round(newPosition.y)}) in tile (${tileX}, ${tileY}) - Global count: ${globalCount + 1}`);
-                                    }
+                                if (window.summaryLoggingEnabled) {
+                                    console.log(`[Propagation] ${resourceType} spawned child at (${Math.round(newPosition.x)}, ${Math.round(newPosition.y)}) in tile (${tileX}, ${tileY}) - Global count: ${globalCount + 1}`);
                                 }
                             }
                         }
@@ -4521,41 +4595,7 @@ console.log('Phaser main loaded');
             return this.entities.filter(e => e.type === resourceType && !e.collected).length;
         }
 
-        findPropagationPosition(originalPosition, resourceType) {
-            const maxAttempts = 20;
-            const propagationRadius = GameConfig.resources.density.propagationRadius;
 
-            for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                // Generate position within propagation radius using seeded random
-                assert(this.seededRandom, 'SeededRandom required for resource propagation');
-                const angle = this.seededRandom.random() * 2 * Math.PI;
-                const dist = this.seededRandom.random() * propagationRadius;
-                const newX = originalPosition.x + Math.cos(angle) * dist;
-                const newY = originalPosition.y + Math.sin(angle) * dist;
-
-                // Ensure within world bounds
-                if (newX < 0 || newX > GameConfig.world.width || newY < 0 || newY > GameConfig.world.height) {
-                    continue;
-                }
-
-                // Check if too close to village
-                if (this.isTooCloseToVillage({ x: newX, y: newY })) {
-                    continue;
-                }
-
-                // Check if position is already occupied
-                const tooClose = this.entities.some(e =>
-                    !e.collected &&
-                    GameUtils.distance({ x: newX, y: newY }, e.position) < 20
-                );
-
-                if (!tooClose) {
-                    return { x: newX, y: newY };
-                }
-            }
-
-            return null; // Could not find suitable position
-        }
 
         updateAnimalFleeing(delta) {
             // Get all animals (only check entities that are in resourceData)

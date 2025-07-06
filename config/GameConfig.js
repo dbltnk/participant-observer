@@ -11,9 +11,9 @@
 window.GameConfig = {
     // World settings - Controls the size and layout of the game world
     world: {
-        width: window.innerWidth * 10, // 10x viewport width
-        height: window.innerHeight * 10, // 10x viewport height
-        tileSize: 1350, // Size of each "tile" for spatial calculations (used in distance checks)
+        width: window.innerWidth * 3, // 3x viewport width
+        height: window.innerHeight * 5, // 5x viewport height
+        tileSize: 1500, // Size of each "tile" for spatial calculations (used in distance checks)
         villagerCount: 6, // Total camps (7 AI villagers + 1 player camp)
 
         // Village and camp generation
@@ -167,7 +167,6 @@ window.GameConfig = {
         density: {
             resourcesPerTile: 12, // Average number of resources per tile 
             variance: 3, // ±variance for random variation (10-20 per tile when resourcesPerTile=15 & variance=5)
-            propagationRadius: 80 // Distance within which resources can spawn new ones
         },
 
         // Resource type limits
