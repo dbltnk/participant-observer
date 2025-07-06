@@ -147,6 +147,13 @@ window.GameConfig = {
             variance: 1          // ±1 hour daily variation
         },
 
+        // Hierarchical state machine settings
+        collection: {
+            maxBatchSize: 6,     // Maximum items to collect in one batch (normal mode)
+            emergencyBatchSize: 1, // Items to collect in emergency mode
+            targetInvalidationTimeout: 5000, // Time in ms before replanning if target becomes unavailable
+        },
+
         // Villager names for random generation
         villagerNames: [
             'Alex', 'Blake', 'Casey', 'Drew', 'Emery', 'Finley', 'Gray', 'Harper',
@@ -428,6 +435,7 @@ window.GameConfig = {
             // Button colors
             buttonPrimary: '#228B22', // Primary button (green)
             buttonSecondary: '#666', // Secondary button (gray)
+            buttonSuccess: '#228B22', // Success button (green)
         },
 
         // Font sizes - Centralized font size definitions
