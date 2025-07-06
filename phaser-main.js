@@ -20,9 +20,10 @@ console.log('Phaser main loaded');
         },
 
         // Check if a position is within interaction distance of another
-        isWithinInteractionDistance(pos1, pos2, threshold = null) {
+        isWithinInteractionDistance(pos1, pos2, threshold) {
+            assert(threshold !== null && threshold !== undefined, 'isWithinInteractionDistance requires explicit threshold parameter');
             const dist = this.distance(pos1, pos2);
-            const interactionThreshold = threshold || GameConfig.player.interactionThreshold;
+            const interactionThreshold = threshold;
             return dist <= interactionThreshold;
         },
 
@@ -73,7 +74,8 @@ console.log('Phaser main loaded');
             const nutrition = window.resourceGeneration.getNutrition(itemType);
             assert(nutrition, `No nutrition data generated for resource: ${itemType}`);
 
-            return nutrition.fire || 0;
+            assert(nutrition.fire !== undefined, `Resource ${itemType} missing fire property`);
+            return nutrition.fire;
         },
 
         // Get runspeed for a resource type (uses procedurally generated values)
@@ -308,7 +310,7 @@ console.log('Phaser main loaded');
 
             const elementData = {
                 tag: el.tagName.toLowerCase(),
-                id: el.id || null,
+                id: el.id,
                 classes: Array.from(el.classList),
                 computedStyles: {
                     'background-color': styles.backgroundColor,
@@ -503,8 +505,7 @@ console.log('Phaser main loaded');
             this.moveSpeed = GameConfig.villager.moveSpeed;
 
             // Needs system (same as player) - Initialize with random values
-            // Use seeded random if provided, otherwise fall back to Math.random
-            const random = seededRandom || { randomRange: (min, max) => Math.random() * (max - min) + min };
+            const random = seededRandom;
             this.needs = {
                 temperature: random.randomRange(GameConfig.player.startingStats.temperature.min, GameConfig.player.startingStats.temperature.max),
                 water: random.randomRange(GameConfig.player.startingStats.water.min, GameConfig.player.startingStats.water.max),
@@ -1681,7 +1682,9 @@ console.log('Phaser main loaded');
         }
 
         findOwnFireplace() {
-            return this.villager.fireplace || null;
+            assert(this.villager, 'Villager must exist to find own fireplace');
+            assert(this.villager.fireplace !== undefined, 'Villager fireplace property must be defined');
+            return this.villager.fireplace;
         }
     }
 
@@ -1706,7 +1709,7 @@ console.log('Phaser main loaded');
 
             for (const method of requiredMethods) {
                 if (typeof this.villager[method] !== 'function') {
-                    console.error(`[ActionExecutor] Villager not properly initialized for ${this.villager.name || 'unknown'}. ${method} method missing.`);
+                    console.error(`[ActionExecutor] Villager not properly initialized for ${this.villager.name}. ${method} method missing.`);
                     return false;
                 }
             }
@@ -1803,7 +1806,9 @@ console.log('Phaser main loaded');
          */
         executeCollectResource(deltaTime, entities, storageBoxes) {
             if (!this.validateVillager(['collectResource', 'retrieveFromStorage'])) {
-                this.villager?.hierarchicalAI?.transitionAction(ACTION_STATES.WAIT);
+                assert(this.villager, 'Villager must exist to transition action');
+                assert(this.villager.hierarchicalAI, 'Villager hierarchicalAI must exist to transition action');
+                this.villager.hierarchicalAI.transitionAction(ACTION_STATES.WAIT);
                 return;
             }
 
@@ -1838,7 +1843,9 @@ console.log('Phaser main loaded');
          */
         executeStoreItems(deltaTime, entities, storageBoxes) {
             if (!this.validateVillager(['isInventoryFull', 'storeItemsInStorage'])) {
-                this.villager?.hierarchicalAI?.transitionAction(ACTION_STATES.WAIT);
+                assert(this.villager, 'Villager must exist to transition action');
+                assert(this.villager.hierarchicalAI, 'Villager hierarchicalAI must exist to transition action');
+                this.villager.hierarchicalAI.transitionAction(ACTION_STATES.WAIT);
                 return;
             }
 
@@ -1860,7 +1867,9 @@ console.log('Phaser main loaded');
          */
         executeUseFacility(actionType, deltaTime, entities, storageBoxes) {
             if (!this.validateVillager(['drinkFromWell', 'addWoodToFire'])) {
-                this.villager?.hierarchicalAI?.transitionAction(ACTION_STATES.WAIT);
+                assert(this.villager, 'Villager must exist to transition action');
+                assert(this.villager.hierarchicalAI, 'Villager hierarchicalAI must exist to transition action');
+                this.villager.hierarchicalAI.transitionAction(ACTION_STATES.WAIT);
                 return;
             }
 
@@ -2476,15 +2485,18 @@ console.log('Phaser main loaded');
          * Helper methods (adapted from existing VillagerStateMachine)
          */
         findOwnFireplace() {
-            return this.villager.fireplace || null;
+            assert(this.villager.fireplace !== undefined, `Villager ${this.villager.name} missing fireplace property`);
+            return this.villager.fireplace;
         }
 
         findOwnStorageBox() {
-            return this.villager.personalStorageBox || null;
+            assert(this.villager.personalStorageBox !== undefined, `Villager ${this.villager.name} missing personalStorageBox property`);
+            return this.villager.personalStorageBox;
         }
 
         findCommunalStorageBox() {
-            return this.villager.communalStorageBox || null;
+            assert(this.villager.communalStorageBox !== undefined, `Villager ${this.villager.name} missing communalStorageBox property`);
+            return this.villager.communalStorageBox;
         }
 
         hasWoodInInventory() {
@@ -2921,7 +2933,8 @@ console.log('Phaser main loaded');
                     const maxWater = 10;
 
                     // Calculate scale factor based on water level
-                    const waterLevel = entity.waterLevel || 0;
+                    assert(entity.waterLevel !== undefined, `Well entity missing waterLevel property: ${entity.type}`);
+                    const waterLevel = entity.waterLevel;
                     const scaleFactor = Math.max(0, Math.min(1, (waterLevel - minWater) / (maxWater - minWater)));
                     const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
 
@@ -2943,7 +2956,8 @@ console.log('Phaser main loaded');
                     const maxWood = 10;
 
                     // Calculate scale factor based on wood level
-                    const woodLevel = entity.wood || 0;
+                    assert(entity.wood !== undefined, `Fireplace entity missing wood property: ${entity.type}`);
+                    const woodLevel = entity.wood;
                     const scaleFactor = Math.max(0, Math.min(1, woodLevel / maxWood));
                     const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
 
@@ -3523,7 +3537,7 @@ console.log('Phaser main loaded');
                 tempState = 'hot';
             }
 
-            const tempLabel = GameConfig.visualTemperature.labels[tempState] || 'Moderate';
+            const tempLabel = GameConfig.visualTemperature.labels[tempState];
             if (tempState === 'freezing') tempEmoji = '🥶';
             else if (tempState === 'cold') tempEmoji = '🧊';
             else if (tempState === 'warm') tempEmoji = '🌤️';
@@ -3534,7 +3548,8 @@ console.log('Phaser main loaded');
             const livingVillagers = this.villagers ? this.villagers.filter(v => !v.isDead).length : 0;
             this.ui.timeText.setText(`📅 Day ${t.day}\n${timeEmoji} ${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}\n${tempEmoji} ${tempLabel}\n👥 Neighbours: ${livingVillagers}`);
             // Seed UI
-            const currentSeed = this.currentSeedValue || getCurrentSeed();
+            assert(this.currentSeedValue !== undefined, 'MainScene missing currentSeedValue property');
+            const currentSeed = this.currentSeedValue;
             this.ui.seedInputText.setText(currentSeed.toString());
 
             // Update debug elements
@@ -3647,7 +3662,7 @@ console.log('Phaser main loaded');
             if (GameConfig.resources.resourceData[type]) {
                 return GameConfig.resources.resourceData[type].emoji;
             }
-            return GameConfig.entityEmojis[type] || '❓';
+            return GameConfig.entityEmojis[type];
         }
         showTempMessage(msg, duration = GameConfig.ui.tempMessageDuration) {
             if (this._tempMsg) this._tempMsg.destroy();
@@ -3891,7 +3906,7 @@ console.log('Phaser main loaded');
 
             // Sort by distance and return the closest suitable position
             candidates.sort((a, b) => a.distance - b.distance);
-            return candidates[0] || { x: centerX, y: centerY, biome: { type: 'plains', temperature: 'moderate' } };
+            return candidates[0];
         }
 
         createGroundTexture() {
@@ -3980,6 +3995,7 @@ console.log('Phaser main loaded');
                 seed = parseInt(seedText, 10);
             }
             if (isNaN(seed) || seed < GameConfig.ui.seedInputMinValue) {
+                console.warn('[New Game] Invalid seed value, defaulting to seed 23');
                 seed = 23; // Default to seed 23
             } else if (seed > GameConfig.ui.seedInputMaxValue) {
                 seed = GameConfig.ui.seedInputMaxValue;
@@ -4131,19 +4147,28 @@ console.log('Phaser main loaded');
 
             // Count resources by type (in the wild)
             const wildCounts = {};
+            // Initialize all resource types to 0
+            for (const type of [...GameUtils.ALL_FOOD_TYPES, ...GameUtils.ALL_BURNABLE_TYPES]) {
+                wildCounts[type] = 0;
+            }
+
             for (const entity of this.entities) {
                 if ((GameUtils.ALL_FOOD_TYPES.includes(entity.type) || GameUtils.ALL_BURNABLE_TYPES.includes(entity.type)) && !entity.collected) {
-                    wildCounts[entity.type] = (wildCounts[entity.type] || 0) + 1;
+                    wildCounts[entity.type]++;
                 }
             }
 
             // Count resources in inventories and storage
             const storedCounts = {};
+            // Initialize all resource types to 0
+            for (const type of [...GameUtils.ALL_FOOD_TYPES, ...GameUtils.ALL_BURNABLE_TYPES]) {
+                storedCounts[type] = 0;
+            }
 
             // Player inventory
             for (const item of this.playerState.inventory) {
                 if (item && (GameUtils.ALL_FOOD_TYPES.includes(item.type) || GameUtils.ALL_BURNABLE_TYPES.includes(item.type))) {
-                    storedCounts[item.type] = (storedCounts[item.type] || 0) + 1;
+                    storedCounts[item.type]++;
                 }
             }
 
@@ -4152,7 +4177,7 @@ console.log('Phaser main loaded');
                 if (villager && !villager.isDead) {
                     for (const item of villager.inventory) {
                         if (item && (GameUtils.ALL_FOOD_TYPES.includes(item.type) || GameUtils.ALL_BURNABLE_TYPES.includes(item.type))) {
-                            storedCounts[item.type] = (storedCounts[item.type] || 0) + 1;
+                            storedCounts[item.type]++;
                         }
                     }
                 }
@@ -4163,7 +4188,7 @@ console.log('Phaser main loaded');
                 if (entity.type === 'storage_box' && entity.items) {
                     for (const item of entity.items) {
                         if (item && (GameUtils.ALL_FOOD_TYPES.includes(item.type) || GameUtils.ALL_BURNABLE_TYPES.includes(item.type))) {
-                            storedCounts[item.type] = (storedCounts[item.type] || 0) + 1;
+                            storedCounts[item.type]++;
                         }
                     }
                 }
@@ -4175,8 +4200,8 @@ console.log('Phaser main loaded');
 
             for (const type of sortedTypes) {
                 const emoji = this.getResourceEmoji(type);
-                const wildCount = wildCounts[type] || 0;
-                const storedCount = storedCounts[type] || 0;
+                const wildCount = wildCounts[type];
+                const storedCount = storedCounts[type];
 
                 // Add resource line (color will be determined per line in updateResourceCountTextWithColors)
                 displayText += `${emoji} ${type}: ${wildCount}+${storedCount}\n`;
@@ -4614,7 +4639,8 @@ console.log('Phaser main loaded');
                 const baseSize = 24;
                 const maxSize = 48;
                 const maxWood = 10;
-                const woodLevel = fire.wood || 0;
+                assert(fire.wood !== undefined, `Fire entity missing wood property`);
+                const woodLevel = fire.wood;
                 const scaleFactor = Math.max(0, Math.min(1, woodLevel / maxWood));
                 const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
                 const transparencyThreshold = 3;
@@ -4969,7 +4995,8 @@ console.log('Phaser main loaded');
                 const minWater = 3;
                 const maxWater = 10;
                 // Calculate scale factor based on water level
-                const waterLevel = well.waterLevel || 0;
+                assert(well.waterLevel !== undefined, `Well entity missing waterLevel property`);
+                const waterLevel = well.waterLevel;
                 const scaleFactor = Math.max(0, Math.min(1, (waterLevel - minWater) / (maxWater - minWater)));
                 const scaledSize = baseSize + (maxSize - baseSize) * scaleFactor;
                 // Calculate transparency (fully transparent at 0 water, fully opaque at 5+ water)
@@ -5015,7 +5042,8 @@ console.log('Phaser main loaded');
             vitaminD: 0x54a0ff,
             vitaminE: 0x5f27cd
         };
-        return colors[type] || 0x666666;
+        assert(colors[type] !== undefined, `Missing color for type: ${type}`);
+        return colors[type];
     }
     // Seeded random number generator for consistent world generation
     class SeededRandom {
@@ -5172,13 +5200,15 @@ console.log('Phaser main loaded');
         // Get runspeed for a resource (use cached values)
         getRunspeed(resourceName) {
             assert(this.generatedNutrition[resourceName], `No nutrition data for resource: ${resourceName}`);
-            return this.generatedNutrition[resourceName].runspeed || 0;
+            assert(this.generatedNutrition[resourceName].runspeed !== undefined, `Resource ${resourceName} missing runspeed property`);
+            return this.generatedNutrition[resourceName].runspeed;
         }
     }
 
     function getCurrentSeed() {
         let currentSeed = parseInt(localStorage.getItem(GameConfig.storage.localStorageKey), 10);
         if (!currentSeed || isNaN(currentSeed)) {
+            console.warn('No valid seed found in localStorage, defaulting to seed 23');
             // Default to seed 23 for consistency
             currentSeed = 23;
             // Store it for consistency
@@ -5236,7 +5266,8 @@ console.log('Phaser main loaded');
     }
     function getCurrentTime(playerState) {
         let gameStartTime = GameConfig.time.gameStartHour * GameConfig.time.secondsPerHour;
-        const totalSeconds = playerState.currentTime || gameStartTime;
+        assert(playerState.currentTime !== undefined, 'Player state missing currentTime property');
+        const totalSeconds = playerState.currentTime;
         const day = Math.floor(totalSeconds / GameConfig.time.secondsPerDay) + 1;
         const hour = Math.floor((totalSeconds % GameConfig.time.secondsPerDay) / GameConfig.time.secondsPerHour);
         const minute = Math.floor((totalSeconds % GameConfig.time.secondsPerHour) / GameConfig.time.secondsPerMinute);
