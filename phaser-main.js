@@ -828,12 +828,14 @@ console.log('Phaser main loaded');
                         fontFamily: 'monospace',
                         color: '#00ff00',
                         backgroundColor: '#000',
-                        padding: { left: 2, right: 2, top: 1, bottom: 1 }
+                        padding: { left: 2, right: 2, top: 1, bottom: 1 },
+                        wordWrap: { width: 0 }, // Disable word wrapping - let text expand horizontally
+                        maxLines: 1 // Force single line
                     }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug);
                 }
 
                 // Show inventory slots as emojis (empty slots show nothing)
-                const inventoryEmojis = this.inventory.map(item => item ? item.emoji : ' ').join('');
+                const inventoryEmojis = this.inventory.map(item => item ? item.emoji : ' ').join(' ');
                 this.inventoryText.setText(inventoryEmojis);
                 this.inventoryText.setPosition(this.position.x, this.position.y + 50);
                 this.inventoryText.setVisible(true);
@@ -919,7 +921,9 @@ console.log('Phaser main loaded');
                             this.inventory[emptySlot] = { ...item };
                             storageBox.items[i] = null;
 
-                            console.log(`[Villager] ${this.name} retrieved ${item.type} from storage`);
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Villager] ${this.name} retrieved ${item.type} from storage`);
+                            }
                             return true;
                         }
                     }
@@ -960,7 +964,9 @@ console.log('Phaser main loaded');
             }
 
             if (storedCount > 0) {
-                console.log(`[Villager] ${this.name} stored ${storedCount} items in storage`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Villager] ${this.name} stored ${storedCount} items in storage`);
+                }
                 return true;
             }
 
@@ -996,7 +1002,9 @@ console.log('Phaser main loaded');
             fire.wood += GameConfig.player.fireWoodRestore;
             this.inventory[woodSlot] = null;
 
-            console.log(`[Villager] ${this.name} added wood to fire at (${Math.round(fire.position.x)}, ${Math.round(fire.position.y)})`);
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Villager] ${this.name} added wood to fire at (${Math.round(fire.position.x)}, ${Math.round(fire.position.y)})`);
+            }
             return true;
         }
 
