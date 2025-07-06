@@ -783,12 +783,13 @@ console.log('Phaser main loaded');
             this.nameText.setPosition(this.position.x, this.position.y - 40);
             this.nameText.setText(this.name);
 
-            // Update state text with goal and action (only show if debug enabled)
+            // Update state text with goal, action, and need (only show if debug enabled)
             this.stateText.setPosition(this.position.x, this.position.y + 30);
             if (window.villagerDebugEnabled) {
                 const currentGoal = this.hierarchicalAI ? this.hierarchicalAI.goalData.currentGoal : 'unknown';
                 const currentAction = this.hierarchicalAI ? this.hierarchicalAI.actionData.currentAction : 'unknown';
-                this.stateText.setText(`${currentGoal}/${currentAction}`);
+                const currentNeed = this.hierarchicalAI ? this.hierarchicalAI.getCurrentNeedDescription() : 'unknown';
+                this.stateText.setText(`${currentGoal} / ${currentAction} / ${currentNeed}`);
                 this.stateText.setVisible(true);
             } else {
                 this.stateText.setVisible(false);
@@ -1333,12 +1334,24 @@ console.log('Phaser main loaded');
         executeSurviveGoal(deltaTime, entities, storageBoxes) {
             // Emergency needs - handle immediately
             if (this.villager.needs.water < GameConfig.villager.emergencyThresholds.water) {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[HierarchicalVillagerAI] ${this.villager.name} SURVIVE: Executing drink action (emergency water need)`);
+                }
                 this.executeActionSequence('drink', deltaTime, entities, storageBoxes, true);
             } else if (this.villager.needs.calories < GameConfig.villager.emergencyThresholds.calories) {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[HierarchicalVillagerAI] ${this.villager.name} SURVIVE: Executing eat action (emergency calories need)`);
+                }
                 this.executeActionSequence('eat', deltaTime, entities, storageBoxes, true);
             } else if (this.villager.needs.temperature < GameConfig.villager.emergencyThresholds.temperature) {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[HierarchicalVillagerAI] ${this.villager.name} SURVIVE: Executing warmup action (emergency temperature need)`);
+                }
                 this.executeActionSequence('warmup', deltaTime, entities, storageBoxes, true);
             } else if (this.collectionManager.shouldRefillFire(true, entities)) {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[HierarchicalVillagerAI] ${this.villager.name} SURVIVE: Executing fireRefill action (emergency fire need)`);
+                }
                 this.executeActionSequence('fireRefill', deltaTime, entities, storageBoxes, true);
             }
         }
@@ -1392,9 +1405,66 @@ console.log('Phaser main loaded');
         executeContributeGoal(deltaTime, entities, storageBoxes) {
             // Village tasks - forage for resources
             if (this.collectionManager.shouldForageFood(storageBoxes)) {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[HierarchicalVillagerAI] ${this.villager.name} CONTRIBUTE: Executing forageFood action (village food supply)`);
+                }
                 this.executeActionSequence('forageFood', deltaTime, entities, storageBoxes, false);
             } else if (this.collectionManager.shouldForageBurnable(storageBoxes)) {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[HierarchicalVillagerAI] ${this.villager.name} CONTRIBUTE: Executing forageBurnable action (village fuel supply)`);
+                }
                 this.executeActionSequence('forageBurnable', deltaTime, entities, storageBoxes, false);
+            }
+        }
+
+        /**
+         * Get the specific need this villager is trying to fulfill
+         * @returns {string} Description of the need being addressed
+         */
+        getCurrentNeedDescription() {
+            const currentGoal = this.goalData.currentGoal;
+
+            switch (currentGoal) {
+                case GOAL_STATES.SURVIVE:
+                    // Check which emergency need is being addressed
+                    if (this.villager.needs.water < GameConfig.villager.emergencyThresholds.water) {
+                        return 'emergency water';
+                    } else if (this.villager.needs.calories < GameConfig.villager.emergencyThresholds.calories) {
+                        return 'emergency calories';
+                    } else if (this.villager.needs.temperature < GameConfig.villager.emergencyThresholds.temperature) {
+                        return 'emergency temp';
+                    } else if (this.collectionManager.shouldRefillFire(true, this.villager.gameEntities || [])) {
+                        return 'emergency fire';
+                    }
+                    return 'survive (no emergency)';
+
+                case GOAL_STATES.MAINTAIN:
+                    // Check which regular need is being addressed
+                    if (this.villager.needs.water < GameConfig.villager.regularThresholds.water) {
+                        return 'water';
+                    } else if (this.villager.needs.temperature < GameConfig.villager.regularThresholds.temperature) {
+                        return 'temp';
+                    } else if (this.villager.needs.calories < GameConfig.villager.regularThresholds.calories) {
+                        return 'calories';
+                    } else if (this.collectionManager.shouldRefillFire(false, this.villager.gameEntities || [])) {
+                        return 'fire';
+                    }
+                    return 'maintain (satisfied)';
+
+                case GOAL_STATES.CONTRIBUTE:
+                    // Check which contribution task is being done
+                    if (this.collectionManager.shouldForageFood(this.villager.gameEntities?.filter(e => e.type === 'storage_box') || [])) {
+                        return 'forage food';
+                    } else if (this.collectionManager.shouldForageBurnable(this.villager.gameEntities?.filter(e => e.type === 'storage_box') || [])) {
+                        return 'forage fuel';
+                    }
+                    return 'contribute (idle)';
+
+                case GOAL_STATES.REST:
+                    return 'sleep';
+
+                default:
+                    return 'unknown';
             }
         }
 
