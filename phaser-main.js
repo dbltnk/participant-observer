@@ -35,27 +35,27 @@ console.log('Phaser main loaded');
 
         // Food type checking - checks if item has calories > 0
         isFood(type) {
-            const foodData = GameConfig.resources.foodData[type];
-            return foodData && foodData.calories > 0;
+            const resourceData = GameConfig.resources.resourceData[type];
+            return resourceData && resourceData.calories > 0;
         },
 
         // Check if item type is burnable (has fire value)
         isBurnable(type) {
-            const foodData = GameConfig.resources.foodData[type];
-            return foodData && foodData.fire > 0;
+            const resourceData = GameConfig.resources.resourceData[type];
+            return resourceData && resourceData.fire > 0;
         },
 
         // Get nutrition values for a food type
         getNutrition(foodType) {
-            const foodData = GameConfig.resources.foodData[foodType];
-            assert(foodData, `Food type ${foodType} not found in GameConfig.resources.foodData`);
-            return foodData;
+            const resourceData = GameConfig.resources.resourceData[foodType];
+            assert(resourceData, `Food type ${foodType} not found in GameConfig.resources.resourceData`);
+            return resourceData;
         },
 
         getFireValue(itemType) {
-            const foodData = GameConfig.resources.foodData[itemType];
-            assert(foodData, `Item type ${itemType} not found in GameConfig.resources.foodData`);
-            return foodData.fire || 0;
+            const resourceData = GameConfig.resources.resourceData[itemType];
+            assert(resourceData, `Item type ${itemType} not found in GameConfig.resources.resourceData`);
+            return resourceData.fire || 0;
         },
 
         // Apply nutrition to a target (player or villager)
@@ -98,10 +98,10 @@ console.log('Phaser main loaded');
         },
 
         // All food types extracted from GameConfig for easy access
-        ALL_FOOD_TYPES: Object.keys(GameConfig.resources.foodData).filter(type => GameConfig.resources.foodData[type].calories > 0),
+        ALL_FOOD_TYPES: Object.keys(GameConfig.resources.resourceData).filter(type => GameConfig.resources.resourceData[type].calories > 0),
 
         // All burnable resource types extracted from GameConfig for easy access
-        ALL_BURNABLE_TYPES: Object.keys(GameConfig.resources.foodData).filter(type => GameConfig.resources.foodData[type].fire > 0)
+        ALL_BURNABLE_TYPES: Object.keys(GameConfig.resources.resourceData).filter(type => GameConfig.resources.resourceData[type].fire > 0)
     };
 
     function assert(condition, message) {
@@ -2421,7 +2421,7 @@ console.log('Phaser main loaded');
                 const emptySlot = GameUtils.findEmptySlot(initialCommunalStorageBox.items);
                 if (emptySlot !== -1) {
                     const burnableType = GameUtils.ALL_BURNABLE_TYPES[this.seededRandom.randomInt(0, GameUtils.ALL_BURNABLE_TYPES.length - 1)];
-                    const burnableData = GameConfig.resources.foodData[burnableType];
+                    const burnableData = GameConfig.resources.resourceData[burnableType];
                     initialCommunalStorageBox.items[emptySlot] = { type: burnableType, emoji: burnableData.emoji };
                 }
             }
@@ -2431,8 +2431,8 @@ console.log('Phaser main loaded');
                 const emptySlot = GameUtils.findEmptySlot(initialCommunalStorageBox.items);
                 if (emptySlot !== -1) {
                     const foodType = GameUtils.ALL_FOOD_TYPES[this.seededRandom.randomInt(0, GameUtils.ALL_FOOD_TYPES.length - 1)];
-                    const foodData = GameConfig.resources.foodData[foodType];
-                    initialCommunalStorageBox.items[emptySlot] = { type: foodType, emoji: foodData.emoji };
+                    const resourceData = GameConfig.resources.resourceData[foodType];
+                    initialCommunalStorageBox.items[emptySlot] = { type: foodType, emoji: resourceData.emoji };
                 }
             }
 
@@ -2456,7 +2456,7 @@ console.log('Phaser main loaded');
                     const emptySlot = GameUtils.findEmptySlot(personalStorageBox.items);
                     if (emptySlot !== -1) {
                         const burnableType = GameUtils.ALL_BURNABLE_TYPES[this.seededRandom.randomInt(0, GameUtils.ALL_BURNABLE_TYPES.length - 1)];
-                        const burnableData = GameConfig.resources.foodData[burnableType];
+                        const burnableData = GameConfig.resources.resourceData[burnableType];
                         personalStorageBox.items[emptySlot] = { type: burnableType, emoji: burnableData.emoji };
                     }
                 }
@@ -2466,8 +2466,8 @@ console.log('Phaser main loaded');
                     const emptySlot = GameUtils.findEmptySlot(personalStorageBox.items);
                     if (emptySlot !== -1) {
                         const foodType = GameUtils.ALL_FOOD_TYPES[this.seededRandom.randomInt(0, GameUtils.ALL_FOOD_TYPES.length - 1)];
-                        const foodData = GameConfig.resources.foodData[foodType];
-                        personalStorageBox.items[emptySlot] = { type: foodType, emoji: foodData.emoji };
+                        const resourceData = GameConfig.resources.resourceData[foodType];
+                        personalStorageBox.items[emptySlot] = { type: foodType, emoji: resourceData.emoji };
                     }
                 }
 
@@ -2651,9 +2651,9 @@ console.log('Phaser main loaded');
                 } else if (entity.type === 'well') {
                     fontSize = 22; // Wells keep same size
                 } else if (GameUtils.ALL_FOOD_TYPES.includes(entity.type)) {
-                    // Check if it's an animal (has calories > 0 and water = 0)
-                    const foodData = GameConfig.resources.foodData[entity.type];
-                    if (foodData && foodData.calories > 0 && foodData.water === 0) {
+                    // Check if it's mobile (animal)
+                    const resourceData = GameConfig.resources.resourceData[entity.type];
+                    if (resourceData && resourceData.mobile === true) {
                         // It's an animal - make 50% larger
                         fontSize = 28; // 22 * 1.5 = 33
                     } else {
@@ -3381,9 +3381,9 @@ console.log('Phaser main loaded');
             return false;
         }
         getResourceEmoji(type) {
-            // Get emoji from GameConfig.resources.foodData
-            if (GameConfig.resources.foodData[type]) {
-                return GameConfig.resources.foodData[type].emoji;
+            // Get emoji from GameConfig.resources.resourceData
+            if (GameConfig.resources.resourceData[type]) {
+                return GameConfig.resources.resourceData[type].emoji;
             }
             return GameConfig.entityEmojis[type] || '❓';
         }
@@ -4428,10 +4428,14 @@ console.log('Phaser main loaded');
         }
 
         updateAnimalFleeing(delta) {
-            // Get all animal entities (rabbit, deer, etc.)
+            // Get all mobile entities from GameConfig
+            const mobileTypes = Object.keys(GameConfig.resources.resourceData).filter(type => {
+                const resourceData = GameConfig.resources.resourceData[type];
+                return resourceData.mobile === true;
+            });
+
             const animals = this.entities.filter(e =>
-                !e.collected &&
-                ['rabbit', 'deer', 'squirrel', 'pheasant', 'duck', 'goose', 'hare', 'fox', 'boar', 'elk', 'marten', 'grouse', 'woodcock', 'beaver', 'otter'].includes(e.type)
+                !e.collected && mobileTypes.includes(e.type)
             );
 
             // Debug: Log animal count occasionally
