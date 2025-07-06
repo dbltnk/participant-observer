@@ -33,9 +33,16 @@ console.log('Phaser main loaded');
             return hour >= GameConfig.time.nightStartHour || hour < GameConfig.time.gameStartHour;
         },
 
-        // Food type checking
+        // Food type checking - checks if item has calories > 0
         isFood(type) {
-            return GameConfig.resources.foodData[type] !== undefined;
+            const foodData = GameConfig.resources.foodData[type];
+            return foodData && foodData.calories > 0;
+        },
+
+        // Check if item type is burnable (has fire value)
+        isBurnable(type) {
+            const foodData = GameConfig.resources.foodData[type];
+            return foodData && foodData.fire > 0;
         },
 
         // Get nutrition values for a food type
@@ -43,6 +50,12 @@ console.log('Phaser main loaded');
             const foodData = GameConfig.resources.foodData[foodType];
             assert(foodData, `Food type ${foodType} not found in GameConfig.resources.foodData`);
             return foodData;
+        },
+
+        getFireValue(itemType) {
+            const foodData = GameConfig.resources.foodData[itemType];
+            assert(foodData, `Item type ${itemType} not found in GameConfig.resources.foodData`);
+            return foodData.fire || 0;
         },
 
         // Apply nutrition to a target (player or villager)
@@ -85,7 +98,10 @@ console.log('Phaser main loaded');
         },
 
         // All food types extracted from GameConfig for easy access
-        ALL_FOOD_TYPES: Object.keys(GameConfig.resources.foodData).filter(type => GameConfig.resources.foodData[type].calories > 0)
+        ALL_FOOD_TYPES: Object.keys(GameConfig.resources.foodData).filter(type => GameConfig.resources.foodData[type].calories > 0),
+
+        // All burnable resource types extracted from GameConfig for easy access
+        ALL_BURNABLE_TYPES: Object.keys(GameConfig.resources.foodData).filter(type => GameConfig.resources.foodData[type].fire > 0)
     };
 
     function assert(condition, message) {
@@ -1385,7 +1401,7 @@ console.log('Phaser main loaded');
             }
 
             // Use helper for clarity
-            const woodCount = this.villager.inventory.filter(item => item && item.type === GameConfig.entityTypes.tree).length;
+            const woodCount = this.villager.inventory.filter(item => item && GameUtils.isBurnable(item.type)).length;
             const hasWood = this.hasWoodInInventory();
             if (window.summaryLoggingEnabled) {
                 console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Wood count: ${woodCount}/${this.stateData.woodTarget}, hasWoodInInventory: ${hasWood}`);
@@ -1426,7 +1442,15 @@ console.log('Phaser main loaded');
                         if (window.summaryLoggingEnabled) {
                             console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Close enough to retrieve wood from storage`);
                         }
-                        if (this.retrieveFromStorage([this.stateData.targetWood.storageBox], GameConfig.entityTypes.tree)) {
+                        // Try to retrieve any burnable resource from storage
+                        let retrieved = false;
+                        for (const burnableType of GameUtils.ALL_BURNABLE_TYPES) {
+                            if (this.retrieveFromStorage([this.stateData.targetWood.storageBox], burnableType)) {
+                                retrieved = true;
+                                break;
+                            }
+                        }
+                        if (retrieved) {
                             if (window.summaryLoggingEnabled) {
                                 console.log(`[VillagerStateMachine] ${this.villager.name} ${stateName}: Wood retrieved from storage successfully`);
                             }
@@ -1702,7 +1726,7 @@ console.log('Phaser main loaded');
         // Helper method to find nearest uncollected resource
         findNearestResource(entities) {
             return GameUtils.findNearestEntity(entities, this.villager.position, entity =>
-                (GameUtils.isFood(entity.type) || entity.type === GameConfig.entityTypes.tree) && !entity.collected
+                (GameUtils.isFood(entity.type) || GameUtils.isBurnable(entity.type)) && !entity.collected
             );
         }
 
@@ -1782,7 +1806,7 @@ console.log('Phaser main loaded');
         // === UTILITY METHODS ===
 
         hasWoodInInventory() {
-            return this.villager.inventory.some(item => item && item.type === GameConfig.entityTypes.tree);
+            return this.villager.inventory.some(item => item && GameUtils.isBurnable(item.type));
         }
 
         hasFoodInInventory() {
@@ -1869,26 +1893,45 @@ console.log('Phaser main loaded');
                 return false;
             }
 
-            // Look for food in inventory
+            // Look for items in inventory - check for burnable items first, then food
             for (let i = 0; i < this.villager.inventory.length; i++) {
                 const item = this.villager.inventory[i];
-                if (item && GameUtils.isFood(item.type)) {
-                    const oldCalories = this.villager.needs.calories;
-                    const oldWater = this.villager.needs.water;
-                    GameUtils.applyNutrition(this.villager, item.type);
-                    this.villager.inventory[i] = null;
+                if (item) {
+                    const fireValue = GameUtils.getFireValue(item.type);
 
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[Villager] ${this.villager.name} EAT_FOOD_SUCCESS: Ate ${item.type}${item.emoji} from inventory slot ${i} near fireplace`);
-                        console.log(`[Villager] ${this.villager.name} Nutrition: Calories ${oldCalories.toFixed(1)} → ${this.villager.needs.calories.toFixed(1)}, Water ${oldWater.toFixed(1)} → ${this.villager.needs.water.toFixed(1)}`);
-                        this.logNearbyObjects();
+                    // If item has fire value > 0, burn it instead of eating
+                    if (fireValue > 0) {
+                        const oldWood = nearbyFire.wood;
+                        nearbyFire.wood = Math.min(GameConfig.fires.maxWood, nearbyFire.wood + fireValue);
+                        this.villager.inventory[i] = null;
+
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.villager.name} BURN_ITEM_SUCCESS: Burned ${item.type}${item.emoji} from inventory slot ${i} near fireplace`);
+                            console.log(`[Villager] ${this.villager.name} Fire wood: ${oldWood} → ${nearbyFire.wood} (added ${fireValue})`);
+                            this.logNearbyObjects();
+                        }
+                        return true;
                     }
-                    return true;
+
+                    // Otherwise, if it's food, eat it
+                    if (GameUtils.isFood(item.type)) {
+                        const oldCalories = this.villager.needs.calories;
+                        const oldWater = this.villager.needs.water;
+                        GameUtils.applyNutrition(this.villager, item.type);
+                        this.villager.inventory[i] = null;
+
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.villager.name} EAT_FOOD_SUCCESS: Ate ${item.type}${item.emoji} from inventory slot ${i} near fireplace`);
+                            console.log(`[Villager] ${this.villager.name} Nutrition: Calories ${oldCalories.toFixed(1)} → ${this.villager.needs.calories.toFixed(1)}, Water ${oldWater.toFixed(1)} → ${this.villager.needs.water.toFixed(1)}`);
+                            this.logNearbyObjects();
+                        }
+                        return true;
+                    }
                 }
             }
 
             if (window.summaryLoggingEnabled) {
-                console.log(`[Villager] ${this.villager.name} EAT_FOOD_FAILED: No food in inventory`);
+                console.log(`[Villager] ${this.villager.name} EAT_FOOD_FAILED: No food or burnable items in inventory`);
                 this.logNearbyObjects();
             }
             return false;
@@ -2026,24 +2069,27 @@ console.log('Phaser main loaded');
         }
 
         addWoodToFire(fire) {
-            // Find wood in inventory
+            // Find burnable items in inventory
             for (let i = 0; i < this.villager.inventory.length; i++) {
                 const item = this.villager.inventory[i];
-                if (item && item.type === GameConfig.entityTypes.tree) {
-                    const oldWood = fire.wood;
-                    fire.wood = Math.min(GameConfig.fires.maxWood, fire.wood + 1);
-                    this.villager.inventory[i] = null;
+                if (item) {
+                    const fireValue = GameUtils.getFireValue(item.type);
+                    if (fireValue > 0) {
+                        const oldWood = fire.wood;
+                        fire.wood = Math.min(GameConfig.fires.maxWood, fire.wood + fireValue);
+                        this.villager.inventory[i] = null;
 
-                    if (window.summaryLoggingEnabled) {
-                        console.log(`[Villager] ${this.villager.name} ADD_WOOD SUCCESS: Fire wood ${oldWood} → ${fire.wood}`);
-                        this.logNearbyObjects();
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.villager.name} ADD_WOOD SUCCESS: Burned ${item.type}${item.emoji} for ${fireValue} wood, fire wood ${oldWood} → ${fire.wood}`);
+                            this.logNearbyObjects();
+                        }
+                        return true;
                     }
-                    return true;
                 }
             }
 
             if (window.summaryLoggingEnabled) {
-                console.log(`[Villager] ${this.villager.name} ADD_WOOD FAILED: No wood in inventory`);
+                console.log(`[Villager] ${this.villager.name} ADD_WOOD FAILED: No burnable items in inventory`);
                 this.logNearbyObjects();
             }
             return false;
@@ -2261,10 +2307,21 @@ console.log('Phaser main loaded');
             return { source: nearestSource, distance: nearestDistance, type: sourceType };
         }
 
-        // Specialized method for finding nearest wood (uses the generic method)
+        // Specialized method for finding nearest burnable resource (uses the generic method)
         findNearestWood(entities, storageBoxes, isEmergency = false) {
-            const result = this.findNearestResourceSource(entities, storageBoxes, GameConfig.entityTypes.tree, isEmergency);
-            return result.source;
+            // Find the nearest burnable resource by checking each type
+            let nearestSource = null;
+            let nearestDistance = Infinity;
+
+            for (const burnableType of GameUtils.ALL_BURNABLE_TYPES) {
+                const result = this.findNearestResourceSource(entities, storageBoxes, burnableType, isEmergency);
+                if (result.source && result.distance < nearestDistance) {
+                    nearestSource = result.source;
+                    nearestDistance = result.distance;
+                }
+            }
+
+            return nearestSource;
         }
 
         // Specialized method for finding nearest food (uses the generic method)
@@ -2400,11 +2457,13 @@ console.log('Phaser main loaded');
             const communalWoodCount = 6;//this.seededRandom.randomInt(GameConfig.storage.initialItems.wood.min, GameConfig.storage.initialItems.wood.max);
             const communalFoodCount = this.seededRandom.randomInt(GameConfig.storage.initialItems.food.min, GameConfig.storage.initialItems.food.max);
 
-            // Add wood to communal storage
+            // Add burnable resources to communal storage
             for (let i = 0; i < communalWoodCount; i++) {
                 const emptySlot = GameUtils.findEmptySlot(initialCommunalStorageBox.items);
                 if (emptySlot !== -1) {
-                    initialCommunalStorageBox.items[emptySlot] = { type: GameConfig.entityTypes.tree, emoji: '🌲' };
+                    const burnableType = GameUtils.ALL_BURNABLE_TYPES[this.seededRandom.randomInt(0, GameUtils.ALL_BURNABLE_TYPES.length - 1)];
+                    const burnableData = GameConfig.resources.foodData[burnableType];
+                    initialCommunalStorageBox.items[emptySlot] = { type: burnableType, emoji: burnableData.emoji };
                 }
             }
 
@@ -2433,11 +2492,13 @@ console.log('Phaser main loaded');
                 const personalWoodCount = this.seededRandom.randomInt(GameConfig.storage.initialItems.wood.min, GameConfig.storage.initialItems.wood.max);
                 const personalFoodCount = this.seededRandom.randomInt(GameConfig.storage.initialItems.food.min, GameConfig.storage.initialItems.food.max);
 
-                // Add wood to personal storage
+                // Add burnable resources to personal storage
                 for (let j = 0; j < personalWoodCount; j++) {
                     const emptySlot = GameUtils.findEmptySlot(personalStorageBox.items);
                     if (emptySlot !== -1) {
-                        personalStorageBox.items[emptySlot] = { type: GameConfig.entityTypes.tree, emoji: '🌲' };
+                        const burnableType = GameUtils.ALL_BURNABLE_TYPES[this.seededRandom.randomInt(0, GameUtils.ALL_BURNABLE_TYPES.length - 1)];
+                        const burnableData = GameConfig.resources.foodData[burnableType];
+                        personalStorageBox.items[emptySlot] = { type: burnableType, emoji: burnableData.emoji };
                     }
                 }
 
@@ -2553,8 +2614,8 @@ console.log('Phaser main loaded');
 
             console.log(`[World Generation] Generating resources using density system: ${tilesX}x${tilesY} tiles (${totalTiles} total)`);
 
-            // All resource types (food + trees)
-            const allResourceTypes = [...GameUtils.ALL_FOOD_TYPES, GameConfig.entityTypes.tree];
+            // All resource types (food + burnable resources)
+            const allResourceTypes = [...GameUtils.ALL_FOOD_TYPES, ...GameUtils.ALL_BURNABLE_TYPES];
             let totalResourcesGenerated = 0;
 
             // Generate resources for each tile
@@ -2626,8 +2687,8 @@ console.log('Phaser main loaded');
                     fontSize = 40;
                 } else if (entity.type === 'storage_box') {
                     fontSize = 28;
-                } else if (entity.type === 'tree') {
-                    fontSize = 44; // 200% larger (22 * 2 = 44)
+                } else if (GameUtils.ALL_BURNABLE_TYPES.includes(entity.type)) {
+                    fontSize = 36; // 200% larger (22 * 2 = 44)
                 } else if (entity.type === 'well') {
                     fontSize = 22; // Wells keep same size
                 } else if (GameUtils.ALL_FOOD_TYPES.includes(entity.type)) {
@@ -2700,7 +2761,7 @@ console.log('Phaser main loaded');
                 this.addDebugElements(entity);
 
                 // --- Resource collection: make resources interactive ---
-                if (GameUtils.ALL_FOOD_TYPES.includes(entity.type) || entity.type === "tree") {
+                if (GameUtils.ALL_FOOD_TYPES.includes(entity.type) || GameUtils.ALL_BURNABLE_TYPES.includes(entity.type)) {
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         if (entity.collected) return;
@@ -2756,23 +2817,26 @@ console.log('Phaser main loaded');
                         const dist = GameUtils.distance(this.playerState.position, entity.position);
                         assert(dist <= GameConfig.player.interactionThreshold, 'Tried to interact with fire out of range');
 
-                        // Check if player has wood to add
-                        const woodSlot = this.playerState.inventory.findIndex(item => item && item.type === GameConfig.entityTypes.tree);
-                        if (woodSlot !== -1 && entity.wood < entity.maxWood) {
-                            // Add wood to fire (enforce max limit)
-                            entity.wood = Math.min(entity.maxWood, entity.wood + 1);
-                            this.playerState.inventory[woodSlot] = null;
+                        // Check if player has burnable resources to add
+                        const burnableSlot = this.playerState.inventory.findIndex(item => item && GameUtils.getFireValue(item.type) > 0);
+                        if (burnableSlot !== -1 && entity.wood < entity.maxWood) {
+                            const item = this.playerState.inventory[burnableSlot];
+                            const fireValue = GameUtils.getFireValue(item.type);
+
+                            // Add burnable resource to fire (enforce max limit)
+                            entity.wood = Math.min(entity.maxWood, entity.wood + fireValue);
+                            this.playerState.inventory[burnableSlot] = null;
                             entity.isBurning = true;
 
                             // Update fire visuals
                             this.updateFireVisuals(entity);
 
                             this.updatePhaserUI();
-                            this.showTempMessage('Added wood to fire!', GameConfig.technical.messageDurations.short);
-                        } else if (woodSlot !== -1) {
+                            this.showTempMessage(`Burned ${item.type} for ${fireValue} wood!`, GameConfig.technical.messageDurations.short);
+                        } else if (burnableSlot !== -1) {
                             this.showTempMessage('Fire is full of wood!', GameConfig.technical.messageDurations.short);
                         } else {
-                            this.showTempMessage('Need wood to fuel fire!', GameConfig.technical.messageDurations.short);
+                            this.showTempMessage('Need burnable resources to fuel fire!', GameConfig.technical.messageDurations.short);
                         }
                     });
                 }
@@ -2892,12 +2956,13 @@ console.log('Phaser main loaded');
                             }
                         }
 
-                        // Third priority: add wood to fire if near a burning fire
-                        if (item.type === GameConfig.entityTypes.tree) {
+                        // Third priority: add burnable resources to fire if near a burning fire
+                        const fireValue = GameUtils.getFireValue(item.type);
+                        if (fireValue > 0) {
                             const nearbyFire = this.findNearbyFire();
                             if (nearbyFire && nearbyFire.wood < nearbyFire.maxWood) {
-                                // Add wood to fire (enforce max limit)
-                                nearbyFire.wood = Math.min(nearbyFire.maxWood, nearbyFire.wood + 1);
+                                // Add burnable resource to fire (enforce max limit)
+                                nearbyFire.wood = Math.min(nearbyFire.maxWood, nearbyFire.wood + fireValue);
                                 nearbyFire.isBurning = true;
                                 this.playerState.inventory[i] = null;
 
@@ -2905,7 +2970,7 @@ console.log('Phaser main loaded');
                                 this.updateFireVisuals(nearbyFire);
 
                                 this.updatePhaserUI();
-                                this.showTempMessage('Added wood to fire!', 1200);
+                                this.showTempMessage(`Burned ${item.type} for ${fireValue} wood!`, 1200);
                                 return;
                             }
                         }
@@ -3277,7 +3342,7 @@ console.log('Phaser main loaded');
 
             // Debug: Log entity count occasionally (behind log spam gate)
             if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) { // 1% chance per frame when spam enabled
-                const resourceEntities = this.entities.filter(e => [...GameUtils.ALL_FOOD_TYPES, 'tree'].includes(e.type));
+                const resourceEntities = this.entities.filter(e => [...GameUtils.ALL_FOOD_TYPES, ...GameUtils.ALL_BURNABLE_TYPES].includes(e.type));
                 const uncollectedResources = resourceEntities.filter(e => !e.collected);
                 console.log(`[MainScene] Total entities: ${this.entities.length}, Resources: ${resourceEntities.length}, Uncollected: ${uncollectedResources.length}`);
             }
@@ -3368,15 +3433,7 @@ console.log('Phaser main loaded');
             if (GameConfig.resources.foodData[type]) {
                 return GameConfig.resources.foodData[type].emoji;
             }
-            // Fallback for non-food entities
-            const fallbackEmojis = {
-                'well': '💧',
-                'fireplace': '🔥',
-                'sleeping_bag': '🛏️',
-                'storage_box': '📦',
-                'tree': '🌲'
-            };
-            return fallbackEmojis[type] || '❓';
+            return GameConfig.entityEmojis[type] || '❓';
         }
         showTempMessage(msg, duration = GameConfig.ui.tempMessageDuration) {
             if (this._tempMsg) this._tempMsg.destroy();
@@ -3574,40 +3631,12 @@ console.log('Phaser main loaded');
                     const capacity = entity.isPersonal ? GameConfig.storage.personalCapacity : GameConfig.storage.communalCapacity;
                     const itemCount = entity.items.filter(item => item !== null).length;
                     return `${entity.isPersonal ? 'Personal' : 'Communal'} Storage (${itemCount}/${capacity})`;
-                case 'blackberry':
-                case 'mushroom':
-                case 'herb':
-                case 'blueberry':
-                case 'raspberry':
-                case 'elderberry':
-                case 'wild_garlic':
-                case 'dandelion':
-                case 'nettle':
-                case 'sorrel':
-                case 'watercress':
-                case 'wild_onion':
-                case 'chickweed':
-                case 'plantain':
-                case 'yarrow':
-                case 'rabbit':
-                case 'deer':
-                case 'squirrel':
-                case 'pheasant':
-                case 'duck':
-                case 'goose':
-                case 'hare':
-                case 'fox':
-                case 'boar':
-                case 'elk':
-                case 'marten':
-                case 'grouse':
-                case 'woodcock':
-                case 'beaver':
-                case 'otter':
-                case 'tree':
-                    const status = entity.collected ? '(Collected)' : entity.isChild ? '(Child)' : '(Adult)';
-                    return `${entity.type} ${status}`;
                 default:
+                    // Check if it's a burnable resource using utility function
+                    if (GameUtils.isBurnable(entity.type) || GameUtils.isFood(entity.type)) {
+                        const status = entity.collected ? '(Collected)' : entity.isChild ? '(Child)' : '(Adult)';
+                        return `${entity.type} ${status}`;
+                    }
                     return entity.type;
             }
         }
@@ -3959,10 +3988,22 @@ console.log('Phaser main loaded');
             // Only allow eating if near a burning fire
             const nearbyFire = this.findNearbyFire();
             if (nearbyFire) {
-                GameUtils.applyNutrition(this.playerState, item.type);
-                this.playerState.inventory[slot] = null;
-                this.updatePhaserUI();
-                this.showTempMessage(`Ate ${item.type}!`, 1200);
+                const fireValue = GameUtils.getFireValue(item.type);
+
+                // If item has fire value > 0, burn it instead of eating
+                if (fireValue > 0) {
+                    const oldWood = nearbyFire.wood;
+                    nearbyFire.wood = Math.min(GameConfig.fires.maxWood, nearbyFire.wood + fireValue);
+                    this.playerState.inventory[slot] = null;
+                    this.updatePhaserUI();
+                    this.showTempMessage(`Burned ${item.type} for ${fireValue} wood!`, 1200);
+                } else {
+                    // Otherwise, eat it as food
+                    GameUtils.applyNutrition(this.playerState, item.type);
+                    this.playerState.inventory[slot] = null;
+                    this.updatePhaserUI();
+                    this.showTempMessage(`Ate ${item.type}!`, 1200);
+                }
             } else {
                 this.showTempMessage('Must be near a burning fire to eat!', 1500);
             }
@@ -4116,11 +4157,11 @@ console.log('Phaser main loaded');
 
                 // Check each uncollected resource for propagation (both adults and children)
                 for (const entity of this.entities) {
-                    if (!entity.collected && (GameUtils.ALL_FOOD_TYPES.includes(entity.type) || entity.type === GameConfig.entityTypes.tree)) {
+                    if (!entity.collected && (GameUtils.ALL_FOOD_TYPES.includes(entity.type) || GameUtils.ALL_BURNABLE_TYPES.includes(entity.type))) {
                         // Calculate propagation chance based on global resource count
                         const globalCount = this.getGlobalResourceCount(entity.type);
                         const baseChance = 0.5; // 50% base chance
-                        const maxCount = entity.type === GameConfig.entityTypes.tree ? GameConfig.resources.maxCounts.tree : GameConfig.resources.maxCounts.default;
+                        const maxCount = GameUtils.ALL_BURNABLE_TYPES.includes(entity.type) ? GameConfig.resources.maxCounts.tree : GameConfig.resources.maxCounts.default;
                         const finalChance = Math.max(0, baseChance * (1 - globalCount / maxCount)); // Decreases to 0% at max count
 
                         // Attempt to spawn new resource nearby using seeded random
