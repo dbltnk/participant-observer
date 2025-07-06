@@ -926,7 +926,10 @@ console.log('Phaser main loaded');
                 }
             }
 
-            console.warn(`[Villager] ${this.name} no ${type} found in storage`);
+            // Only log this warning occasionally to avoid spam when storage is legitimately empty
+            if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) {
+                console.warn(`[Villager] ${this.name} no ${type} found in storage`);
+            }
             return false;
         }
 
@@ -2193,7 +2196,7 @@ console.log('Phaser main loaded');
             if (!entities) return null;
 
             // Debug: Log entity count and types
-            if (window.summaryLoggingEnabled && Math.random() < 0.05) { // 5% chance to log
+            if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) {
                 const foodEntities = entities.filter(e => GameUtils.isFood(e.type));
                 const safeFoodEntities = foodEntities.filter(e => this.isResourceSafeToCollect(e));
                 const goldenRuleFoodEntities = safeFoodEntities.filter(e => this.canCollectResourceWithGoldenRule(e, entities));
@@ -2211,7 +2214,7 @@ console.log('Phaser main loaded');
             if (!entities) return null;
 
             // Debug: Log entity count and types
-            if (window.summaryLoggingEnabled && Math.random() < 0.05) { // 5% chance to log
+            if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) { // 5% chance to log
                 const burnableEntities = entities.filter(e => GameUtils.isBurnable(e.type));
                 const safeBurnableEntities = burnableEntities.filter(e => this.isResourceSafeToCollect(e));
                 const goldenRuleBurnableEntities = safeBurnableEntities.filter(e => this.canCollectResourceWithGoldenRule(e, entities));
