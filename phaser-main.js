@@ -579,7 +579,7 @@ console.log('Phaser main loaded');
             }
 
             // Apply fire temperature effects for villagers (same as player)
-            if (isNight && this.gameEntities) {
+            if (this.gameEntities) {
                 for (const entity of this.gameEntities) {
                     if (entity.type === GameConfig.entityTypes.fireplace && entity.isBurning && entity.wood > 0) {
                         const dist = GameUtils.distance(this.position, entity.position);
@@ -1832,9 +1832,23 @@ console.log('Phaser main loaded');
             if (this.stateData.targetFire) {
                 // Move towards fire
                 this.villager.moveTowards(this.stateData.targetFire.position, deltaTime);
+
+                // Check if we're close enough to the fire - if so, we can stay here and warm up
+                const distanceToFire = GameUtils.distance(this.villager.position, this.stateData.targetFire.position);
+                const fireRange = GameConfig.player.fireHeatingRange;
+
+                if (distanceToFire <= fireRange) {
+                    // We're close enough to warm up - the global heating system will handle the actual warming
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} WARM_UP: Near fire, warming up at (${Math.round(this.villager.position.x)}, ${Math.round(this.villager.position.y)})`);
+                    }
+                }
             } else {
                 // No fire found, try to find one
                 this.stateData.targetFire = this.findNearestBurningFire();
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} WARM_UP: Searching for fire`);
+                }
             }
         }
 
@@ -3247,20 +3261,20 @@ console.log('Phaser main loaded');
             this.uiContainer.add(this.ui.logSpamBtn);
 
             // Force villager state toggle (bottom left, above log spam button) - fixed to camera viewport
-            this.ui.forceStateBtn = this.add.text(margin + 150, window.innerHeight - margin - GameConfig.ui.dimensions.logSpamButtonOffset - 30, '⚪ Force FORAGE_BURNABLE: OFF', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.debugBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.forceStateBtn = this.add.text(margin + 150, window.innerHeight - margin - GameConfig.ui.dimensions.logSpamButtonOffset - 30, '⚪ Force REGULAR_WARM_UP: OFF', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.debugBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
             this.ui.forceStateBtn.on('pointerdown', () => {
                 if (window.forceVillagerState) {
                     window.forceVillagerState = null;
                 } else {
-                    window.forceVillagerState = VILLAGER_STATES.FORAGE_BURNABLE;
+                    window.forceVillagerState = VILLAGER_STATES.REGULAR_WARM_UP;
                 }
                 updateForceStateBtn.call(this);
             });
             function updateForceStateBtn() {
                 if (window.forceVillagerState) {
-                    this.ui.forceStateBtn.setText('🟢 Force FORAGE_BURNABLE: ON').setColor(GameConfig.ui.colors.textPrimary).setBackgroundColor(GameConfig.ui.colors.buttonSuccess);
+                    this.ui.forceStateBtn.setText('🟢 Force REGULAR_WARM_UP: ON').setColor(GameConfig.ui.colors.textPrimary).setBackgroundColor(GameConfig.ui.colors.buttonSuccess);
                 } else {
-                    this.ui.forceStateBtn.setText('⚪ Force FORAGE_BURNABLE: OFF').setColor(GameConfig.ui.colors.textSecondary).setBackgroundColor(GameConfig.ui.colors.debugBackground);
+                    this.ui.forceStateBtn.setText('⚪ Force REGULAR_WARM_UP: OFF').setColor(GameConfig.ui.colors.textSecondary).setBackgroundColor(GameConfig.ui.colors.debugBackground);
                 }
             }
             updateForceStateBtn.call(this);
@@ -4548,8 +4562,7 @@ console.log('Phaser main loaded');
             const t = getCurrentTime(this.playerState);
             const isNight = GameUtils.isNightTime(t.hour);
 
-            // Only apply fire effects at night when temperature would normally decrease
-            if (!isNight) return;
+            // Apply fire effects anytime - allows warming up during day
 
             // Consume wood from ALL burning fires globally (not just near player)
             for (const entity of this.entities) {
