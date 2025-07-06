@@ -167,7 +167,7 @@
 * **Community Knowledge:** Successful strategies can be shared with villagers through specific actions.
 * **Discovery Rewards:** Finding the optimal survival strategy for a seed unlocks special insights.
 
-**Conversation System
+**Conversation System:**
 * **LLM-driven chat:** You can talk to NPCs to learn about what they are doing and why. They might not always have all information or understand exactly why they are doing things but they will not lie to you either.
 
 **Technical Enhancements:**
@@ -203,3 +203,50 @@
 | **Emotional Investment** | Resource management tension | Community building and discovery satisfaction |
 
 ---
+
+### XII. V3 Future Vision: "Learning Movement & Crafting"
+
+**The Mystery of Navigation:**
+* **Terrain Mastery:** Every seed generates unique terrain patterns, obstacles, and movement challenges. Players must observe how villagers navigate efficiently to learn optimal paths.
+* **Movement Clues:** Villagers develop unique traversal strategies based on terrain type, weather conditions, and resource locations. Players learn by watching their pathfinding decisions.
+* **Environmental Navigation:** Different terrain types (swamps, mountains, dense forests) require different movement techniques that villagers discover through trial and error.
+* **Multiple Playthroughs Required:** Each seed's terrain requires 3-5 playthroughs to fully understand the optimal movement strategies.
+
+**Enhanced Movement Learning:**
+* **Villager Pathfinding:** Villagers remember successful routes and avoid dangerous terrain, developing efficient movement patterns over time.
+* **Movement Clues:** Villagers show visible signs when they discover new efficient paths or encounter movement obstacles.
+* **Social Movement Learning:** Villagers can learn from each other's successful navigation strategies, creating emergent pathfinding knowledge.
+* **Movement Personality:** Each villager has unique movement preferences and risk tolerance for different terrain types.
+
+**Advanced Crafting System:**
+* **Dynamic Crafting:** Crafting recipes and material properties change based on seed, terrain, and environmental conditions.
+* **Crafting Discovery:** Players must observe villager crafting behavior to learn what materials work best in each world.
+* **Terrain-Specific Tools:** Different terrain types require different tools and crafting approaches that villagers discover through experimentation.
+* **Seasonal Crafting:** Crafting materials and techniques change based on the time of year and environmental conditions.
+
+**Movement & Crafting Knowledge System:**
+* **Navigation Journal:** Players can record observations about villager movement patterns and terrain traversal.
+* **Crafting Hypothesis Testing:** Players can test theories about optimal crafting by observing villager tool usage and success rates.
+* **Community Movement Knowledge:** Successful navigation strategies can be shared with villagers through specific actions.
+* **Crafting Discovery Rewards:** Finding optimal movement and crafting strategies for a seed unlocks special insights.
+
+**V3 Success Metrics:**
+* Players willingly replay the same seed multiple times to discover optimal movement and crafting strategies.
+* Emergent pathfinding and crafting knowledge through villager behavior observation.
+* Each seed feels like a unique navigation and crafting puzzle to solve.
+* Players develop genuine attachment to their villagers' movement and crafting expertise.
+
+---
+
+### XIII. V1 vs V2 vs V3 Comparison
+
+| Aspect | V1 (Current) | V2 (Future) | V3 (Future) |
+|--------|--------------|-------------|-------------|
+| **Core Goal** | Survive and manage resources | Learn the world's secrets through observation | Learn movement and crafting through observation |
+| **Replayability** | Different seeds = different layouts | Same seed = multiple playthroughs to understand survival | Same seed = multiple playthroughs to understand movement & crafting |
+| **Villager Role** | Resource competition and community management | Teachers and subjects of observation | Movement and crafting teachers |
+| **Resource System** | Fixed nutritional properties | Procedurally generated properties per seed | Procedurally generated terrain and crafting properties per seed |
+| **Player Agency** | Direct survival actions | Detective work and hypothesis testing | Movement and crafting detective work |
+| **Success Condition** | Survive as long as possible | Discover optimal survival strategy for the community | Discover optimal movement and crafting strategies |
+| **Learning Curve** | Learn game mechanics once | Learn unique world rules for each seed | Learn unique terrain and crafting rules for each seed |
+| **Emotional Investment** | Resource management tension | Community building and discovery satisfaction | Movement mastery and crafting discovery satisfaction |
