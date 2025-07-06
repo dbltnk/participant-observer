@@ -36,26 +36,44 @@ console.log('Phaser main loaded');
         // Food type checking - checks if item has calories > 0
         isFood(type) {
             const resourceData = GameConfig.resources.resourceData[type];
-            return resourceData && resourceData.calories > 0;
+            if (!resourceData) return false;
+
+            // Check if it's a plant or animal category (food)
+            return resourceData.category === 'plant' || resourceData.category === 'animal';
         },
 
         // Check if item type is burnable (has fire value)
         isBurnable(type) {
             const resourceData = GameConfig.resources.resourceData[type];
-            return resourceData && resourceData.fire > 0;
+            if (!resourceData) return false;
+
+            // Check if it's a burnable category
+            return resourceData.category === 'burnable';
         },
 
-        // Get nutrition values for a food type
+        // Get nutrition values for a food type (uses procedurally generated values)
         getNutrition(foodType) {
             const resourceData = GameConfig.resources.resourceData[foodType];
             assert(resourceData, `Food type ${foodType} not found in GameConfig.resources.resourceData`);
-            return resourceData;
+
+            // Use procedurally generated nutrition values
+            assert(window.resourceGeneration, 'ResourceGeneration not initialized');
+            const nutrition = window.resourceGeneration.getNutrition(foodType);
+            assert(nutrition, `No nutrition data generated for resource: ${foodType}`);
+
+            return nutrition;
         },
 
         getFireValue(itemType) {
             const resourceData = GameConfig.resources.resourceData[itemType];
             assert(resourceData, `Item type ${itemType} not found in GameConfig.resources.resourceData`);
-            return resourceData.fire || 0;
+
+            // Use procedurally generated fire values
+            assert(window.resourceGeneration, 'ResourceGeneration not initialized');
+            const nutrition = window.resourceGeneration.getNutrition(itemType);
+            assert(nutrition, `No nutrition data generated for resource: ${itemType}`);
+
+            return nutrition.fire || 0;
         },
 
         // Apply nutrition to a target (player or villager)
@@ -98,10 +116,19 @@ console.log('Phaser main loaded');
         },
 
         // All food types extracted from GameConfig for easy access
-        ALL_FOOD_TYPES: Object.keys(GameConfig.resources.resourceData).filter(type => GameConfig.resources.resourceData[type].calories > 0),
+        get ALL_FOOD_TYPES() {
+            return Object.keys(GameConfig.resources.resourceData).filter(type =>
+                GameConfig.resources.resourceData[type].category === 'plant' ||
+                GameConfig.resources.resourceData[type].category === 'animal'
+            );
+        },
 
         // All burnable resource types extracted from GameConfig for easy access
-        ALL_BURNABLE_TYPES: Object.keys(GameConfig.resources.resourceData).filter(type => GameConfig.resources.resourceData[type].fire > 0)
+        get ALL_BURNABLE_TYPES() {
+            return Object.keys(GameConfig.resources.resourceData).filter(type =>
+                GameConfig.resources.resourceData[type].category === 'burnable'
+            );
+        }
     };
 
     function assert(condition, message) {
@@ -2291,7 +2318,7 @@ console.log('Phaser main loaded');
 
     class MainScene extends Phaser.Scene {
         constructor() {
-            super('MainScene');
+            super({ key: 'MainScene' });
             this.lastPropagationDay = -1; // Track last propagation day to prevent duplicates
             this._gameOverOverlay = null; // Initialize game over overlay reference
         }
@@ -2311,6 +2338,12 @@ console.log('Phaser main loaded');
 
             // Create character customization system for consistent appearance
             this.characterCustomization = new CharacterCustomization(this.seededRandom);
+
+            // Initialize resource generation system
+            this.resourceGeneration = new ResourceGeneration(this.seededRandom);
+
+            // Make ResourceGeneration globally accessible for debugging
+            window.resourceGeneration = this.resourceGeneration;
 
             // Generate biome data first
             this.generateBiomeData();
@@ -4799,6 +4832,113 @@ console.log('Phaser main loaded');
         // Get random integer between min and max (inclusive)
         randomInt(min, max) {
             return Math.floor(this.randomRange(min, max + 1));
+        }
+    }
+
+    // Resource generation system for procedural nutrition values
+    class ResourceGeneration {
+        constructor(seededRandom) {
+            this.seededRandom = seededRandom;
+            this.generatedNutrition = {};
+
+            // Initialize all nutrition values
+            this.initializeAllNutrition();
+        }
+
+        // Initialize all nutrition values at game start
+        initializeAllNutrition() {
+            assert(this.seededRandom, 'SeededRandom instance required for resource generation');
+            this.generatedNutrition = {};
+
+            // Generate nutrition for every resource
+            for (const [resourceName, resourceData] of Object.entries(GameConfig.resources.resourceData)) {
+                this.generatedNutrition[resourceName] = this.generateNutritionForResource(resourceName, resourceData);
+            }
+
+            console.log('[ResourceGeneration] Generated nutrition for', Object.keys(this.generatedNutrition).length, 'resources');
+        }
+
+        // Generate nutrition for a single resource
+        generateNutritionForResource(resourceName, resourceData) {
+            const category = resourceData.category;
+            const rules = GameConfig.resources.resourceCategories[category];
+            const random = this.seededRandom;
+
+            assert(category, `Resource ${resourceName} missing category`);
+            assert(rules, `Unknown category: ${category}`);
+            assert(random, 'SeededRandom not initialized');
+
+            // Start with base category values
+            let nutrition = {
+                calories: rules.calories,
+                water: rules.water,
+                fire: rules.fire,
+                vitamins: Array.isArray(rules.vitamins) ? [...rules.vitamins] : [0, 0, 0, 0, 0] // Copy base vitamins or create array
+            };
+
+            // Generate random values for ranges
+            if (typeof rules.calories === 'object') {
+                nutrition.calories = random.randomRange(rules.calories.min, rules.calories.max);
+            }
+            if (typeof rules.water === 'object') {
+                nutrition.water = random.randomRange(rules.water.min, rules.water.max);
+            }
+            if (typeof rules.fire === 'object') {
+                nutrition.fire = random.randomRange(rules.fire.min, rules.fire.max);
+            }
+
+            // Check for poisonous variants
+            if (rules.poisonousChance && random.random() < rules.poisonousChance) {
+                nutrition.calories = random.randomRange(rules.poisonousCalories.min, rules.poisonousCalories.max);
+                nutrition.water = rules.poisonousWater;
+                nutrition.vitamins = [0, 0, 0, 0, 0]; // Poisonous variants have no vitamins
+            }
+
+            // Generate vitamins for non-burnables
+            if (category !== 'burnable') {
+                nutrition.vitamins = this.generateVitamins(random);
+            }
+
+            return nutrition;
+        }
+
+        // Generate vitamin distribution
+        generateVitamins(random) {
+            const vitamins = [0, 0, 0, 0, 0];
+            const vitaminCount = random.randomInt(
+                GameConfig.resources.vitaminDistribution.vitaminCount.min,
+                GameConfig.resources.vitaminDistribution.vitaminCount.max
+            );
+
+            // Select random vitamins to assign
+            const vitaminIndices = [];
+            for (let i = 0; i < 5; i++) {
+                vitaminIndices.push(i);
+            }
+
+            // Shuffle and take first vitaminCount
+            for (let i = vitaminIndices.length - 1; i > 0; i--) {
+                const j = random.randomInt(0, i + 1);
+                [vitaminIndices[i], vitaminIndices[j]] = [vitaminIndices[j], vitaminIndices[i]];
+            }
+
+            // Assign vitamins
+            for (let i = 0; i < vitaminCount; i++) {
+                const vitaminIndex = vitaminIndices[i];
+                const strength = random.randomRange(
+                    GameConfig.resources.vitaminDistribution.vitaminStrength.min,
+                    GameConfig.resources.vitaminDistribution.vitaminStrength.max
+                );
+                vitamins[vitaminIndex] = strength;
+            }
+
+            return vitamins;
+        }
+
+        // Get nutrition for a resource (use cached values)
+        getNutrition(resourceName) {
+            assert(this.generatedNutrition[resourceName], `No nutrition data for resource: ${resourceName}`);
+            return this.generatedNutrition[resourceName];
         }
     }
 

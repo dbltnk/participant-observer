@@ -180,7 +180,6 @@ window.GameConfig = {
         // === DESIGNER BALANCING SECTION ===
         // All food/resource types with complete data (easier to maintain)
 
-
         // Biome definitions for world generation
         biomes: {
             camp: { color: '#D2B48C', temperature: 'moderate' },    // Light brown
@@ -192,81 +191,127 @@ window.GameConfig = {
             tundra: { color: '#F0F8FF', temperature: 'cold' },            // Alice blue
         },
 
-        resourceData: {
-            // Wood and other burnables (not mobile)
-            'oak': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 3, emoji: '🌳', temperature: ['moderate'], mobile: false },
-            'pine': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 2, emoji: '🌲', temperature: ['cold'], mobile: false },
-            'maple': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 2, emoji: '🍁', temperature: ['moderate'], mobile: false },
-            'palm': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 1, emoji: '🌴', temperature: ['warm'], mobile: false },
-            'reed': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 1, emoji: '🪾', temperature: ['warm'], mobile: false },
-            'spruce': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 3, emoji: '🎄', temperature: ['cold'], mobile: false },
-            'bamboo': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 2, emoji: '🎋', temperature: ['warm'], mobile: false },
-            'leaf': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 1, emoji: '🍂', temperature: ['cold'], mobile: false },
-            'plant': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 1, emoji: '🪴', temperature: ['moderate'], mobile: false },
-            'cactus': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 1, emoji: '🌵', temperature: ['warm'], mobile: false },
-            // Plants (not mobile)
-            'apple': { calories: 30, vitamins: [20, 0, 20, 0, 0], water: 15, fire: 0, emoji: '🍎', temperature: ['cold'], mobile: false },
-            'banana': { calories: 25, vitamins: [0, 20, 0, 0, 0], water: 10, fire: 0, emoji: '🍌', temperature: ['warm'], mobile: false },
-            'orange': { calories: 28, vitamins: [0, 0, 30, 0, 0], water: 20, fire: 0, emoji: '🍊', temperature: ['warm'], mobile: false },
-            'grape': { calories: 22, vitamins: [0, 0, 0, 0, 20], water: 12, fire: 0, emoji: '🍇', temperature: ['moderate'], mobile: false },
-            'strawberry': { calories: 20, vitamins: [20, 0, 0, 0, 0], water: 15, fire: 0, emoji: '🍓', temperature: ['moderate'], mobile: false },
-            'pear': { calories: 26, vitamins: [0, 0, 20, 0, 0], water: 12, fire: 0, emoji: '🍐', temperature: ['moderate'], mobile: false },
-            'peach': { calories: 24, vitamins: [20, 0, 0, 0, 0], water: 15, fire: 0, emoji: '🍑', temperature: ['warm'], mobile: false },
-            'plum': { calories: 23, vitamins: [0, 0, 20, 0, 0], water: 10, fire: 0, emoji: '🫐', temperature: ['moderate'], mobile: false },
-            'cherry': { calories: 18, vitamins: [0, 0, 0, 0, 20], water: 12, fire: 0, emoji: '🍒', temperature: ['moderate'], mobile: false },
-            'lemon': { calories: 15, vitamins: [0, 0, 30, 0, 0], water: 8, fire: 0, emoji: '🍋', temperature: ['warm'], mobile: false },
-            'pineapple': { calories: 32, vitamins: [0, 0, 25, 0, 0], water: 18, fire: 0, emoji: '🍍', temperature: ['warm'], mobile: false },
-            'mango': { calories: 30, vitamins: [20, 0, 0, 0, 0], water: 15, fire: 0, emoji: '🥭', temperature: ['warm'], mobile: false },
-            'coconut': { calories: 35, vitamins: [0, 0, 0, 0, 20], water: 5, fire: 0, emoji: '🥥', temperature: ['warm'], mobile: false },
-            'kiwi': { calories: 22, vitamins: [0, 0, 30, 0, 0], water: 12, fire: 0, emoji: '🥝', temperature: ['moderate'], mobile: false },
-            'avocado': { calories: 40, vitamins: [0, 0, 0, 0, 25], water: 8, fire: 0, emoji: '🥑', temperature: ['warm'], mobile: false },
-            'shroom': { calories: 20, vitamins: [0, 20, 20, 0, 0], water: 5, fire: 0, emoji: '🍄‍🟫', temperature: ['cold'], mobile: false },
-            'mushroom': { calories: 20, vitamins: [0, 20, 20, 0, 0], water: 5, fire: 0, emoji: '🍄', temperature: ['moderate'], mobile: false },
-            'rose': { calories: 5, vitamins: [0, 0, 0, 0, 10], water: 2, fire: 0, emoji: '🌹', temperature: ['moderate'], mobile: false },
-            'tulip': { calories: 3, vitamins: [0, 0, 0, 0, 5], water: 1, fire: 0, emoji: '🌷', temperature: ['moderate'], mobile: false },
-            'sunflower': { calories: 8, vitamins: [0, 0, 0, 0, 15], water: 3, fire: 0, emoji: '🌻', temperature: ['warm'], mobile: false },
-            'daisy': { calories: 2, vitamins: [0, 0, 0, 0, 3], water: 1, fire: 0, emoji: '🌼', temperature: ['cold'], mobile: false },
-            'lily': { calories: 4, vitamins: [0, 0, 0, 0, 8], water: 2, fire: 0, emoji: '🌸', temperature: ['cold'], mobile: false },
-            'lotus': { calories: 6, vitamins: [0, 0, 0, 0, 12], water: 4, fire: 0, emoji: '🪷', temperature: ['warm'], mobile: false },
-            'hibiscus': { calories: 3, vitamins: [0, 0, 0, 0, 6], water: 2, fire: 0, emoji: '🌺', temperature: ['warm'], mobile: false },
-            'carrot': { calories: 25, vitamins: [30, 0, 0, 0, 0], water: 8, fire: 0, emoji: '🥕', temperature: ['moderate'], mobile: false },
-            'potato': { calories: 35, vitamins: [0, 0, 0, 0, 15], water: 5, fire: 0, emoji: '🥔', temperature: ['cold'], mobile: false },
-            'tomato': { calories: 22, vitamins: [0, 0, 25, 0, 0], water: 12, fire: 0, emoji: '🍅', temperature: ['warm'], mobile: false },
-            'onion': { calories: 15, vitamins: [0, 0, 0, 0, 10], water: 6, fire: 0, emoji: '🧅', temperature: ['moderate'], mobile: false },
-            'garlic': { calories: 8, vitamins: [0, 0, 0, 0, 5], water: 2, fire: 0, emoji: '🧄', temperature: ['moderate'], mobile: false },
-            'pepper': { calories: 20, vitamins: [0, 0, 30, 0, 0], water: 8, fire: 0, emoji: '🫑', temperature: ['warm'], mobile: false },
-            'cucumber': { calories: 16, vitamins: [0, 0, 0, 0, 8], water: 15, fire: 0, emoji: '🥒', temperature: ['cold'], mobile: false },
-            'lettuce': { calories: 12, vitamins: [0, 0, 0, 0, 10], water: 18, fire: 0, emoji: '🥬', temperature: ['cold'], mobile: false },
-            'broccoli': { calories: 20, vitamins: [0, 0, 0, 0, 15], water: 8, fire: 0, emoji: '🥦', temperature: ['cold'], mobile: false },
-            'cauliflower': { calories: 18, vitamins: [0, 0, 0, 0, 12], water: 6, fire: 0, emoji: '🥬', temperature: ['cold'], mobile: false },
-            'pumpkin': { calories: 28, vitamins: [0, 0, 0, 0, 15], water: 10, fire: 0, emoji: '🎃', temperature: ['cold'], mobile: false },
-            'eggplant': { calories: 20, vitamins: [0, 0, 0, 0, 10], water: 8, fire: 0, emoji: '🍆', temperature: ['warm'], mobile: false },
-            // Animals (mobile)
-            'rabbit': { calories: 35, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🐰', temperature: ['moderate'], mobile: true },
-            'deer': { calories: 40, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦌', temperature: ['moderate'], mobile: true },
-            'squirrel': { calories: 30, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🐿️', temperature: ['moderate'], mobile: true },
-            'pheasant': { calories: 32, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦃', temperature: ['moderate'], mobile: true },
-            'duck': { calories: 30, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦆', temperature: ['moderate'], mobile: true },
-            'goose': { calories: 32, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦢', temperature: ['cold'], mobile: true },
-            'hare': { calories: 35, vitamins: [0, 0, 20, 0, 20], water: 0, fire: 0, emoji: '🐰', temperature: ['moderate'], mobile: true },
-            'fox': { calories: 28, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦊', temperature: ['moderate'], mobile: true },
-            'boar': { calories: 38, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🐗', temperature: ['moderate'], mobile: true },
-            'woodcock': { calories: 25, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦅', temperature: ['moderate'], mobile: true },
-            'beaver': { calories: 30, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦫', temperature: ['cold'], mobile: true },
-            'otter': { calories: 28, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦦', temperature: ['cold'], mobile: true },
-            'bear': { calories: 45, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🐻', temperature: ['cold'], mobile: true },
-            'wolf': { calories: 42, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🐺', temperature: ['cold'], mobile: true },
-            'lynx': { calories: 38, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🐱', temperature: ['cold'], mobile: true },
-            'weasel': { calories: 28, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦡', temperature: ['moderate'], mobile: true },
-            'raccoon': { calories: 30, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦝', temperature: ['moderate'], mobile: true },
-            'skunk': { calories: 25, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦨', temperature: ['moderate'], mobile: true },
-            'porcupine': { calories: 28, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦔', temperature: ['moderate'], mobile: true },
-            'mole': { calories: 20, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦫', temperature: ['moderate'], mobile: true },
-            'vole': { calories: 18, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🐭', temperature: ['moderate'], mobile: true },
-            'hyena': { calories: 45, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦁', temperature: ['warm'], mobile: true },
-            'leopard': { calories: 48, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🐆', temperature: ['warm'], mobile: true },
-            'bobcat': { calories: 35, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🐱', temperature: ['moderate'], mobile: true },
+        // Resource category rules for procedural generation
+        resourceCategories: {
+            burnable: {
+                fire: { min: 1, max: 3 },
+                calories: 0,
+                water: 0,
+                vitamins: [0, 0, 0, 0, 0]
+            },
+            plant: {
+                calories: { min: 10, max: 20 },
+                water: { min: 0, max: 15 },
+                fire: 0,
+                poisonousChance: 0.15, // 15% chance to be poisonous
+                poisonousCalories: { min: -25, max: -15 },
+                poisonousWater: 0
+            },
+            animal: {
+                calories: { min: 25, max: 40 },
+                water: 0,
+                fire: 0,
+                poisonousChance: 0.12, // 12% chance to be poisonous  
+                poisonousCalories: { min: -35, max: -25 },
+                poisonousWater: 0
+            }
         },
+
+        // Vitamin distribution system
+        vitaminDistribution: {
+            // Each resource gets 1-2 vitamins, ensuring variety
+            vitaminCount: { min: 1, max: 2 },
+            vitaminStrength: { min: 15, max: 30 },
+            // Ensure all 5 vitamins are well-represented across all resources
+            vitaminBalance: {
+                vitaminA: { targetPercentage: 20 }, // 20% of resources should have vitamin A
+                vitaminB: { targetPercentage: 20 },
+                vitaminC: { targetPercentage: 20 },
+                vitaminD: { targetPercentage: 20 },
+                vitaminE: { targetPercentage: 20 }
+            }
+        },
+
+        // Resource data with categories (nutrition values generated procedurally)
+        resourceData: {
+            // Burnables (fire only)
+            'oak': { category: 'burnable', emoji: '🌳', temperature: ['moderate'], mobile: false },
+            'pine': { category: 'burnable', emoji: '🌲', temperature: ['cold'], mobile: false },
+            'maple': { category: 'burnable', emoji: '🍁', temperature: ['moderate'], mobile: false },
+            'palm': { category: 'burnable', emoji: '🌴', temperature: ['warm'], mobile: false },
+            'reed': { category: 'burnable', emoji: '🪾', temperature: ['warm'], mobile: false },
+            'spruce': { category: 'burnable', emoji: '🎄', temperature: ['cold'], mobile: false },
+            'bamboo': { category: 'burnable', emoji: '🎋', temperature: ['warm'], mobile: false },
+            'leaf': { category: 'burnable', emoji: '🍂', temperature: ['cold'], mobile: false },
+            'plant': { category: 'burnable', emoji: '🪴', temperature: ['moderate'], mobile: false },
+            'cactus': { category: 'burnable', emoji: '🌵', temperature: ['warm'], mobile: false },
+
+            // Plants (calories + water + vitamins)
+            'apple': { category: 'plant', emoji: '🍎', temperature: ['cold'], mobile: false },
+            'banana': { category: 'plant', emoji: '🍌', temperature: ['warm'], mobile: false },
+            'orange': { category: 'plant', emoji: '🍊', temperature: ['warm'], mobile: false },
+            'grape': { category: 'plant', emoji: '🍇', temperature: ['moderate'], mobile: false },
+            'strawberry': { category: 'plant', emoji: '🍓', temperature: ['moderate'], mobile: false },
+            'pear': { category: 'plant', emoji: '🍐', temperature: ['moderate'], mobile: false },
+            'peach': { category: 'plant', emoji: '🍑', temperature: ['warm'], mobile: false },
+            'plum': { category: 'plant', emoji: '🫐', temperature: ['moderate'], mobile: false },
+            'cherry': { category: 'plant', emoji: '🍒', temperature: ['moderate'], mobile: false },
+            'lemon': { category: 'plant', emoji: '🍋', temperature: ['warm'], mobile: false },
+            'pineapple': { category: 'plant', emoji: '🍍', temperature: ['warm'], mobile: false },
+            'mango': { category: 'plant', emoji: '🥭', temperature: ['warm'], mobile: false },
+            'coconut': { category: 'plant', emoji: '🥥', temperature: ['warm'], mobile: false },
+            'kiwi': { category: 'plant', emoji: '🥝', temperature: ['moderate'], mobile: false },
+            'avocado': { category: 'plant', emoji: '🥑', temperature: ['warm'], mobile: false },
+            'shroom': { category: 'plant', emoji: '🍄‍🟫', temperature: ['cold'], mobile: false },
+            'mushroom': { category: 'plant', emoji: '🍄', temperature: ['moderate'], mobile: false },
+            'rose': { category: 'plant', emoji: '🌹', temperature: ['moderate'], mobile: false },
+            'tulip': { category: 'plant', emoji: '🌷', temperature: ['moderate'], mobile: false },
+            'sunflower': { category: 'plant', emoji: '🌻', temperature: ['warm'], mobile: false },
+            'daisy': { category: 'plant', emoji: '🌼', temperature: ['cold'], mobile: false },
+            'lily': { category: 'plant', emoji: '🌸', temperature: ['cold'], mobile: false },
+            'lotus': { category: 'plant', emoji: '🪷', temperature: ['warm'], mobile: false },
+            'hibiscus': { category: 'plant', emoji: '🌺', temperature: ['warm'], mobile: false },
+            'carrot': { category: 'plant', emoji: '🥕', temperature: ['moderate'], mobile: false },
+            'potato': { category: 'plant', emoji: '🥔', temperature: ['cold'], mobile: false },
+            'tomato': { category: 'plant', emoji: '🍅', temperature: ['warm'], mobile: false },
+            'onion': { category: 'plant', emoji: '🧅', temperature: ['moderate'], mobile: false },
+            'garlic': { category: 'plant', emoji: '🧄', temperature: ['moderate'], mobile: false },
+            'pepper': { category: 'plant', emoji: '🫑', temperature: ['warm'], mobile: false },
+            'cucumber': { category: 'plant', emoji: '🥒', temperature: ['cold'], mobile: false },
+            'lettuce': { category: 'plant', emoji: '🥬', temperature: ['cold'], mobile: false },
+            'broccoli': { category: 'plant', emoji: '🥦', temperature: ['cold'], mobile: false },
+            'cauliflower': { category: 'plant', emoji: '🥬', temperature: ['cold'], mobile: false },
+            'pumpkin': { category: 'plant', emoji: '🎃', temperature: ['cold'], mobile: false },
+            'eggplant': { category: 'plant', emoji: '🍆', temperature: ['warm'], mobile: false },
+
+            // Animals (calories + vitamins only)
+            'rabbit': { category: 'animal', emoji: '🐰', temperature: ['moderate'], mobile: true },
+            'deer': { category: 'animal', emoji: '🦌', temperature: ['moderate'], mobile: true },
+            'squirrel': { category: 'animal', emoji: '🐿️', temperature: ['moderate'], mobile: true },
+            'pheasant': { category: 'animal', emoji: '🦃', temperature: ['moderate'], mobile: true },
+            'duck': { category: 'animal', emoji: '🦆', temperature: ['moderate'], mobile: true },
+            'goose': { category: 'animal', emoji: '🦢', temperature: ['cold'], mobile: true },
+            'hare': { category: 'animal', emoji: '🐰', temperature: ['moderate'], mobile: true },
+            'fox': { category: 'animal', emoji: '🦊', temperature: ['moderate'], mobile: true },
+            'boar': { category: 'animal', emoji: '🐗', temperature: ['moderate'], mobile: true },
+            'woodcock': { category: 'animal', emoji: '🦅', temperature: ['moderate'], mobile: true },
+            'beaver': { category: 'animal', emoji: '🦫', temperature: ['cold'], mobile: true },
+            'otter': { category: 'animal', emoji: '🦦', temperature: ['cold'], mobile: true },
+            'bear': { category: 'animal', emoji: '🐻', temperature: ['cold'], mobile: true },
+            'wolf': { category: 'animal', emoji: '🐺', temperature: ['cold'], mobile: true },
+            'lynx': { category: 'animal', emoji: '🐱', temperature: ['cold'], mobile: true },
+            'weasel': { category: 'animal', emoji: '🦡', temperature: ['moderate'], mobile: true },
+            'raccoon': { category: 'animal', emoji: '🦝', temperature: ['moderate'], mobile: true },
+            'skunk': { category: 'animal', emoji: '🦨', temperature: ['moderate'], mobile: true },
+            'porcupine': { category: 'animal', emoji: '🦔', temperature: ['moderate'], mobile: true },
+            'mole': { category: 'animal', emoji: '🦫', temperature: ['moderate'], mobile: true },
+            'vole': { category: 'animal', emoji: '🐭', temperature: ['moderate'], mobile: true },
+            'hyena': { category: 'animal', emoji: '🦁', temperature: ['warm'], mobile: true },
+            'leopard': { category: 'animal', emoji: '🐆', temperature: ['warm'], mobile: true },
+            'bobcat': { category: 'animal', emoji: '🐱', temperature: ['moderate'], mobile: true },
+        },
+
+
     },
 
     // Entity types - Centralized entity type definitions

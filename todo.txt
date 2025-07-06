@@ -1,14 +1,15 @@
 x chunky cells
 x spawn by grid cell density
 x res have fire value
-X make biome list incl village
-res are tagged to biomes
+x make biome list incl village
+x res are tagged to biomes
 x fix NPC visuals
 x download phaser3
-res are proc genned
-every res has some random in stats incl speed and size
-grid cells are tagged as biomes
-exclude the center as village biome
+x res are proc genned
+x grid cells are tagged as biomes
+x exclude the center as village biome
+some animals are faster
+villager have perfect knowledge of what to eat (not poisonous, not too fast)
 villagers never take the last 2 of any type in a biomes
 reproduction is possible if there are 2 of a type in a biome
 make sure max cap works
