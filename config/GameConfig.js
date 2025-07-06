@@ -168,7 +168,7 @@ window.GameConfig = {
     resources: {
         // Density-based spawning system
         density: {
-            resourcesPerTile: 10, // Average number of resources per tile 
+            resourcesPerTile: 12, // Average number of resources per tile 
             variance: 3, // ±variance for random variation (10-20 per tile when resourcesPerTile=15 & variance=5)
             propagationRadius: 80 // Distance within which resources can spawn new ones
         },
@@ -182,6 +182,7 @@ window.GameConfig = {
 
         // === DESIGNER BALANCING SECTION ===
         // All food/resource types with complete data (easier to maintain)
+
 
         // Biome definitions for world generation
         biomes: {

@@ -2586,6 +2586,18 @@ console.log('Phaser main loaded');
                     const tileEndX = Math.min(tileStartX + tileSize, cfg.width);
                     const tileEndY = Math.min(tileStartY + tileSize, cfg.height);
 
+                    // Get biome for this tile to determine temperature compatibility
+                    const tileCenterX = tileStartX + tileSize / 2;
+                    const tileCenterY = tileStartY + tileSize / 2;
+                    const biome = this.getBiomeAtPosition(tileCenterX, tileCenterY);
+                    assert(biome, `Failed to get biome for tile (${tileX}, ${tileY})`);
+                    assert(biome.temperature, `Biome missing temperature: ${biome.type}`);
+
+                    // Skip resource spawning in camp biome
+                    if (biome.type === 'camp') {
+                        continue;
+                    }
+
                     // Calculate resources for this tile with variance
                     const baseResources = densityConfig.resourcesPerTile;
                     const variance = densityConfig.variance;
@@ -2594,10 +2606,18 @@ console.log('Phaser main loaded');
                         baseResources + variance
                     );
 
+                    // Filter resources by biome temperature compatibility
+                    const compatibleResources = this.getTemperatureCompatibleResources(biome.temperature);
+                    assert(compatibleResources.length > 0, `No compatible resources found for biome temperature: ${biome.temperature}`);
+
+                    // Select 2-5 different resource types for this biome tile
+                    const resourceTypesCount = this.seededRandom.randomInt(2, 5);
+                    const selectedResourceTypes = this.selectRandomResourceTypes(compatibleResources, resourceTypesCount);
+
                     // Generate resources for this tile
                     for (let i = 0; i < resourcesForTile; i++) {
-                        // Randomly select resource type
-                        const resourceType = allResourceTypes[this.seededRandom.randomInt(0, allResourceTypes.length - 1)];
+                        // Select resource type from the chosen types for this biome
+                        const resourceType = selectedResourceTypes[this.seededRandom.randomInt(0, selectedResourceTypes.length - 1)];
 
                         // Generate random position within tile bounds
                         let pos;
@@ -3562,6 +3582,48 @@ console.log('Phaser main loaded');
             return this.biomeData[tileX][tileY];
         }
 
+        getTemperatureCompatibleResources(biomeTemperature) {
+            // Get all resource types
+            const allResourceTypes = [...GameUtils.ALL_FOOD_TYPES, ...GameUtils.ALL_BURNABLE_TYPES];
+            const compatibleResources = [];
+
+            // Filter resources by exact temperature match
+            for (const resourceType of allResourceTypes) {
+                const resourceData = GameConfig.resources.resourceData[resourceType];
+                assert(resourceData, `Missing resource data for: ${resourceType}`);
+                assert(resourceData.temperature, `Resource missing temperature: ${resourceType}`);
+
+                // Check if this resource's temperature exactly matches the biome
+                const resourceTemperatures = resourceData.temperature;
+                const isCompatible = resourceTemperatures.includes(biomeTemperature);
+
+                if (isCompatible) {
+                    compatibleResources.push(resourceType);
+                }
+            }
+
+            return compatibleResources;
+        }
+
+        selectRandomResourceTypes(availableResources, count) {
+            // Select random resource types without duplicates
+            const selected = [];
+            const shuffled = [...availableResources]; // Create a copy to shuffle
+
+            // Fisher-Yates shuffle
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = this.seededRandom.randomInt(0, i);
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+
+            // Take the first 'count' items
+            for (let i = 0; i < Math.min(count, shuffled.length); i++) {
+                selected.push(shuffled[i]);
+            }
+
+            return selected;
+        }
+
         findCentralBiome() {
             // Find the most central biome for camp placement
             const centerX = GameConfig.world.width / 2;
@@ -4307,6 +4369,25 @@ console.log('Phaser main loaded');
                                 const tileSize = GameConfig.world.tileSize;
                                 const tileX = Math.floor(newPosition.x / tileSize);
                                 const tileY = Math.floor(newPosition.y / tileSize);
+
+                                // Check temperature compatibility for the new position
+                                const biome = this.getBiomeAtPosition(newPosition.x, newPosition.y);
+                                assert(biome, 'Failed to get biome for propagation position');
+                                assert(biome.temperature, `Biome missing temperature: ${biome.type}`);
+
+                                // Check if the resource type exactly matches the biome temperature
+                                const resourceData = GameConfig.resources.resourceData[entity.type];
+                                assert(resourceData, `Missing resource data for: ${entity.type}`);
+                                assert(resourceData.temperature, `Resource missing temperature: ${entity.type}`);
+
+                                const isCompatible = resourceData.temperature.includes(biome.temperature);
+
+                                if (!isCompatible) {
+                                    if (window.summaryLoggingEnabled) {
+                                        console.log(`[Propagation] Skipping ${entity.type} propagation - incompatible with ${biome.type} (${biome.temperature})`);
+                                    }
+                                    continue; // Skip this propagation attempt
+                                }
 
                                 // Check if this tile already has too many resources
                                 const resourcesInTile = this.entities.filter(e =>
