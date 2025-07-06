@@ -76,6 +76,21 @@ console.log('Phaser main loaded');
             return nutrition.fire || 0;
         },
 
+        // Get runspeed for a resource type (uses procedurally generated values)
+        getRunspeed(resourceType) {
+            const resourceData = GameConfig.resources.resourceData[resourceType];
+            assert(resourceData, `Resource type ${resourceType} not found in GameConfig.resources.resourceData`);
+
+            // Use procedurally generated runspeed values
+            assert(window.resourceGeneration, 'ResourceGeneration not initialized');
+            return window.resourceGeneration.getRunspeed(resourceType);
+        },
+
+        // Check if a resource type is mobile (has runspeed > 0)
+        isMobile(resourceType) {
+            return this.getRunspeed(resourceType) > 0;
+        },
+
         // Apply nutrition to a target (player or villager)
         applyNutrition(target, foodType) {
             const nutrition = this.getNutrition(foodType);
@@ -2704,9 +2719,9 @@ console.log('Phaser main loaded');
                 } else if (entity.type === 'well') {
                     fontSize = 22; // Wells keep same size
                 } else if (GameUtils.ALL_FOOD_TYPES.includes(entity.type)) {
-                    // Check if it's mobile (animal)
-                    const resourceData = GameConfig.resources.resourceData[entity.type];
-                    if (resourceData && resourceData.mobile === true) {
+                    // Check if it's an animal (has runspeed > 0)
+                    const runspeed = GameUtils.getRunspeed(entity.type);
+                    if (runspeed > 0) {
                         // It's an animal - make 50% larger
                         fontSize = 28; // 22 * 1.5 = 33
                     } else {
@@ -4543,15 +4558,14 @@ console.log('Phaser main loaded');
         }
 
         updateAnimalFleeing(delta) {
-            // Get all mobile entities from GameConfig
-            const mobileTypes = Object.keys(GameConfig.resources.resourceData).filter(type => {
-                const resourceData = GameConfig.resources.resourceData[type];
-                return resourceData.mobile === true;
+            // Get all animals (only check entities that are in resourceData)
+            const animals = this.entities.filter(e => {
+                if (e.collected) return false;
+                // Only check entities that are in resourceData (animals, plants, burnables)
+                if (!GameConfig.resources.resourceData[e.type]) return false;
+                const runspeed = GameUtils.getRunspeed(e.type);
+                return runspeed > 0;
             });
-
-            const animals = this.entities.filter(e =>
-                !e.collected && mobileTypes.includes(e.type)
-            );
 
             // Debug: Log animal count occasionally
             if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) { // 1% chance per frame when spam enabled
@@ -4594,8 +4608,9 @@ console.log('Phaser main loaded');
             const dist = Math.sqrt(dx * dx + dy * dy);
 
             if (dist > 0) {
-                // Move away at fixed animal speed using actual delta time
-                const fleeSpeed = GameConfig.animals.moveSpeed * (delta / 1000); // Fixed animal speed, actual delta
+                // Move away at procedurally generated animal speed using actual delta time
+                const animalSpeed = GameUtils.getRunspeed(animal.type);
+                const fleeSpeed = animalSpeed * (delta / 1000); // Procedurally generated animal speed, actual delta
                 const moveX = (dx / dist) * fleeSpeed;
                 const moveY = (dy / dist) * fleeSpeed;
 
@@ -4630,7 +4645,7 @@ console.log('Phaser main loaded');
             if (!animal.wanderState) {
                 animal.wanderState = {
                     targetPosition: null,
-                    wanderSpeed: GameConfig.animals.moveSpeed, // Fixed animal speed
+                    wanderSpeed: GameUtils.getRunspeed(animal.type) / 2, // Half the procedurally generated animal speed
                     changeDirectionTimer: 0,
                     changeDirectionInterval: GameConfig.animals.directionChangeInterval.min + this.seededRandom.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min) // 2-5 seconds
                 };
@@ -4873,7 +4888,8 @@ console.log('Phaser main loaded');
                 calories: rules.calories,
                 water: rules.water,
                 fire: rules.fire,
-                vitamins: Array.isArray(rules.vitamins) ? [...rules.vitamins] : [0, 0, 0, 0, 0] // Copy base vitamins or create array
+                vitamins: Array.isArray(rules.vitamins) ? [...rules.vitamins] : [0, 0, 0, 0, 0], // Copy base vitamins or create array
+                runspeed: rules.runspeed // Copy base runspeed
             };
 
             // Generate random values for ranges
@@ -4897,6 +4913,11 @@ console.log('Phaser main loaded');
             // Generate vitamins for non-burnables
             if (category !== 'burnable') {
                 nutrition.vitamins = this.generateVitamins(random);
+            }
+
+            // Generate runspeed for animals
+            if (category === 'animal') {
+                nutrition.runspeed = this.generateRunspeed(random);
             }
 
             return nutrition;
@@ -4935,10 +4956,33 @@ console.log('Phaser main loaded');
             return vitamins;
         }
 
+        // Generate runspeed for animals
+        generateRunspeed(random) {
+            const villagerSpeed = GameConfig.villager.moveSpeed; // Base villager speed
+            const rules = GameConfig.resources.resourceCategories.animal.runspeed;
+
+            // 75% chance to be slower, 25% chance to be faster
+            if (random.random() < rules.slowChance) {
+                // Slower: 10-20 units slower than villager
+                const speedReduction = random.randomRange(rules.slowRange.min, rules.slowRange.max);
+                return Math.max(0, villagerSpeed + speedReduction); // Ensure non-negative
+            } else {
+                // Faster: 20-30 units faster than villager
+                const speedIncrease = random.randomRange(rules.fastRange.min, rules.fastRange.max);
+                return villagerSpeed + speedIncrease;
+            }
+        }
+
         // Get nutrition for a resource (use cached values)
         getNutrition(resourceName) {
             assert(this.generatedNutrition[resourceName], `No nutrition data for resource: ${resourceName}`);
             return this.generatedNutrition[resourceName];
+        }
+
+        // Get runspeed for a resource (use cached values)
+        getRunspeed(resourceName) {
+            assert(this.generatedNutrition[resourceName], `No nutrition data for resource: ${resourceName}`);
+            return this.generatedNutrition[resourceName].runspeed || 0;
         }
     }
 

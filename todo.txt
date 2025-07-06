@@ -8,11 +8,11 @@ x download phaser3
 x res are proc genned
 x grid cells are tagged as biomes
 x exclude the center as village biome
-some animals are faster
+x some animals are faster
+reproduction is possible if there are 2 of a type in a biome
+force villager states for debug
 villager have perfect knowledge of what to eat (not poisonous, not too fast)
 villagers never take the last 2 of any type in a biomes
-reproduction is possible if there are 2 of a type in a biome
 make sure max cap works
-force villager states for debug
 villager states debug
 add topology: biome walls
