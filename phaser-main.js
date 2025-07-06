@@ -2324,35 +2324,19 @@ console.log('Phaser main loaded');
                 type: GameConfig.entityTypes.storage_box, emoji: '📦', capacity: GameConfig.storage.communalCapacity, items: new Array(GameConfig.storage.communalCapacity).fill(null)
             };
             this.entities.push(communalStorage);
-            // --- Camps and facilities (organic placement using Perlin noise) ---
+            // --- Camps and facilities (simple circular placement) ---
             this.camps = [];
 
-            // Use Perlin noise to create organic camp placement
-            const noiseScale = GameConfig.world.noiseScale;
-            const noiseBias = GameConfig.world.noiseBias;
-
             for (let i = 0; i < cfg.villagerCount; i++) {
-                // Start with a base circular pattern but heavily modify with noise
+                // Simple circular placement with some randomness
                 const baseAngle = (i / cfg.villagerCount) * 2 * Math.PI;
 
-                // Use Perlin noise to create organic variations
-                const noiseX = Math.cos(baseAngle) * noiseScale;
-                const noiseY = Math.sin(baseAngle) * noiseScale;
-                const noiseValue = this.noise.noise2D(noiseX, noiseY);
-
-                // Apply noise to both angle and radius for organic placement
-                const angleVariation = noiseValue * cfg.campPlacement.angleVariationRange;
-                const radiusVariation = (noiseValue * 0.5 + 0.5) * cfg.campPlacement.radiusVariationRange;
+                // Add some randomness to angle and radius
+                const angleVariation = (this.seededRandom.random() - 0.5) * cfg.campPlacement.angleVariationRange;
+                const radiusVariation = (this.seededRandom.random() - 0.5) * cfg.campPlacement.radiusVariationRange;
 
                 const angle = baseAngle + angleVariation;
                 const radius = cfg.campPlacement.baseRadius + radiusVariation;
-
-                // Add additional randomness for even more organic feel
-                const finalAngleVariation = (this.seededRandom.random() - 0.5) * cfg.campPlacement.additionalRandomAngle;
-                const finalRadiusVariation = (this.seededRandom.random() - 0.5) * cfg.campPlacement.additionalRandomRadius;
-
-                let finalAngle = angle + finalAngleVariation;
-                let finalRadius = radius + finalRadiusVariation;
 
                 // Ensure camps don't get too close to each other
                 let attempts = 0;
@@ -2360,8 +2344,8 @@ console.log('Phaser main loaded');
                 let tooClose = false;
 
                 do {
-                    x = centerX + Math.cos(finalAngle) * finalRadius;
-                    y = centerY + Math.sin(finalAngle) * finalRadius;
+                    x = centerX + Math.cos(angle) * radius;
+                    y = centerY + Math.sin(angle) * radius;
 
                     // Check distance from other camps
                     tooClose = false;
@@ -2375,8 +2359,10 @@ console.log('Phaser main loaded');
 
                     // If too close, try a slightly different position
                     if (tooClose) {
-                        finalAngle += (this.seededRandom.random() - 0.5) * 0.5;
-                        finalRadius += (this.seededRandom.random() - 0.5) * 50;
+                        const newAngle = angle + (this.seededRandom.random() - 0.5) * 0.5;
+                        const newRadius = radius + (this.seededRandom.random() - 0.5) * 50;
+                        x = centerX + Math.cos(newAngle) * newRadius;
+                        y = centerY + Math.sin(newAngle) * newRadius;
                     }
 
                     attempts++;
@@ -2556,115 +2542,76 @@ console.log('Phaser main loaded');
                     this.wells.push(well);
                 }
             }
-            // --- Resources (Small clusters of same type, spreading from village) ---
-            const resourceTypes = GameUtils.ALL_FOOD_TYPES;
-            const totalResources = (cfg.villagerCount + 1) * cfg.resourcesPerVillager;
-            console.log(`[World Generation] Generating ${totalResources} resources in clusters for ${cfg.villagerCount} villagers + 1 player`);
+            // --- Resources (Density-based spawning across all tiles) ---
+            const densityConfig = GameConfig.resources.density;
+            const tileSize = GameConfig.world.tileSize;
 
-            // Calculate cluster parameters
-            const clusterSize = 2 + this.seededRandom.randomInt(0, 2); // 2-4 resources per cluster
-            const clusterCount = Math.ceil(totalResources / clusterSize);
+            // Calculate number of tiles in the world
+            const tilesX = Math.ceil(cfg.width / tileSize);
+            const tilesY = Math.ceil(cfg.height / tileSize);
+            const totalTiles = tilesX * tilesY;
 
-            // Create clusters starting near village and spreading outward
-            const maxDistance = Math.min(cfg.width, cfg.height) / 2; // Maximum distance from village center
+            console.log(`[World Generation] Generating resources using density system: ${tilesX}x${tilesY} tiles (${totalTiles} total)`);
 
-            let resourcesGenerated = 0;
+            // All resource types (food + trees)
+            const allResourceTypes = [...GameUtils.ALL_FOOD_TYPES, GameConfig.entityTypes.tree];
+            let totalResourcesGenerated = 0;
 
-            for (let clusterIndex = 0; clusterIndex < clusterCount && resourcesGenerated < totalResources; clusterIndex++) {
-                // Calculate distance from village (closer clusters first)
-                const distanceFromVillage = (clusterIndex / clusterCount) * maxDistance;
+            // Generate resources for each tile
+            for (let tileX = 0; tileX < tilesX; tileX++) {
+                for (let tileY = 0; tileY < tilesY; tileY++) {
+                    // Calculate tile bounds
+                    const tileStartX = tileX * tileSize;
+                    const tileStartY = tileY * tileSize;
+                    const tileEndX = Math.min(tileStartX + tileSize, cfg.width);
+                    const tileEndY = Math.min(tileStartY + tileSize, cfg.height);
 
-                // Add some randomness to distance
-                const distanceVariation = (this.seededRandom.random() - 0.5) * 200;
-                const actualDistance = Math.max(GameConfig.world.resourceVillageMinDistance, distanceFromVillage + distanceVariation);
+                    // Calculate resources for this tile with variance
+                    const baseResources = densityConfig.resourcesPerTile;
+                    const variance = densityConfig.variance;
+                    const resourcesForTile = this.seededRandom.randomInt(
+                        Math.max(0, baseResources - variance),
+                        baseResources + variance
+                    );
 
-                // Generate cluster center position
-                let clusterCenter;
-                let attempts = 0;
-                do {
-                    const angle = this.seededRandom.random() * 2 * Math.PI;
-                    clusterCenter = {
-                        x: centerX + Math.cos(angle) * actualDistance,
-                        y: centerY + Math.sin(angle) * actualDistance
-                    };
+                    // Generate resources for this tile
+                    for (let i = 0; i < resourcesForTile; i++) {
+                        // Randomly select resource type
+                        const resourceType = allResourceTypes[this.seededRandom.randomInt(0, allResourceTypes.length - 1)];
 
-                    // Ensure within world bounds
-                    clusterCenter.x = Math.max(0, Math.min(cfg.width, clusterCenter.x));
-                    clusterCenter.y = Math.max(0, Math.min(cfg.height, clusterCenter.y));
+                        // Generate random position within tile bounds
+                        let pos;
+                        let attempts = 0;
+                        const maxAttempts = 50;
 
-                    attempts++;
-                } while (this.isTooCloseToVillage(clusterCenter) && attempts < cfg.wellMaxAttempts);
+                        do {
+                            pos = {
+                                x: this.seededRandom.randomRange(tileStartX, tileEndX),
+                                y: this.seededRandom.randomRange(tileStartY, tileEndY)
+                            };
+                            attempts++;
+                        } while (this.isTooCloseToVillage(pos) && attempts < maxAttempts);
 
-                if (attempts >= cfg.wellMaxAttempts) continue;
+                        // Skip if we couldn't find a valid position
+                        if (attempts >= maxAttempts) continue;
 
-                // Choose primary resource type for this cluster (80% chance same type)
-                const primaryType = resourceTypes[this.seededRandom.randomInt(0, resourceTypes.length - 1)];
+                        const emoji = this.getResourceEmoji(resourceType);
+                        this.entities.push({
+                            position: pos,
+                            type: resourceType,
+                            emoji,
+                            collected: false,
+                            isChild: false, // Initial resources are adults
+                            tileX: tileX, // Track which tile this belongs to
+                            tileY: tileY
+                        });
 
-                // Generate resources in this cluster
-                const resourcesInCluster = Math.min(clusterSize, totalResources - resourcesGenerated);
-
-                for (let i = 0; i < resourcesInCluster; i++) {
-                    // 80% chance to use primary type, 20% chance to use random type
-                    const resourceType = this.seededRandom.random() < 0.8 ? primaryType : resourceTypes[this.seededRandom.randomInt(0, resourceTypes.length - 1)];
-
-                    // Generate position within cluster (20-60 pixels from center)
-                    const clusterRadius = 20 + this.seededRandom.random() * 40;
-                    const angle = this.seededRandom.random() * 2 * Math.PI;
-
-                    const pos = {
-                        x: clusterCenter.x + Math.cos(angle) * clusterRadius,
-                        y: clusterCenter.y + Math.sin(angle) * clusterRadius
-                    };
-
-                    // Ensure within world bounds
-                    pos.x = Math.max(0, Math.min(cfg.width, pos.x));
-                    pos.y = Math.max(0, Math.min(cfg.height, pos.y));
-
-                    const emoji = this.getResourceEmoji(resourceType);
-                    this.entities.push({
-                        position: pos,
-                        type: resourceType,
-                        emoji,
-                        collected: false,
-                        isChild: false, // Initial resources are adults
-                        clusterId: clusterIndex // Track which cluster this belongs to
-                    });
-
-                    resourcesGenerated++;
-                }
-
-                console.log(`[World Generation] Created cluster ${clusterIndex} with ${resourcesInCluster} ${primaryType} resources at distance ${Math.round(actualDistance)} from village`);
-            }
-
-            console.log(`[World Generation] Generated ${totalResources} resources, total entities: ${this.entities.length}`);
-
-            // --- Generate trees separately (50 total) ---
-            console.log(`[World Generation] Generating 50 trees across the world`);
-            for (let i = 0; i < 50; i++) {
-                let attempts = 0;
-                let pos;
-                do {
-                    pos = {
-                        x: this.seededRandom.randomRange(0, cfg.width),
-                        y: this.seededRandom.randomRange(0, cfg.height)
-                    };
-                    attempts++;
-                } while (this.isTooCloseToVillage(pos) && attempts < GameConfig.technical.distances.resourcePlacementAttempts);
-
-                if (attempts < GameConfig.technical.distances.resourcePlacementAttempts) {
-                    const treeEntity = {
-                        position: pos,
-                        type: GameConfig.entityTypes.tree,
-                        emoji: '🌲',
-                        collected: false,
-                        isChild: false, // Initial trees are adults
-                        clusterId: -1 // Trees don't use cluster system
-                    };
-
-                    this.entities.push(treeEntity);
+                        totalResourcesGenerated++;
+                    }
                 }
             }
-            console.log(`[World Generation] Generated 50 trees, total entities: ${this.entities.length}`);
+
+            console.log(`[World Generation] Generated ${totalResourcesGenerated} resources across ${totalTiles} tiles, total entities: ${this.entities.length}`);
 
             // --- Render all entities as Phaser text objects ---
             this.worldEntities = [];
@@ -4173,52 +4120,69 @@ console.log('Phaser main loaded');
                         // Calculate propagation chance based on global resource count
                         const globalCount = this.getGlobalResourceCount(entity.type);
                         const baseChance = 0.5; // 50% base chance
-                        const maxCount = entity.type === GameConfig.entityTypes.tree ? GameConfig.resources.maxCounts.tree : GameConfig.resources.maxCounts.default; // Trees cap at 50, others at 10
+                        const maxCount = entity.type === GameConfig.entityTypes.tree ? GameConfig.resources.maxCounts.tree : GameConfig.resources.maxCounts.default;
                         const finalChance = Math.max(0, baseChance * (1 - globalCount / maxCount)); // Decreases to 0% at max count
 
                         // Attempt to spawn new resource nearby using seeded random
                         if (this.seededRandom.random() < finalChance) {
                             const newPosition = this.findPropagationPosition(entity.position, entity.type);
                             if (newPosition) {
-                                const newEntity = {
-                                    position: newPosition,
-                                    type: entity.type,
-                                    emoji: entity.emoji,
-                                    collected: false,
-                                    isChild: true, // Mark as child
-                                    birthTime: this.playerState.currentTime, // Track when born
-                                    clusterId: entity.clusterId
-                                };
+                                // Calculate which tile this new resource would be in
+                                const tileSize = GameConfig.world.tileSize;
+                                const tileX = Math.floor(newPosition.x / tileSize);
+                                const tileY = Math.floor(newPosition.y / tileSize);
 
-                                // Create visual representation (smaller for children)
-                                const fontSize = entity.isChild ? 16 : 22; // Smaller size for children
-                                const textObj = this.add.text(newPosition.x, newPosition.y, newEntity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
-                                newEntity._phaserText = textObj;
-                                this.worldEntities.push(textObj);
+                                // Check if this tile already has too many resources
+                                const resourcesInTile = this.entities.filter(e =>
+                                    !e.collected &&
+                                    e.tileX === tileX &&
+                                    e.tileY === tileY
+                                ).length;
 
-                                // Add interaction
-                                textObj.setInteractive({ useHandCursor: true });
-                                textObj.on('pointerdown', () => {
-                                    if (newEntity.collected) return;
-                                    const dist = GameUtils.distance(this.playerState.position, newEntity.position);
-                                    assert(dist <= GameConfig.player.interactionThreshold, 'Tried to collect resource out of range');
-                                    const slot = this.playerState.inventory.findIndex(i => i === null);
-                                    if (slot === -1) {
-                                        this.showTempMessage('Inventory full!', 1500);
-                                        return;
+                                const maxResourcesInTile = GameConfig.resources.density.resourcesPerTile + GameConfig.resources.density.variance;
+
+                                if (resourcesInTile < maxResourcesInTile) {
+                                    const newEntity = {
+                                        position: newPosition,
+                                        type: entity.type,
+                                        emoji: entity.emoji,
+                                        collected: false,
+                                        isChild: true, // Mark as child
+                                        birthTime: this.playerState.currentTime, // Track when born
+                                        tileX: tileX,
+                                        tileY: tileY
+                                    };
+
+                                    // Create visual representation (smaller for children)
+                                    const fontSize = entity.isChild ? 16 : 22; // Smaller size for children
+                                    const textObj = this.add.text(newPosition.x, newPosition.y, newEntity.emoji, { fontSize: fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
+                                    newEntity._phaserText = textObj;
+                                    this.worldEntities.push(textObj);
+
+                                    // Add interaction
+                                    textObj.setInteractive({ useHandCursor: true });
+                                    textObj.on('pointerdown', () => {
+                                        if (newEntity.collected) return;
+                                        const dist = GameUtils.distance(this.playerState.position, newEntity.position);
+                                        assert(dist <= GameConfig.player.interactionThreshold, 'Tried to collect resource out of range');
+                                        const slot = this.playerState.inventory.findIndex(i => i === null);
+                                        if (slot === -1) {
+                                            this.showTempMessage('Inventory full!', 1500);
+                                            return;
+                                        }
+                                        newEntity.collected = true;
+                                        newEntity.collectedAt = this.playerState.currentTime;
+                                        textObj.setVisible(false);
+                                        this.playerState.inventory[slot] = { type: newEntity.type, emoji: newEntity.emoji };
+                                        this.updatePhaserUI();
+                                        this.showTempMessage(`Collected ${newEntity.type}!`, 1200);
+                                    });
+
+                                    this.entities.push(newEntity);
+
+                                    if (window.summaryLoggingEnabled) {
+                                        console.log(`[Propagation] ${entity.type} spawned child at (${Math.round(newPosition.x)}, ${Math.round(newPosition.y)}) in tile (${tileX}, ${tileY}) - Global count: ${globalCount + 1}`);
                                     }
-                                    newEntity.collected = true;
-                                    newEntity.collectedAt = this.playerState.currentTime;
-                                    textObj.setVisible(false);
-                                    this.playerState.inventory[slot] = { type: newEntity.type, emoji: newEntity.emoji };
-                                    this.updatePhaserUI();
-                                    this.showTempMessage(`Collected ${newEntity.type}!`, 1200);
-                                });
-
-                                this.entities.push(newEntity);
-
-                                if (window.summaryLoggingEnabled) {
-                                    console.log(`[Propagation] ${entity.type} spawned child at (${Math.round(newPosition.x)}, ${Math.round(newPosition.y)}) - Global count: ${globalCount + 1}`);
                                 }
                             }
                         }
@@ -4253,7 +4217,7 @@ console.log('Phaser main loaded');
 
         findPropagationPosition(originalPosition, resourceType) {
             const maxAttempts = 20;
-            const propagationRadius = GameConfig.resources.propagationRadius;
+            const propagationRadius = GameConfig.resources.density.propagationRadius;
 
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 // Generate position within propagation radius using seeded random

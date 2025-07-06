@@ -1,5 +1,14 @@
-villager states
-spawn stuff in obvious groups
-add topology
-game name
-nicer visuals
+x chunky cells
+spawn by grid cell density
+res have fire value
+make biome list incl village
+res are tagged to biomes
+res are proc genned
+grid cells are tagged as biomes
+exclude the center as village biome
+villagers never take the last 2 of any type in a biomes
+reproduction is possible if there are 2 of a type in a biome
+make sure max cap works
+force villager states for debug
+villager states debug
+add topology: biome walls

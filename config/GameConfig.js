@@ -13,10 +13,8 @@ window.GameConfig = {
     world: {
         width: window.innerWidth * 10, // 10x viewport width
         height: window.innerHeight * 10, // 10x viewport height
-        tileSize: 64, // Size of each "tile" for spatial calculations (used in distance checks)
+        tileSize: 1024, // Size of each "tile" for spatial calculations (used in distance checks)
         villagerCount: 8, // Total camps (7 AI villagers + 1 player camp)
-        resourcesPerVillager: 20, // Initial resources spawned per villager (including player) 
-        maxResourcesPerType: 20, // Global cap on resources per type (prevents overpopulation) 
 
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 25 }, // Offset for village storage from center
@@ -38,14 +36,10 @@ window.GameConfig = {
         villagerSpawnRadius: 5000, // Maximum distance from village center for villager spawning
 
         // Resource generation
-        resourceVillageMinDistance: 1200, // Minimum distance from village center for resources
+        resourceVillageMinDistance: 512, // Minimum distance from village center for resources
         wellMinDistance: 2000, // Minimum distance between wells
         wellCount: 30, // Number of additional wells beyond village well
         wellMaxAttempts: 50, // Maximum attempts to place a well
-
-        // Perlin noise settings
-        noiseScale: 10, // Scale factor for Perlin noise in resource placement - reduced for better clustering
-        noiseBias: 0.7 // Bias factor for noise-based positioning - increased for better clustering
     },
 
     // Time settings - Controls how fast game time passes relative to real time
@@ -172,7 +166,12 @@ window.GameConfig = {
 
     // Resource settings - Controls how resources spawn and spread
     resources: {
-        propagationRadius: 80, // Distance within which resources can spawn new ones - reduced for tighter clustering
+        // Density-based spawning system
+        density: {
+            resourcesPerTile: 10, // Average number of resources per tile 
+            variance: 3, // ±variance for random variation (10-20 per tile when resourcesPerTile=15 & variance=5)
+            propagationRadius: 80 // Distance within which resources can spawn new ones
+        },
 
         // Resource type limits
         maxCounts: {
