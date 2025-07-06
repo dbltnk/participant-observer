@@ -150,7 +150,7 @@ console.log('Phaser main loaded');
 
         /**
          * Shared resource collection logic used by both player and villager systems
-         * @param {Object} entity - The entity to collect
+         * @param {Object} entity - The entity to collect (must be a resource in GameConfig.resources.resourceData)
          * @param {Array} inventory - The inventory array to add the item to
          * @param {string} collectorName - Name of the collector for logging
          * @returns {boolean} - Whether collection was successful
@@ -159,6 +159,12 @@ console.log('Phaser main loaded');
             assert(entity, 'Entity required for collectResource');
             assert(entity.type, 'Entity must have a type');
             assert(inventory, 'Inventory array required for collectResource');
+
+            // Check if we can collect this resource (must be in resourceData)
+            if (!GameConfig.resources.resourceData[entity.type]) {
+                console.warn(`[${collectorName}] cannot collect entity of type: ${entity.type} (not in resourceData)`);
+                return false;
+            }
 
             // Check if we can collect this resource
             if (!GameUtils.isFood(entity.type) && !GameUtils.isBurnable(entity.type)) {
@@ -984,27 +990,34 @@ console.log('Phaser main loaded');
             assert(fire, 'Fire entity required for addWoodToFire');
             assert(fire.type === GameConfig.entityTypes.fireplace, 'Target must be a fireplace');
 
-            // Find wood in inventory
-            let woodSlot = -1;
+            // Find burnable item in inventory
+            let burnableSlot = -1;
+            let burnableItem = null;
             for (let i = 0; i < this.inventory.length; i++) {
                 const item = this.inventory[i];
                 if (item && GameUtils.isBurnable(item.type)) {
-                    woodSlot = i;
+                    burnableSlot = i;
+                    burnableItem = item;
                     break;
                 }
             }
 
-            if (woodSlot === -1) {
-                console.warn(`[Villager] ${this.name} no wood in inventory to add to fire`);
+            if (burnableSlot === -1) {
+                console.warn(`[Villager] ${this.name} no burnable items in inventory to add to fire`);
                 return false;
             }
 
-            // Add wood to fire
-            fire.wood += GameConfig.player.fireWoodRestore;
-            this.inventory[woodSlot] = null;
+            // Get the fire value of the specific item being burned (same as player system)
+            const fireValue = GameUtils.getFireValue(burnableItem.type);
+            assert(fireValue > 0, `Burnable item ${burnableItem.type} has no fire value`);
+
+            // Add the item's fire value to the fire (same as player system)
+            const oldWood = fire.wood;
+            fire.wood = Math.min(GameConfig.fires.maxWood, fire.wood + fireValue);
+            this.inventory[burnableSlot] = null;
 
             if (window.summaryLoggingEnabled) {
-                console.log(`[Villager] ${this.name} added wood to fire at (${Math.round(fire.position.x)}, ${Math.round(fire.position.y)})`);
+                console.log(`[Villager] ${this.name} burned ${burnableItem.type} for ${fireValue} wood at (${Math.round(fire.position.x)}, ${Math.round(fire.position.y)})`);
             }
             return true;
         }
@@ -2336,6 +2349,10 @@ console.log('Phaser main loaded');
                 };
             }
 
+            // Ensure resourceType is a valid resource (exists in resourceData)
+            assert(GameConfig.resources.resourceData[resourceType],
+                `findNearestResourceSource: resourceType '${resourceType}' must be in GameConfig.resources.resourceData`);
+
             // Check storage boxes first
             const storageBoxesToCheck = isEmergency ?
                 [this.villager.personalStorageBox, this.villager.communalStorageBox, ...storageBoxes.filter(box => box !== this.villager.personalStorageBox && box !== this.villager.communalStorageBox)] :
@@ -2359,9 +2376,12 @@ console.log('Phaser main loaded');
                 }
             }
 
-            // Check world entities
+            // Check world entities (only those in resourceData)
             for (const entity of entities) {
-                if (entity.type === resourceType && this.isResourceSafeToCollect(entity)) {
+                // Only consider entities that are in resourceData (actual resources)
+                if (GameConfig.resources.resourceData[entity.type] &&
+                    entity.type === resourceType &&
+                    this.isResourceSafeToCollect(entity)) {
                     const dist = GameUtils.distance(this.villager.position, entity.position);
                     if (dist < nearestDistance) {
                         nearestSource = entity;
