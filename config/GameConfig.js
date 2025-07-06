@@ -13,8 +13,8 @@ window.GameConfig = {
     world: {
         width: window.innerWidth * 10, // 10x viewport width
         height: window.innerHeight * 10, // 10x viewport height
-        tileSize: 1024, // Size of each "tile" for spatial calculations (used in distance checks)
-        villagerCount: 8, // Total camps (7 AI villagers + 1 player camp)
+        tileSize: 1350, // Size of each "tile" for spatial calculations (used in distance checks)
+        villagerCount: 6, // Total camps (7 AI villagers + 1 player camp)
 
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 25 }, // Offset for village storage from center
@@ -182,6 +182,18 @@ window.GameConfig = {
 
         // === DESIGNER BALANCING SECTION ===
         // All food/resource types with complete data (easier to maintain)
+
+        // Biome definitions for world generation
+        biomes: {
+            camp: { color: '#D2B48C', temperature: 'moderate' },    // Light brown
+            woodlands: { color: '#4A7C59', temperature: 'moderate' },    // Forest green
+            plains: { color: '#8FBC8F', temperature: 'moderate' },        // Light green
+            wetlands: { color: '#556B2F', temperature: 'warm' },      // Dark olive green
+            desert: { color: '#DEB887', temperature: 'warm' },            // Burlywood
+            mountains: { color: '#696969', temperature: 'cold' },          // Dim gray
+            tundra: { color: '#F0F8FF', temperature: 'cold' },            // Alice blue
+        },
+
         foodData: {
             // Wood and other burnables
             'oak': { calories: 0, vitamins: [0, 0, 0, 0, 0], water: 0, fire: 3, emoji: '🌳' },
@@ -241,8 +253,6 @@ window.GameConfig = {
             'hare': { calories: 35, vitamins: [0, 0, 20, 0, 20], water: 0, fire: 0, emoji: '🐰' },
             'fox': { calories: 28, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦊' },
             'boar': { calories: 38, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🐗' },
-            'elk': { calories: 40, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦌' },
-            'grouse': { calories: 28, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦃' },
             'woodcock': { calories: 25, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦅' },
             'beaver': { calories: 30, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦫' },
             'otter': { calories: 28, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦦' },
@@ -255,7 +265,6 @@ window.GameConfig = {
             'porcupine': { calories: 28, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦔' },
             'mole': { calories: 20, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦫' },
             'vole': { calories: 18, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🐭' },
-            'muskrat': { calories: 25, vitamins: [0, 0, 0, 20, 20], water: 0, fire: 0, emoji: '🦫' },
             'hyena': { calories: 45, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🦁' },
             'leopard': { calories: 48, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🐆' },
             'bobcat': { calories: 35, vitamins: [0, 0, 20, 20, 0], water: 0, fire: 0, emoji: '🐱' },

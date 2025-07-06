@@ -1,7 +1,7 @@
 x chunky cells
 x spawn by grid cell density
-res have fire value
-make biome list incl village
+x res have fire value
+X make biome list incl village
 res are tagged to biomes
 res are proc genned
 every res has some random in stats incl speed and size

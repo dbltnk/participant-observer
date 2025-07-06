@@ -2361,12 +2361,20 @@ console.log('Phaser main loaded');
             // Create character customization system for consistent appearance
             this.characterCustomization = new CharacterCustomization(this.seededRandom);
 
+            // Generate biome data first
+            this.generateBiomeData();
+
             // Create ground texture for better navigation (after noise is initialized)
             this.createGroundTexture();
 
             const cfg = GameConfig.world;
-            const centerX = cfg.width / 2;
-            const centerY = cfg.height / 2;
+
+            // Find central biome for camp placement
+            const centralBiome = this.findCentralBiome();
+            const centerX = centralBiome.x;
+            const centerY = centralBiome.y;
+
+            console.log(`[World Generation] Placing village in ${centralBiome.biome.type} biome at (${Math.round(centerX)}, ${Math.round(centerY)})`);
             // --- Village center (no visual, just reference point) ---
             const villageCenter = { position: { x: centerX, y: centerY }, type: 'village_center' };
             // --- Village well ---
@@ -2992,10 +3000,7 @@ console.log('Phaser main loaded');
             this.uiContainer.add(this.ui.timeText);
 
             // --- Visual Temperature State Tracking ---
-            this._visualTempState = null; // Track current state
-            this._visualTempDayState = null; // Track current day state ("moderate" or "warm")
-            this._visualTempLastHour = null; // Track last hour for update
-            this._visualTempSeededRandom = new SeededRandom(getCurrentSeed() + 12345); // Offset for temp randomness
+            // No longer caching - recalculated every frame // Offset for temp randomness
 
             // Game title (top center) - fixed to camera viewport
             this.ui.titleText = this.add.text(window.innerWidth / 2, margin, 'Participant Observer', {
@@ -3250,11 +3255,7 @@ console.log('Phaser main loaded');
             this.playerName.setPosition(this.playerState.position.x, this.playerState.position.y - 40);
 
             // --- Visual Temperature State Update ---
-            const t = getCurrentTime(this.playerState);
-            if (this._visualTempLastHour !== t.hour) {
-                this._visualTempLastHour = t.hour;
-                this._visualTempState = this._calculateVisualTemperatureState(t);
-            }
+            // No longer caching - recalculated every frame in updatePhaserUI()
         }
         updatePhaserUI() {
             // Needs bars
@@ -3286,8 +3287,8 @@ console.log('Phaser main loaded');
             else if (t.hour >= GameConfig.time.nightStartHour && t.hour < 22) timeEmoji = '🌆';
             else timeEmoji = '🌙';
 
-            // Visual temperature display
-            let tempState = this._visualTempState || 'moderate';
+            // Visual temperature display - recalculate every frame
+            let tempState = this._calculateVisualTemperatureState(t);
             let tempEmoji = '❄️';
 
             // Override: If near a burning fire, always show "hot"
@@ -3471,44 +3472,203 @@ console.log('Phaser main loaded');
             this.currentSeedValue = currentSeed;
         }
 
+        generateBiomeData() {
+            // Generate biome data for the entire world using Perlin noise
+            const worldWidth = GameConfig.world.width;
+            const worldHeight = GameConfig.world.height;
+            const tileSize = GameConfig.world.tileSize;
+
+            // Calculate number of tiles
+            const tilesX = Math.ceil(worldWidth / tileSize);
+            const tilesY = Math.ceil(worldHeight / tileSize);
+
+            this.biomeData = [];
+
+            // Generate biome noise at different scales for natural variation
+            const biomeScale = 0.002; // Large-scale biome variation
+            const detailScale = 0.01;  // Smaller detail variation
+
+            for (let tileX = 0; tileX < tilesX; tileX++) {
+                this.biomeData[tileX] = [];
+                for (let tileY = 0; tileY < tilesY; tileY++) {
+                    const worldX = tileX * tileSize;
+                    const worldY = tileY * tileSize;
+
+                    // Generate biome noise
+                    const biomeNoise = this.noise.noise2D(worldX * biomeScale, worldY * biomeScale);
+                    const detailNoise = this.noise.noise2D(worldX * detailScale, worldY * detailScale);
+
+                    // Combine noise values for natural biome transitions
+                    const combinedNoise = (biomeNoise * 0.7) + (detailNoise * 0.3);
+
+                    // Calculate north-south temperature gradient (0 = north, 1 = south)
+                    const northSouthRatio = worldY / worldHeight;
+
+                    // Add some randomness to avoid perfect gradients
+                    const temperatureVariation = (this.seededRandom.random() - 0.5) * 0.3; // ±15% variation
+                    const adjustedRatio = Math.max(0, Math.min(1, northSouthRatio + temperatureVariation));
+
+                    // Get all available biomes and their temperatures (exclude camp - it's created separately)
+                    const biomes = GameConfig.resources.biomes;
+                    const biomeEntries = Object.entries(biomes).filter(([name, config]) => name !== 'camp');
+
+                    // Filter biomes by temperature based on north-south gradient
+                    let availableBiomes;
+                    if (adjustedRatio < 0.3) {
+                        // North: prefer cold biomes
+                        availableBiomes = biomeEntries.filter(([name, config]) =>
+                            config.temperature === 'cold' || config.temperature === 'moderate'
+                        );
+                    } else if (adjustedRatio < 0.5) {
+                        // Center: prefer moderate biomes
+                        availableBiomes = biomeEntries.filter(([name, config]) =>
+                            config.temperature === 'moderate');
+                    } else {
+                        // South: prefer warm biomes
+                        availableBiomes = biomeEntries.filter(([name, config]) =>
+                            config.temperature === 'warm' || config.temperature === 'moderate'
+                        );
+                    }
+
+                    // If no biomes available for this temperature zone, use all biomes (except camp)
+                    if (availableBiomes.length === 0) {
+                        availableBiomes = biomeEntries;
+                    }
+
+                    // Select biome based on noise value and available biomes
+                    const biomeIndex = Math.floor(Math.abs(combinedNoise) * availableBiomes.length);
+                    const selectedBiome = availableBiomes[biomeIndex % availableBiomes.length];
+                    const biomeType = selectedBiome[0];
+
+                    this.biomeData[tileX][tileY] = {
+                        type: biomeType,
+                        noise: combinedNoise,
+                        temperature: GameConfig.resources.biomes[biomeType].temperature
+                    };
+                }
+            }
+
+            console.log(`[Biome Generation] Generated biome data for ${tilesX}x${tilesY} tiles with north-south temperature gradient`);
+
+            // Create a single camp area around the village center
+            this.createCampArea();
+        }
+
+        createCampArea() {
+            // Find the central biome for camp placement
+            const centralBiome = this.findCentralBiome();
+            const centerX = centralBiome.x;
+            const centerY = centralBiome.y;
+
+            const tileSize = GameConfig.world.tileSize;
+
+            // Convert center position to tile coordinates
+            const centerTileX = Math.floor(centerX / tileSize);
+            const centerTileY = Math.floor(centerY / tileSize);
+
+            // Assert bounds are valid
+            assert(centerTileX >= 0 && centerTileX < this.biomeData.length,
+                `Camp center tile X (${centerTileX}) out of bounds (0-${this.biomeData.length - 1})`);
+            assert(centerTileY >= 0 && centerTileY < this.biomeData[centerTileX].length,
+                `Camp center tile Y (${centerTileY}) out of bounds (0-${this.biomeData[centerTileX].length - 1})`);
+
+            // Assert camp biome exists in config
+            assert(GameConfig.resources.biomes.camp, 'Camp biome missing from config');
+            assert(GameConfig.resources.biomes.camp.temperature, 'Camp biome missing temperature');
+
+            // Create camp area by overriding just the center tile
+            this.biomeData[centerTileX][centerTileY] = {
+                type: 'camp',
+                noise: 0.9, // High noise value for camp
+                temperature: GameConfig.resources.biomes.camp.temperature
+            };
+
+            // Assert only one camp tile exists
+            let campCount = 0;
+            for (let x = 0; x < this.biomeData.length; x++) {
+                for (let y = 0; y < this.biomeData[x].length; y++) {
+                    if (this.biomeData[x][y].type === 'camp') {
+                        campCount++;
+                    }
+                }
+            }
+            assert(campCount === 1, `Expected exactly 1 camp tile, found ${campCount}`);
+
+            console.log(`[Camp Area] Created camp at center tile (${centerTileX}, ${centerTileY}) at world position (${Math.round(centerX)}, ${Math.round(centerY)})`);
+        }
+
+        getBiomeAtPosition(x, y) {
+            // Convert world position to tile coordinates
+            const tileSize = GameConfig.world.tileSize;
+            const tileX = Math.floor(x / tileSize);
+            const tileY = Math.floor(y / tileSize);
+
+            // Ensure we're within bounds
+            if (tileX < 0 || tileY < 0 || !this.biomeData[tileX] || !this.biomeData[tileX][tileY]) {
+                return { type: 'plains', temperature: 'moderate' }; // Default fallback
+            }
+
+            return this.biomeData[tileX][tileY];
+        }
+
+        findCentralBiome() {
+            // Find the most central biome for camp placement
+            const centerX = GameConfig.world.width / 2;
+            const centerY = GameConfig.world.height / 2;
+
+            // Check a small area around center for suitable biome
+            const searchRadius = 200;
+            const candidates = [];
+
+            for (let x = centerX - searchRadius; x <= centerX + searchRadius; x += 50) {
+                for (let y = centerY - searchRadius; y <= centerY + searchRadius; y += 50) {
+                    const biome = this.getBiomeAtPosition(x, y);
+                    if (biome.type === 'camp' || biome.type === 'plains' || biome.type === 'woodlands') {
+                        candidates.push({
+                            x: x,
+                            y: y,
+                            biome: biome,
+                            distance: GameUtils.distance({ x, y }, { x: centerX, y: centerY })
+                        });
+                    }
+                }
+            }
+
+            // Sort by distance and return the closest suitable position
+            candidates.sort((a, b) => a.distance - b.distance);
+            return candidates[0] || { x: centerX, y: centerY, biome: { type: 'plains', temperature: 'moderate' } };
+        }
+
         createGroundTexture() {
             try {
-                // Create a subtle ground texture using Perlin noise for natural variation
-                const tileSize = GameConfig.world.tileSize; // Size of each texture tile
+                // Create ground texture based on biome data
+                const tileSize = GameConfig.world.tileSize;
                 const worldWidth = GameConfig.world.width;
                 const worldHeight = GameConfig.world.height;
 
-                // Ensure noise is initialized
+                // Ensure noise and biome data are initialized
                 if (!this.noise) {
                     console.error('[Ground Texture] Noise not initialized, skipping ground texture creation');
                     return;
                 }
 
+                if (!this.biomeData) {
+                    console.error('[Ground Texture] Biome data not initialized, generating now');
+                    this.generateBiomeData();
+                }
+
+                // Store biome debug texts for toggling
+                this.biomeDebugTexts = [];
+
                 // Create tiles across the entire world
                 for (let x = 0; x < worldWidth; x += tileSize) {
                     for (let y = 0; y < worldHeight; y += tileSize) {
-                        // Use Perlin noise to determine tile color for natural variation
-                        const noiseX = x / 200; // Scale for smooth variation
-                        const noiseY = y / 200;
-                        const noiseValue = this.noise.noise2D(noiseX, noiseY);
+                        // Get biome for this tile
+                        const biome = this.getBiomeAtPosition(x + tileSize / 2, y + tileSize / 2);
+                        const biomeConfig = GameConfig.resources.biomes[biome.type];
 
-                        // Map noise to color variation
-                        let color;
-                        if (noiseValue < -0.3) {
-                            color = 0x4a5d23; // Darker green
-                        } else if (noiseValue < 0.3) {
-                            color = 0x5a6d33; // Medium green
-                        } else {
-                            color = 0x6a7d43; // Lighter green
-                        }
-
-                        // Add some grey variation for texture
-                        const greyNoise = this.noise.noise2D(noiseX * 2, noiseY * 2);
-                        if (greyNoise > 0.5) {
-                            color = 0x6b6b6b; // Light grey
-                        } else if (greyNoise > 0.2) {
-                            color = 0x5a5a5a; // Medium grey
-                        }
+                        // Convert hex color to integer (use exact biome color from config)
+                        const color = parseInt(biomeConfig.color.replace('#', ''), 16);
 
                         // Create the ground tile
                         const tile = this.add.rectangle(
@@ -3525,10 +3685,27 @@ console.log('Phaser main loaded');
                         // Store reference for potential cleanup
                         if (!this.groundTiles) this.groundTiles = [];
                         this.groundTiles.push(tile);
+
+                        // Add biome debug text at center of tile (only when debug is enabled)
+                        const debugText = this.add.text(
+                            x + tileSize / 2,
+                            y + tileSize / 2,
+                            biome.type,
+                            {
+                                fontSize: '12px',
+                                fontFamily: 'monospace',
+                                color: '#ffffff',
+                                backgroundColor: '#000000',
+                                padding: { left: 4, right: 4, top: 2, bottom: 2 }
+                            }
+                        ).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug).setVisible(false);
+
+                        this.biomeDebugTexts.push(debugText);
                     }
                 }
 
-                console.log(`[Ground Texture] Created ${this.groundTiles.length} ground tiles for navigation`);
+                console.log(`[Ground Texture] Created ${this.groundTiles.length} biome-colored ground tiles`);
+                console.log(`[Ground Texture] Created ${this.biomeDebugTexts.length} biome debug texts`);
             } catch (error) {
                 console.error('[Ground Texture] Error creating ground texture:', error);
                 // Don't crash the game if ground texture fails
@@ -3662,6 +3839,13 @@ console.log('Phaser main loaded');
                     if (window.villagerDebugEnabled) {
                         entity._warmthCircle.setPosition(entity.position.x, entity.position.y);
                     }
+                }
+            }
+
+            // Update biome debug texts
+            if (this.biomeDebugTexts) {
+                for (const debugText of this.biomeDebugTexts) {
+                    debugText.setVisible(window.villagerDebugEnabled);
                 }
             }
 
@@ -4448,33 +4632,37 @@ console.log('Phaser main loaded');
             // Use config for all thresholds
             const cfg = GameConfig.visualTemperature;
             assert(cfg, 'Missing visualTemperature config');
+
             // Helper to check hour in range (handles wrap)
             function inRange(hour, range) {
                 if (range.start <= range.end) return hour >= range.start && hour <= range.end;
                 return hour >= range.start || hour <= range.end;
             }
+
             // Night: always freezing
             if (inRange(t.hour, cfg.night)) return 'freezing';
+
             // Dusk/dawn: always cold
             if (inRange(t.hour, cfg.dusk) || inRange(t.hour, cfg.dawn)) return 'cold';
-            // Day: moderate/warm, 25% chance to change each hour
+
+            // Day: use biome temperature (no randomness)
             if (inRange(t.hour, cfg.day)) {
-                // Only change at hour boundaries
-                if (this._visualTempDayState == null || this._visualTempLastDayHour !== t.hour) {
-                    this._visualTempLastDayHour = t.hour;
-                    // 25% chance to flip state
-                    if (this._visualTempDayState == null) {
-                        // Start with moderate
-                        this._visualTempDayState = 'moderate';
-                    } else if (this._visualTempSeededRandom.random() < cfg.dayChangeChance) {
-                        this._visualTempDayState = (this._visualTempDayState === 'moderate') ? 'warm' : 'moderate';
-                    }
-                }
-                return this._visualTempDayState;
+                // Get biome at current player position
+                const biome = this.getBiomeAtPosition(this.playerState.position.x, this.playerState.position.y);
+                assert(biome, 'Failed to get biome at player position');
+
+                // Use biome temperature from config
+                const biomeConfig = GameConfig.resources.biomes[biome.type];
+                assert(biomeConfig, `Missing biome config for type: ${biome.type}`);
+
+                // Return biome temperature (should be 'moderate', 'warm', 'cold', or 'freezing')
+                return biomeConfig.temperature;
             }
+
             // Fallback
             return 'moderate';
         }
+
 
         updateWellRegeneration(delta) {
             // Regenerate well water levels over time (1 unit every 2 hours)
