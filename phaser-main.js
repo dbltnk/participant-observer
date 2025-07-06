@@ -2344,12 +2344,12 @@ console.log('Phaser main loaded');
             this.camps = [];
 
             for (let i = 0; i < cfg.villagerCount; i++) {
-                // Simple circular placement with some randomness
+                // Even circular placement with minimal randomness
                 const baseAngle = (i / cfg.villagerCount) * 2 * Math.PI;
 
-                // Add some randomness to angle and radius
-                const angleVariation = (this.seededRandom.random() - 0.5) * cfg.campPlacement.angleVariationRange;
-                const radiusVariation = (this.seededRandom.random() - 0.5) * cfg.campPlacement.radiusVariationRange;
+                // Small random variation to avoid perfect circles
+                const angleVariation = (this.seededRandom.random() - 0.5) * 0.3; // Reduced from 1.5 to 0.3 radians
+                const radiusVariation = (this.seededRandom.random() - 0.5) * 50; // Reduced from 200 to 50 pixels
 
                 const angle = baseAngle + angleVariation;
                 const radius = cfg.campPlacement.baseRadius + radiusVariation;
@@ -2373,10 +2373,10 @@ console.log('Phaser main loaded');
                         }
                     }
 
-                    // If too close, try a slightly different position
+                    // If too close, try a slightly different position with even smaller variation
                     if (tooClose) {
-                        const newAngle = angle + (this.seededRandom.random() - 0.5) * 0.5;
-                        const newRadius = radius + (this.seededRandom.random() - 0.5) * 50;
+                        const newAngle = angle + (this.seededRandom.random() - 0.5) * 0.2; // Reduced from 0.5 to 0.2
+                        const newRadius = radius + (this.seededRandom.random() - 0.5) * 25; // Reduced from 50 to 25
                         x = centerX + Math.cos(newAngle) * newRadius;
                         y = centerY + Math.sin(newAngle) * newRadius;
                     }
@@ -2499,8 +2499,8 @@ console.log('Phaser main loaded');
 
                 const villager = new Villager(villagerName, villagerSpawnPosition, i - 1, this.seededRandom); // Use camp index for villagerId and pass seeded random
 
-                // Assign character customization to villager
-                villager.characterCustomization = this.characterCustomization;
+                // Create unique character customization for this villager
+                villager.characterCustomization = new CharacterCustomization(this.seededRandom);
 
                 // Find this villager's personal storage box
                 const personalStorageBox = this.entities.find(e =>
@@ -2859,8 +2859,9 @@ console.log('Phaser main loaded');
                 inventory: new Array(GameConfig.player.inventorySize).fill(null),
                 currentTime: gameStartTime,
             };
-            // Create player with character customization
-            const playerEmoji = this.characterCustomization.getStateEmoji('standing');
+            // Create player with unique character customization
+            this.playerCharacterCustomization = new CharacterCustomization(this.seededRandom);
+            const playerEmoji = this.playerCharacterCustomization.getStateEmoji('standing');
             this.player = this.add.text(this.playerState.position.x, this.playerState.position.y, playerEmoji, { fontSize: GameConfig.player.fontSize + 'px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5);
             assert(this.player, 'Failed to create player emoji.');
 
@@ -3195,13 +3196,13 @@ console.log('Phaser main loaded');
 
             if (this.isSleeping) {
                 // Player is sleeping - use sleeping emoji
-                playerEmojiResult = this.characterCustomization.getStateEmoji('sleeping');
+                playerEmojiResult = this.playerCharacterCustomization.getStateEmoji('sleeping');
             } else if (isPlayerMoving) {
                 // Player is moving - use running emoji with direction
-                playerEmojiResult = this.characterCustomization.getStateEmoji('running', true, playerDirection);
+                playerEmojiResult = this.playerCharacterCustomization.getStateEmoji('running', true, playerDirection);
             } else {
                 // Player is standing still - use standing emoji
-                playerEmojiResult = this.characterCustomization.getStateEmoji('standing');
+                playerEmojiResult = this.playerCharacterCustomization.getStateEmoji('standing');
             }
 
             // Handle emoji result (could be string or object with direction)

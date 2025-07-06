@@ -21,14 +21,14 @@ window.GameConfig = {
         villageWellOffset: { x: 25, y: 50 }, // Offset for village well from center
         campSpacing: { x: 40, y: 60 }, // Spacing between camp facilities (doubled from 20,30)
 
-        // Organic camp placement settings
+        // Even camp placement settings
         campPlacement: {
-            baseRadius: 400, // Base distance from village center to camps
-            minDistanceBetweenCamps: 300, // Minimum distance between camps in pixels
-            angleVariationRange: 1.5, // ±radians for angle variation from noise
-            radiusVariationRange: 200, // Maximum radius variation in pixels
-            additionalRandomAngle: 0.8, // ±radians for additional random angle variation
-            additionalRandomRadius: 100, // ±pixels for additional random radius variation
+            baseRadius: 450, // Increased base distance from village center to camps
+            minDistanceBetweenCamps: 350, // Increased minimum distance between camps in pixels
+            angleVariationRange: 0.3, // Reduced ±radians for angle variation
+            radiusVariationRange: 50, // Reduced maximum radius variation in pixels
+            additionalRandomAngle: 0.2, // Reduced ±radians for additional random angle variation
+            additionalRandomRadius: 25, // Reduced ±pixels for additional random radius variation
             maxPlacementAttempts: 10 // Maximum attempts to place a camp without overlap
         },
 
@@ -142,13 +142,10 @@ window.GameConfig = {
 
         // Villager names for random generation
         villagerNames: [
-            'Alaric', 'Brigid', 'Cormac', 'Deirdre', 'Eamon', 'Fiona', 'Gareth', 'Helena',
-            'Ivar', 'Jocelyn', 'Kieran', 'Luna', 'Mael', 'Niamh', 'Oisin', 'Pádraig',
-            'Quinn', 'Róisín', 'Seamus', 'Tara', 'Ulf', 'Vera', 'Wynn', 'Yara',
-            'Zara', 'Aiden', 'Brenna', 'Cian', 'Dara', 'Eira', 'Finn', 'Gwen',
-            'Hale', 'Iona', 'Jace', 'Kara', 'Liam', 'Maya', 'Nash', 'Orla',
-            'Pax', 'Raven', 'Sage', 'Teagan', 'Uma', 'Vale', 'Wren', 'Xander',
-            'Yuki', 'Zane', 'Aria', 'Blake', 'Cora', 'Dax', 'Echo', 'Faye',
+            'Alex', 'Blake', 'Casey', 'Drew', 'Emery', 'Finley', 'Gray', 'Harper',
+            'Indigo', 'Jordan', 'Kai', 'Lane', 'Morgan', 'Nova', 'Oakley', 'Parker',
+            'Quinn', 'Remy', 'Sage', 'Tatum', 'Uma', 'Vale', 'Wren', 'Xander',
+            'Yuki', 'Zane', 'Avery', 'Blair', 'Cedar', 'Dakota', 'Echo', 'Fallon',
             'Gray', 'Haven', 'Indigo', 'Jade', 'Kai', 'Lark', 'Moss', 'Nova',
             'Ocean', 'Pine', 'Quill', 'River', 'Sky', 'Thorne', 'Unity', 'Vale',
             'Willow', 'Xero', 'Yarrow', 'Zephyr', 'Ash', 'Birch', 'Cedar', 'Dove',
