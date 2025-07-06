@@ -116,6 +116,13 @@ window.GameConfig = {
         moveSpeed: 100, // Villager movement speed in pixels per second (same as player)
         // Formula: newPosition = oldPosition + (moveSpeed * deltaTime / 1000)
 
+        // Golden rule foraging settings
+        foraging: {
+            minResourcesPerGridCell: 3, // Minimum resources required in grid cell before collection
+            skipPoisonousFood: true, // Skip poisonous food variants
+            skipFasterAnimals: true, // Skip animals faster than villager
+        },
+
         // State machine settings
         emergencyThresholds: {
             water: 20,           // Water <20% triggers emergency drink

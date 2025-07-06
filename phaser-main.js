@@ -903,8 +903,9 @@ console.log('Phaser main loaded');
         REGULAR_WARM_UP: 7,          // Normal need - temperature <70%
         REGULAR_EAT: 8,              // Normal need - calories <60%
         REGULAR_FIRE_REFILL: 9,      // Normal need - own fire <10 logs
-        FORAGE: 10,                  // Village task - collect and store resources
-        IDLE: 11                     // Default state - stay near fire
+        FORAGE_FOOD: 10,             // Village task - collect food resources
+        FORAGE_BURNABLE: 11,         // Village task - collect burnable resources
+        IDLE: 12                     // Default state - stay near fire
     };
 
     class VillagerStateMachine {
@@ -968,6 +969,13 @@ console.log('Phaser main loaded');
                 console.log(`[VillagerStateMachine] ${this.villager.name} current needs: T${this.villager.needs.temperature.toFixed(1)} W${this.villager.needs.water.toFixed(1)} C${this.villager.needs.calories.toFixed(1)} V[${this.villager.needs.vitamins.map(v => v.toFixed(1)).join(',')}]`);
             }
 
+            // === QUICK OVERRIDE HACK ===
+            // Force all villagers into a specific state for testing
+            if (window.forceVillagerState) {
+                if (shouldLogEvaluation) console.log(`[VillagerStateMachine] ${this.villager.name} FORCE_OVERRIDE: Using forced state ${window.forceVillagerState}`);
+                return window.forceVillagerState;
+            }
+
             // 1. SLEEP - Highest priority (during sleep hours)
             if (this.shouldSleep(hour)) {
                 if (shouldLogEvaluation) console.log(`[VillagerStateMachine] ${this.villager.name} choosing SLEEP (hour ${hour.toFixed(1)})`);
@@ -1022,13 +1030,19 @@ console.log('Phaser main loaded');
                 return VILLAGER_STATES.REGULAR_FIRE_REFILL;
             }
 
-            // 10. FORAGE - Village task
-            if (this.shouldForage(storageBoxes)) {
-                if (shouldLogEvaluation) console.log(`[VillagerStateMachine] ${this.villager.name} choosing FORAGE`);
-                return VILLAGER_STATES.FORAGE;
+            // 10. FORAGE_FOOD - Village task
+            if (this.shouldForageFood(storageBoxes)) {
+                if (shouldLogEvaluation) console.log(`[VillagerStateMachine] ${this.villager.name} choosing FORAGE_FOOD`);
+                return VILLAGER_STATES.FORAGE_FOOD;
             }
 
-            // 11. IDLE - Default state
+            // 11. FORAGE_BURNABLE - Village task
+            if (this.shouldForageBurnable(storageBoxes)) {
+                if (shouldLogEvaluation) console.log(`[VillagerStateMachine] ${this.villager.name} choosing FORAGE_BURNABLE`);
+                return VILLAGER_STATES.FORAGE_BURNABLE;
+            }
+
+            // 12. IDLE - Default state
             if (shouldLogEvaluation) console.log(`[VillagerStateMachine] ${this.villager.name} choosing IDLE (default)`);
             return VILLAGER_STATES.IDLE;
         }
@@ -1065,8 +1079,11 @@ console.log('Phaser main loaded');
                 case VILLAGER_STATES.REGULAR_FIRE_REFILL:
                     this.enterRegularFireRefill();
                     break;
-                case VILLAGER_STATES.FORAGE:
-                    this.enterForage();
+                case VILLAGER_STATES.FORAGE_FOOD:
+                    this.enterForageFood();
+                    break;
+                case VILLAGER_STATES.FORAGE_BURNABLE:
+                    this.enterForageBurnable();
                     break;
                 case VILLAGER_STATES.IDLE:
                     this.enterIdle();
@@ -1118,8 +1135,11 @@ console.log('Phaser main loaded');
                 case VILLAGER_STATES.REGULAR_FIRE_REFILL:
                     this.executeRegularFireRefill(deltaTime, entities, storageBoxes);
                     break;
-                case VILLAGER_STATES.FORAGE:
-                    this.executeForage(deltaTime, entities, storageBoxes);
+                case VILLAGER_STATES.FORAGE_FOOD:
+                    this.executeForageFood(deltaTime, entities, storageBoxes);
+                    break;
+                case VILLAGER_STATES.FORAGE_BURNABLE:
+                    this.executeForageBurnable(deltaTime, entities, storageBoxes);
                     break;
                 case VILLAGER_STATES.IDLE:
                     this.executeIdle(deltaTime, entities, storageBoxes);
@@ -1294,8 +1314,81 @@ console.log('Phaser main loaded');
             this.executeFireRefill(false, deltaTime, entities, storageBoxes);
         }
 
-        // === FORAGE STATE ===
-        shouldForage(storageBoxes) {
+        // === GOLDEN RULE HELPER METHODS ===
+        // Implements the golden rule: never pick up resources if there aren't at least 3 of this type in the grid cell
+
+        getGridCellForPosition(position) {
+            const tileSize = GameConfig.world.tileSize;
+            const tileX = Math.floor(position.x / tileSize);
+            const tileY = Math.floor(position.y / tileSize);
+            return { x: tileX, y: tileY };
+        }
+
+        countResourcesInGridCell(entities, resourceType, gridCell) {
+            const tileSize = GameConfig.world.tileSize;
+            const cellStartX = gridCell.x * tileSize;
+            const cellStartY = gridCell.y * tileSize;
+            const cellEndX = cellStartX + tileSize;
+            const cellEndY = cellStartY + tileSize;
+
+            let count = 0;
+            for (const entity of entities) {
+                if (entity.type === resourceType && !entity.collected) {
+                    if (entity.position.x >= cellStartX && entity.position.x < cellEndX &&
+                        entity.position.y >= cellStartY && entity.position.y < cellEndY) {
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        isResourceSafeToCollect(entity) {
+            // Check if resource is poisonous (for food)
+            if (GameUtils.isFood(entity.type) && GameConfig.villager.foraging.skipPoisonousFood) {
+                const nutrition = window.resourceGeneration.getNutrition(entity.type);
+                if (nutrition && nutrition.calories < 0) {
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} GOLDEN_RULE: Skipping poisonous food ${entity.type}`);
+                    }
+                    return false; // Poisonous food
+                }
+            }
+
+            // Check if animal is faster than villager (for animals)
+            if (GameUtils.isMobile(entity.type) && GameConfig.villager.foraging.skipFasterAnimals) {
+                const animalSpeed = GameUtils.getRunspeed(entity.type);
+                const villagerSpeed = GameConfig.villager.moveSpeed;
+                if (animalSpeed > villagerSpeed) {
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[VillagerStateMachine] ${this.villager.name} GOLDEN_RULE: Skipping faster animal ${entity.type} (speed: ${animalSpeed} vs villager: ${villagerSpeed})`);
+                    }
+                    return false; // Animal is faster than villager
+                }
+            }
+
+            return true;
+        }
+
+        canCollectResourceWithGoldenRule(entity, entities) {
+            // Golden rule: never pick up if there aren't at least minResourcesPerGridCell of this type in the grid cell
+            const gridCell = this.getGridCellForPosition(entity.position);
+            const countInCell = this.countResourcesInGridCell(entities, entity.type, gridCell);
+            const minRequired = GameConfig.villager.foraging.minResourcesPerGridCell;
+
+            if (countInCell < minRequired) {
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} GOLDEN_RULE: Skipping ${entity.type} - only ${countInCell} in grid cell (need ${minRequired}+)`);
+                }
+                return false; // Not enough resources in cell
+            }
+
+            // Check if resource is safe to collect
+            return this.isResourceSafeToCollect(entity);
+        }
+
+        // === FORAGE FOOD STATE ===
+        shouldForageFood(storageBoxes) {
             // Check if both personal and communal storage have space
             const personalStorage = this.findOwnStorageBox();
             const communalStorage = this.findCommunalStorageBox();
@@ -1312,13 +1405,13 @@ console.log('Phaser main loaded');
                 communalStorageCount < GameConfig.storage.communalCapacity;
         }
 
-        enterForage() {
+        enterForageFood() {
             // Initialize forage state - will find target resource when needed
             this.stateData.targetResource = null;
             this.stateData.storageBox = null;
         }
 
-        executeForage(deltaTime, entities, storageBoxes) {
+        executeForageFood(deltaTime, entities, storageBoxes) {
             // If we have items to store, store them first
             if (this.hasItemsToStore()) {
                 const storeComplete = this.storeForagedItems(deltaTime);
@@ -1328,11 +1421,13 @@ console.log('Phaser main loaded');
                 // All items stored, continue with collection
             }
 
-            // Find and collect resources
-            if (!this.stateData.targetResource) {
-                this.stateData.targetResource = this.findNearestResource(entities);
+            // Find and collect food resources
+            if (!this.stateData.targetResource ||
+                this.stateData.targetResource.collected ||
+                !this.canCollectResourceWithGoldenRule(this.stateData.targetResource, entities)) {
+                this.stateData.targetResource = this.findNearestFoodResource(entities);
                 if (this.stateData.targetResource && window.summaryLoggingEnabled) {
-                    console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE: Found target resource ${this.stateData.targetResource.type} at (${Math.round(this.stateData.targetResource.position.x)}, ${Math.round(this.stateData.targetResource.position.y)})`);
+                    console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE_FOOD: Found target food ${this.stateData.targetResource.type} at (${Math.round(this.stateData.targetResource.position.x)}, ${Math.round(this.stateData.targetResource.position.y)})`);
                 }
             }
 
@@ -1343,7 +1438,68 @@ console.log('Phaser main loaded');
                 if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.targetResource.position)) {
                     if (this.collectResource(this.stateData.targetResource)) {
                         if (window.summaryLoggingEnabled) {
-                            console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE: Collected ${this.stateData.targetResource.type}`);
+                            console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE_FOOD: Collected ${this.stateData.targetResource.type}`);
+                        }
+                        this.stateData.targetResource = null; // Clear target to find new one
+                    } else {
+                        // Collection failed, find new target
+                        this.stateData.targetResource = null;
+                    }
+                }
+            }
+        }
+
+        shouldForageBurnable(storageBoxes) {
+            // Check if both personal and communal storage have space
+            const personalStorage = this.findOwnStorageBox();
+            const communalStorage = this.findCommunalStorageBox();
+
+            if (!personalStorage || !communalStorage) {
+                return false; // Can't forage if storage isn't available
+            }
+
+            const personalStorageCount = personalStorage.items.filter(item => item !== null).length;
+            const communalStorageCount = communalStorage.items.filter(item => item !== null).length;
+
+            // Only forage if both storages have space
+            return personalStorageCount < GameConfig.storage.personalCapacity &&
+                communalStorageCount < GameConfig.storage.communalCapacity;
+        }
+
+        enterForageBurnable() {
+            // Initialize forage state - will find target resource when needed
+            this.stateData.targetResource = null;
+            this.stateData.storageBox = null;
+        }
+
+        executeForageBurnable(deltaTime, entities, storageBoxes) {
+            // If we have items to store, store them first
+            if (this.hasItemsToStore()) {
+                const storeComplete = this.storeForagedItems(deltaTime);
+                if (!storeComplete) {
+                    return; // Still moving to storage or storing
+                }
+                // All items stored, continue with collection
+            }
+
+            // Find and collect burnable resources
+            if (!this.stateData.targetResource ||
+                this.stateData.targetResource.collected ||
+                !this.canCollectResourceWithGoldenRule(this.stateData.targetResource, entities)) {
+                this.stateData.targetResource = this.findNearestBurnableResource(entities);
+                if (this.stateData.targetResource && window.summaryLoggingEnabled) {
+                    console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE_BURNABLE: Found target burnable ${this.stateData.targetResource.type} at (${Math.round(this.stateData.targetResource.position.x)}, ${Math.round(this.stateData.targetResource.position.y)})`);
+                }
+            }
+
+            if (this.stateData.targetResource) {
+                // Move towards target resource
+                this.villager.moveTowards(this.stateData.targetResource.position, deltaTime);
+
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, this.stateData.targetResource.position)) {
+                    if (this.collectResource(this.stateData.targetResource)) {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[VillagerStateMachine] ${this.villager.name} FORAGE_BURNABLE: Collected ${this.stateData.targetResource.type}`);
                         }
                         this.stateData.targetResource = null; // Clear target to find new one
                     } else {
@@ -1767,6 +1923,20 @@ console.log('Phaser main loaded');
             );
         }
 
+        // Helper method to find nearest uncollected food resource that passes golden rule
+        findNearestFoodResource(entities) {
+            return GameUtils.findNearestEntity(entities, this.villager.position, entity =>
+                GameUtils.isFood(entity.type) && !entity.collected && this.canCollectResourceWithGoldenRule(entity, entities)
+            );
+        }
+
+        // Helper method to find nearest uncollected burnable resource that passes golden rule
+        findNearestBurnableResource(entities) {
+            return GameUtils.findNearestEntity(entities, this.villager.position, entity =>
+                GameUtils.isBurnable(entity.type) && !entity.collected && this.canCollectResourceWithGoldenRule(entity, entities)
+            );
+        }
+
         // Helper method to find nearest uncollected resource of a specific type
         findNearestResourceOfType(entities, resourceType) {
             return GameUtils.findNearestEntity(entities, this.villager.position, entity =>
@@ -1793,7 +1963,8 @@ console.log('Phaser main loaded');
                 [VILLAGER_STATES.REGULAR_WARM_UP]: 'REGULAR_WARM_UP',
                 [VILLAGER_STATES.REGULAR_EAT]: 'REGULAR_EAT',
                 [VILLAGER_STATES.REGULAR_FIRE_REFILL]: 'REGULAR_FIRE_REFILL',
-                [VILLAGER_STATES.FORAGE]: 'FORAGE',
+                [VILLAGER_STATES.FORAGE_FOOD]: 'FORAGE_FOOD',
+                [VILLAGER_STATES.FORAGE_BURNABLE]: 'FORAGE_BURNABLE',
                 [VILLAGER_STATES.IDLE]: 'IDLE'
             };
             return stateNames[state] || 'UNKNOWN';
@@ -3075,6 +3246,26 @@ console.log('Phaser main loaded');
             updateLogSpamBtn.call(this);
             this.uiContainer.add(this.ui.logSpamBtn);
 
+            // Force villager state toggle (bottom left, above log spam button) - fixed to camera viewport
+            this.ui.forceStateBtn = this.add.text(margin + 150, window.innerHeight - margin - GameConfig.ui.dimensions.logSpamButtonOffset - 30, '⚪ Force FORAGE_BURNABLE: OFF', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.debugBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
+            this.ui.forceStateBtn.on('pointerdown', () => {
+                if (window.forceVillagerState) {
+                    window.forceVillagerState = null;
+                } else {
+                    window.forceVillagerState = VILLAGER_STATES.FORAGE_BURNABLE;
+                }
+                updateForceStateBtn.call(this);
+            });
+            function updateForceStateBtn() {
+                if (window.forceVillagerState) {
+                    this.ui.forceStateBtn.setText('🟢 Force FORAGE_BURNABLE: ON').setColor(GameConfig.ui.colors.textPrimary).setBackgroundColor(GameConfig.ui.colors.buttonSuccess);
+                } else {
+                    this.ui.forceStateBtn.setText('⚪ Force FORAGE_BURNABLE: OFF').setColor(GameConfig.ui.colors.textSecondary).setBackgroundColor(GameConfig.ui.colors.debugBackground);
+                }
+            }
+            updateForceStateBtn.call(this);
+            this.uiContainer.add(this.ui.forceStateBtn);
+
             // Seed control box (bottom right) - use viewport dimensions
             const seedBoxY = window.innerHeight - margin;
             const seedBoxWidth = GameConfig.ui.dimensions.seedBoxWidth;
@@ -3934,7 +4125,7 @@ console.log('Phaser main loaded');
             // Count resources by type (in the wild)
             const wildCounts = {};
             for (const entity of this.entities) {
-                if (GameUtils.ALL_FOOD_TYPES.includes(entity.type) && !entity.collected) {
+                if ((GameUtils.ALL_FOOD_TYPES.includes(entity.type) || GameUtils.ALL_BURNABLE_TYPES.includes(entity.type)) && !entity.collected) {
                     wildCounts[entity.type] = (wildCounts[entity.type] || 0) + 1;
                 }
             }
@@ -3944,7 +4135,7 @@ console.log('Phaser main loaded');
 
             // Player inventory
             for (const item of this.playerState.inventory) {
-                if (item && GameUtils.ALL_FOOD_TYPES.includes(item.type)) {
+                if (item && (GameUtils.ALL_FOOD_TYPES.includes(item.type) || GameUtils.ALL_BURNABLE_TYPES.includes(item.type))) {
                     storedCounts[item.type] = (storedCounts[item.type] || 0) + 1;
                 }
             }
@@ -3953,7 +4144,7 @@ console.log('Phaser main loaded');
             for (const villager of this.villagers) {
                 if (villager && !villager.isDead) {
                     for (const item of villager.inventory) {
-                        if (item && GameUtils.ALL_FOOD_TYPES.includes(item.type)) {
+                        if (item && (GameUtils.ALL_FOOD_TYPES.includes(item.type) || GameUtils.ALL_BURNABLE_TYPES.includes(item.type))) {
                             storedCounts[item.type] = (storedCounts[item.type] || 0) + 1;
                         }
                     }
@@ -3964,16 +4155,16 @@ console.log('Phaser main loaded');
             for (const entity of this.entities) {
                 if (entity.type === 'storage_box' && entity.items) {
                     for (const item of entity.items) {
-                        if (item && GameUtils.ALL_FOOD_TYPES.includes(item.type)) {
+                        if (item && (GameUtils.ALL_FOOD_TYPES.includes(item.type) || GameUtils.ALL_BURNABLE_TYPES.includes(item.type))) {
                             storedCounts[item.type] = (storedCounts[item.type] || 0) + 1;
                         }
                     }
                 }
             }
 
-            // Build display text with color coding - show ALL food types
+            // Build display text with color coding - show ALL resource types
             let displayText = 'Resource Counts:\n';
-            const sortedTypes = GameUtils.ALL_FOOD_TYPES.sort();
+            const sortedTypes = [...GameUtils.ALL_FOOD_TYPES, ...GameUtils.ALL_BURNABLE_TYPES].sort();
 
             for (const type of sortedTypes) {
                 const emoji = this.getResourceEmoji(type);
@@ -4003,9 +4194,10 @@ console.log('Phaser main loaded');
             const lines = displayText.split('\n');
             let currentY = 275;
             const lineHeight = 12;
-            const columnWidth = 200; // Width of each column
+            const columnWidth = 150; // Reduced width for 3 columns
             const leftColumnX = 20;
-            const rightColumnX = leftColumnX + columnWidth;
+            const middleColumnX = leftColumnX + columnWidth;
+            const rightColumnX = middleColumnX + columnWidth;
 
             // Separate header and total lines from resource lines
             const headerLines = [];
@@ -4019,7 +4211,7 @@ console.log('Phaser main loaded');
                     // Header and total lines go in the left column
                     headerLines.push(line);
                 } else if (line.includes(':')) {
-                    // Resource lines will be split between columns
+                    // Resource lines will be split between three columns
                     resourceLines.push(line);
                 }
             }
@@ -4039,71 +4231,50 @@ console.log('Phaser main loaded');
                 currentY += lineHeight;
             }
 
-            // Split resource lines into two columns
-            const midPoint = Math.ceil(resourceLines.length / 2);
-            const leftColumnResources = resourceLines.slice(0, midPoint);
-            const rightColumnResources = resourceLines.slice(midPoint);
+            // Split resource lines into three columns
+            const itemsPerColumn = Math.ceil(resourceLines.length / 3);
+            const leftColumnResources = resourceLines.slice(0, itemsPerColumn);
+            const middleColumnResources = resourceLines.slice(itemsPerColumn, itemsPerColumn * 2);
+            const rightColumnResources = resourceLines.slice(itemsPerColumn * 2);
 
-            // Display left column resources
-            for (const line of leftColumnResources) {
-                // Check if this line should be grey (contains a resource with wild count = 0)
-                let isGrey = false;
-                const match = line.match(/: (\d+)\+(\d+)/);
-                if (match) {
-                    const wildCount = parseInt(match[1], 10);
-                    isGrey = wildCount === 0;
+            // Helper function to display resources in a column
+            const displayColumnResources = (resources, columnX, startY) => {
+                let y = startY;
+                for (const line of resources) {
+                    // Check if this line should be grey (contains a resource with wild count = 0)
+                    let isGrey = false;
+                    const match = line.match(/: (\d+)\+(\d+)/);
+                    if (match) {
+                        const wildCount = parseInt(match[1], 10);
+                        isGrey = wildCount === 0;
+                    }
+
+                    const color = isGrey ? '#888888' : '#ffffff';
+
+                    // Debug: log the color assignment for resource lines
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[ResourceCount] Column line: "${line.trim()}", isGrey: ${isGrey}, color: ${color}`);
+                    }
+
+                    const textObj = this.add.text(columnX, y, line, {
+                        fontSize: '10px',
+                        fontFamily: 'monospace',
+                        color: color,
+                        backgroundColor: '#000',
+                        padding: { left: 5, right: 5, top: 2, bottom: 2 }
+                    }).setOrigin(0, 0).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.debug);
+
+                    this.uiContainer.add(textObj);
+                    this.resourceCountTexts.push(textObj);
+                    y += lineHeight;
                 }
+            };
 
-                const color = isGrey ? '#888888' : '#ffffff';
-
-                // Debug: log the color assignment for resource lines
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[ResourceCount] Left column line: "${line.trim()}", isGrey: ${isGrey}, color: ${color}`);
-                }
-
-                const textObj = this.add.text(leftColumnX, currentY, line, {
-                    fontSize: '10px',
-                    fontFamily: 'monospace',
-                    color: color,
-                    backgroundColor: '#000',
-                    padding: { left: 5, right: 5, top: 2, bottom: 2 }
-                }).setOrigin(0, 0).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.debug);
-
-                this.uiContainer.add(textObj);
-                this.resourceCountTexts.push(textObj);
-                currentY += lineHeight;
-            }
-
-            // Reset Y position for right column and display right column resources
-            currentY = 275 + (headerLines.length * lineHeight);
-            for (const line of rightColumnResources) {
-                // Check if this line should be grey (contains a resource with wild count = 0)
-                let isGrey = false;
-                const match = line.match(/: (\d+)\+(\d+)/);
-                if (match) {
-                    const wildCount = parseInt(match[1], 10);
-                    isGrey = wildCount === 0;
-                }
-
-                const color = isGrey ? '#888888' : '#ffffff';
-
-                // Debug: log the color assignment for resource lines
-                if (window.summaryLoggingEnabled) {
-                    console.log(`[ResourceCount] Right column line: "${line.trim()}", isGrey: ${isGrey}, color: ${color}`);
-                }
-
-                const textObj = this.add.text(rightColumnX, currentY, line, {
-                    fontSize: '10px',
-                    fontFamily: 'monospace',
-                    color: color,
-                    backgroundColor: '#000',
-                    padding: { left: 5, right: 5, top: 2, bottom: 2 }
-                }).setOrigin(0, 0).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.debug);
-
-                this.uiContainer.add(textObj);
-                this.resourceCountTexts.push(textObj);
-                currentY += lineHeight;
-            }
+            // Display all three columns
+            const headerHeight = headerLines.length * lineHeight;
+            displayColumnResources(leftColumnResources, leftColumnX, 275 + headerHeight);
+            displayColumnResources(middleColumnResources, middleColumnX, 275 + headerHeight);
+            displayColumnResources(rightColumnResources, rightColumnX, 275 + headerHeight);
         }
 
 
