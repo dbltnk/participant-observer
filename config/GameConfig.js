@@ -232,8 +232,8 @@ window.GameConfig = {
                 // Animal runspeed: 75% are slower (10-20 units slower), 25% are faster (20-30 units faster)
                 runspeed: {
                     slowChance: 0.75, // 75% chance to be slower
-                    slowRange: { min: -20, max: -10 }, // 10-20 units slower than villager speed
-                    fastRange: { min: 20, max: 30 } // 20-30 units faster than villager speed
+                    slowRange: { min: -30, max: -20 }, // 20-30 units slower than villager speed
+                    fastRange: { min: 30, max: 40 } // 30-40 units faster than villager speed
                 }
             }
         },
