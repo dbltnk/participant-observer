@@ -152,11 +152,10 @@ console.log('Phaser main loaded');
          * Shared resource collection logic used by both player and villager systems
          * @param {Object} entity - The entity to collect
          * @param {Array} inventory - The inventory array to add the item to
-         * @param {number} currentTime - Current game time for collection timestamp
          * @param {string} collectorName - Name of the collector for logging
          * @returns {boolean} - Whether collection was successful
          */
-        collectResource(entity, inventory, currentTime, collectorName = 'Unknown') {
+        collectResource(entity, inventory, collectorName = 'Unknown') {
             assert(entity, 'Entity required for collectResource');
             assert(entity.type, 'Entity must have a type');
             assert(inventory, 'Inventory array required for collectResource');
@@ -176,7 +175,6 @@ console.log('Phaser main loaded');
 
             // Mark resource as collected (this prevents re-collection)
             entity.collected = true;
-            entity.collectedAt = currentTime;
 
             // Hide the visual representation of the collected resource
             if (entity._phaserText) {
@@ -873,7 +871,7 @@ console.log('Phaser main loaded');
          * @returns {boolean} - Whether collection was successful
          */
         collectResource(target) {
-            return GameUtils.collectResource(target, this.inventory, this.getCurrentTime(this.gameTime), `Villager ${this.name}`);
+            return GameUtils.collectResource(target, this.inventory, `Villager ${this.name}`);
         }
 
         /**
@@ -1457,7 +1455,7 @@ console.log('Phaser main loaded');
                     // Check if we're close enough to interact
                     if (this.actionData.actionTargets.length > 0) {
                         const target = this.actionData.actionTargets[0];
-                        if (GameUtils.isWithinInteractionDistance(this.villager.position, target.position)) {
+                        if (GameUtils.isWithinInteractionDistance(this.villager.position, target.position, GameConfig.player.interactionThreshold)) {
                             this.transitionAction(ACTION_STATES.COLLECT_RESOURCE);
                             this.actionExecutor.executeCollectResource(deltaTime, entities, storageBoxes);
                         } else {
@@ -1795,7 +1793,7 @@ console.log('Phaser main loaded');
             this.villager.moveTowards(target.position, deltaTime);
 
             // Check if we're close enough to interact
-            if (GameUtils.isWithinInteractionDistance(this.villager.position, target.position)) {
+            if (GameUtils.isWithinInteractionDistance(this.villager.position, target.position, GameConfig.player.interactionThreshold)) {
                 // We've reached the target, progress to collection
                 this.villager.hierarchicalAI.actionData.actionProgress = 0.5;
             }
@@ -1819,7 +1817,7 @@ console.log('Phaser main loaded');
             }
 
             // Check if we're still close enough
-            if (!GameUtils.isWithinInteractionDistance(this.villager.position, target.position)) {
+            if (!GameUtils.isWithinInteractionDistance(this.villager.position, target.position, GameConfig.player.interactionThreshold)) {
                 // Target moved or we moved away, go back to moving
                 this.villager.hierarchicalAI.transitionAction(ACTION_STATES.MOVE_TO_RESOURCE);
                 return;
@@ -1880,7 +1878,7 @@ console.log('Phaser main loaded');
             }
 
             // Check if we're close enough
-            if (!GameUtils.isWithinInteractionDistance(this.villager.position, target.position)) {
+            if (!GameUtils.isWithinInteractionDistance(this.villager.position, target.position, GameConfig.player.interactionThreshold)) {
                 this.villager.hierarchicalAI.transitionAction(ACTION_STATES.MOVE_TO_RESOURCE);
                 return;
             }
@@ -1919,7 +1917,7 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(sleepingBag.position, deltaTime);
 
                 // If close enough, sleep
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, sleepingBag.position)) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, sleepingBag.position, GameConfig.player.interactionThreshold)) {
                     // Sleep until morning - handled by main game loop
                     return;
                 }
@@ -1941,7 +1939,7 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(well.position, deltaTime);
 
                 // If close enough, drink
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, well.position)) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, well.position, GameConfig.player.interactionThreshold)) {
                     this.villager.drinkFromWell(well);
                 }
             }
@@ -1962,7 +1960,7 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(foodSource.position, deltaTime);
 
                 // If close enough, interact
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, foodSource.position)) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, foodSource.position, GameConfig.player.interactionThreshold)) {
                     if (foodSource.type === GameConfig.entityTypes.storage_box) {
                         // Retrieve from storage
                         this.villager.retrieveFromStorage(storageBoxes, 'food');
@@ -1989,7 +1987,7 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(fire.position, deltaTime);
 
                 // If close enough, stay near fire
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, fire.position)) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, fire.position, GameConfig.player.interactionThreshold)) {
                     // Stay near fire to warm up
                     return;
                 }
@@ -2011,7 +2009,7 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(woodSource.position, deltaTime);
 
                 // If close enough, interact
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, woodSource.position)) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, woodSource.position, GameConfig.player.interactionThreshold)) {
                     if (woodSource.type === GameConfig.entityTypes.storage_box) {
                         // Retrieve from storage
                         this.villager.retrieveFromStorage(storageBoxes, 'burnable');
@@ -2038,7 +2036,7 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(foodResource.position, deltaTime);
 
                 // If close enough, collect
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, foodResource.position)) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, foodResource.position, GameConfig.player.interactionThreshold)) {
                     this.villager.collectResource(foodResource);
                 }
             }
@@ -2059,7 +2057,7 @@ console.log('Phaser main loaded');
                 this.villager.moveTowards(burnableResource.position, deltaTime);
 
                 // If close enough, collect
-                if (GameUtils.isWithinInteractionDistance(this.villager.position, burnableResource.position)) {
+                if (GameUtils.isWithinInteractionDistance(this.villager.position, burnableResource.position, GameConfig.player.interactionThreshold)) {
                     this.villager.collectResource(burnableResource);
                 }
             }
@@ -2985,7 +2983,7 @@ console.log('Phaser main loaded');
                         assert(dist <= GameConfig.player.interactionThreshold, 'Tried to collect resource out of range');
 
                         // Use shared collection logic
-                        const collectionSuccess = GameUtils.collectResource(entity, this.playerState.inventory, this.playerState.currentTime, 'Player');
+                        const collectionSuccess = GameUtils.collectResource(entity, this.playerState.inventory, 'Player');
 
                         if (collectionSuccess) {
                             this.updatePhaserUI();
@@ -3026,7 +3024,6 @@ console.log('Phaser main loaded');
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         const dist = GameUtils.distance(this.playerState.position, entity.position);
-                        assert(dist <= GameConfig.player.interactionThreshold, 'Tried to interact with fire out of range');
 
                         // Check if player has burnable resources to add
                         const burnableSlot = this.playerState.inventory.findIndex(item => item && GameUtils.getFireValue(item.type) > 0);
@@ -3056,7 +3053,6 @@ console.log('Phaser main loaded');
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         const dist = GameUtils.distance(this.playerState.position, entity.position);
-                        assert(dist <= GameConfig.player.interactionThreshold, 'Tried to interact with sleeping bag out of range');
 
                         if (entity.isOccupied) {
                             this.showTempMessage('Sleeping bag is occupied!', GameConfig.technical.messageDurations.short);
@@ -3072,7 +3068,6 @@ console.log('Phaser main loaded');
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         const dist = GameUtils.distance(this.playerState.position, entity.position);
-                        assert(dist <= GameConfig.player.interactionThreshold, 'Tried to interact with storage box out of range');
 
                         this.showStorageInterface(entity);
                     });
