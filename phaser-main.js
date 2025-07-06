@@ -2260,7 +2260,8 @@ console.log('Phaser main loaded');
 
             // Skip faster animals if configured
             if (GameConfig.villager.foraging.skipFasterAnimals && GameConfig.resources.resourceData[entity.type] && GameConfig.resources.resourceData[entity.type].category === 'animal') {
-                const animalSpeed = entity.moveSpeed || GameConfig.animals.moveSpeed;
+                // Use the actual procedurally generated runspeed for the animal
+                const animalSpeed = GameUtils.getRunspeed(entity.type);
                 const villagerSpeed = GameConfig.villager.moveSpeed;
                 if (animalSpeed > villagerSpeed) {
                     if (window.summaryLoggingEnabled) {
