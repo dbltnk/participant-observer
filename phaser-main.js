@@ -755,8 +755,19 @@ console.log('Phaser main loaded');
                 const moveDistance = Math.min(speed, distance);
                 const ratio = moveDistance / distance;
 
-                this.position.x += dx * ratio;
-                this.position.y += dy * ratio;
+                const newX = this.position.x + dx * ratio;
+                const newY = this.position.y + dy * ratio;
+
+                // Check wall collision before applying movement
+                const newPosition = { x: newX, y: newY };
+                const hasCollision = this.scene && this.scene.checkWallCollision ?
+                    this.scene.checkWallCollision(newPosition, 15) : false; // 15px collision radius for villagers
+
+                // Only apply movement if no collision
+                if (!hasCollision) {
+                    this.position.x = newX;
+                    this.position.y = newY;
+                }
 
                 // Log movement occasionally (1% chance per frame, behind spam gate)
                 if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) {
@@ -3325,6 +3336,9 @@ console.log('Phaser main loaded');
             // Create ground texture for better navigation (after noise is initialized)
             this.createGroundTexture();
 
+            // Create wall system between grid cells
+            this.createWallSystem();
+
             const cfg = GameConfig.world;
 
             // Find central biome for camp placement
@@ -3626,21 +3640,15 @@ console.log('Phaser main loaded');
                         // Select resource type from the chosen types for this biome
                         const resourceType = selectedResourceTypes[this.seededRandom.randomInt(0, selectedResourceTypes.length - 1)];
 
-                        // Generate random position within tile bounds
-                        let pos;
-                        let attempts = 0;
-                        const maxAttempts = 50;
+                        // Generate random position within tile bounds, avoiding walls
+                        const gridCell = { x: tileX, y: tileY };
+                        const pos = this.findSafePositionInGridCell(gridCell, 50);
 
-                        do {
-                            pos = {
-                                x: this.seededRandom.randomRange(tileStartX, tileEndX),
-                                y: this.seededRandom.randomRange(tileStartY, tileEndY)
-                            };
-                            attempts++;
-                        } while (this.isTooCloseToVillage(pos) && attempts < maxAttempts);
+                        // Skip if we couldn't find a safe position
+                        if (!pos) continue;
 
-                        // Skip if we couldn't find a valid position
-                        if (attempts >= maxAttempts) continue;
+                        // Additional check for village proximity
+                        if (this.isTooCloseToVillage(pos)) continue;
 
                         const emoji = this.getResourceEmoji(resourceType);
                         this.entities.push({
@@ -4149,8 +4157,18 @@ console.log('Phaser main loaded');
                 vy *= GameConfig.player.diagonalMovementFactor;
             }
             const moveSpeed = GameConfig.player.moveSpeed;
-            this.playerState.position.x += vx * moveSpeed * (effectiveDelta / 1000);
-            this.playerState.position.y += vy * moveSpeed * (effectiveDelta / 1000);
+            const newX = this.playerState.position.x + vx * moveSpeed * (effectiveDelta / 1000);
+            const newY = this.playerState.position.y + vy * moveSpeed * (effectiveDelta / 1000);
+
+            // Check wall collision before applying movement
+            const newPosition = { x: newX, y: newY };
+            const hasCollision = this.checkWallCollision(newPosition, 20); // 20px collision radius for player
+
+            // Only apply movement if no collision
+            if (!hasCollision) {
+                this.playerState.position.x = newX;
+                this.playerState.position.y = newY;
+            }
 
             // Allow player to move freely within the large world bounds
             // Only clamp to prevent going outside the actual world boundaries
@@ -4372,6 +4390,48 @@ console.log('Phaser main loaded');
                 if (GameUtils.distance(pos, well.position) < GameConfig.world.wellMinDistance) return true;
             }
             return false;
+        }
+
+        isPositionBlockedByWall(pos, safetyMargin = null) {
+            // Check if position collides with any wall (including mountains)
+            const margin = safetyMargin !== null ? safetyMargin : GameConfig.walls.spawnSafetyMargin;
+            return this.checkWallCollision(pos, margin);
+        }
+
+        findSafePositionInGridCell(gridCell, maxAttempts = 50) {
+            // Find a safe position within a specific grid cell that doesn't collide with walls
+            const tileSize = GameConfig.world.tileSize;
+            const wallConfig = GameConfig.walls;
+
+            // Calculate cell boundaries
+            const cellMinX = gridCell.x * tileSize;
+            const cellMaxX = (gridCell.x + 1) * tileSize;
+            const cellMinY = gridCell.y * tileSize;
+            const cellMaxY = (gridCell.y + 1) * tileSize;
+
+            // Add margin to avoid cell edges (from config)
+            const margin = wallConfig.spawnCellMargin;
+            const spawnMinX = cellMinX + margin;
+            const spawnMaxX = cellMaxX - margin;
+            const spawnMinY = cellMinY + margin;
+            const spawnMaxY = cellMaxY - margin;
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                // Generate random position within the cell
+                const pos = {
+                    x: this.seededRandom.randomRange(spawnMinX, spawnMaxX),
+                    y: this.seededRandom.randomRange(spawnMinY, spawnMaxY)
+                };
+
+                // Check if position is safe (not blocked by walls)
+                if (!this.isPositionBlockedByWall(pos, wallConfig.spawnSafetyMargin)) {
+                    return pos;
+                }
+            }
+
+            // If no safe position found, return null
+            console.warn(`[Safe Position] Could not find safe position in grid cell (${gridCell.x}, ${gridCell.y}) after ${maxAttempts} attempts`);
+            return null;
         }
         getResourceEmoji(type) {
             // Get emoji from GameConfig.resources.resourceData
@@ -4703,6 +4763,343 @@ console.log('Phaser main loaded');
                 console.error('[Ground Texture] Error creating ground texture:', error);
                 // Don't crash the game if ground texture fails
             }
+        }
+
+        createWallSystem() {
+            try {
+                // Initialize walls array first
+                this.walls = [];
+
+                // Create walls between grid cells
+                const tileSize = GameConfig.world.tileSize;
+                const worldWidth = GameConfig.world.width;
+                const worldHeight = GameConfig.world.height;
+                const wallConfig = GameConfig.walls;
+
+                // Calculate number of tiles
+                const tilesX = Math.ceil(worldWidth / tileSize);
+                const tilesY = Math.ceil(worldHeight / tileSize);
+
+                // Find the camp grid cell using the same logic as createCampArea()
+                const centralBiome = this.findCentralBiome();
+                const centerX = centralBiome.x;
+                const centerY = centralBiome.y;
+                const campTileX = Math.floor(centerX / tileSize);
+                const campTileY = Math.floor(centerY / tileSize);
+
+                console.log(`[Wall System] Camp cell coordinates: (${campTileX}, ${campTileY})`);
+
+                // Generate per-cell opening plan
+                const cellOpenings = this.generatePerCellOpenings(tilesX, tilesY);
+
+                // Create horizontal walls (between rows)
+                for (let tileY = 0; tileY <= tilesY; tileY++) {
+                    for (let tileX = 0; tileX < tilesX; tileX++) {
+                        // Skip walls that would border the camp cell
+                        const isCampBorder = (tileY === campTileY || tileY === campTileY + 1) &&
+                            (tileX >= campTileX && tileX <= campTileX + 1);
+
+                        if (isCampBorder) {
+                            console.log(`[Wall System] Skipping horizontal wall at (${tileX}, ${tileY}) - camp border`);
+                            continue;
+                        }
+
+                        const wallX = tileX * tileSize;
+                        const wallY = tileY * tileSize;
+
+                        // Check if this horizontal edge should have an opening
+                        const hasOpening = cellOpenings.horizontal[tileY] && cellOpenings.horizontal[tileY][tileX];
+                        const openings = hasOpening ? this.generateWallOpenings(tileSize, 1) : [];
+
+                        // Generate random wall height for this segment
+                        const wallHeight = this.seededRandom.randomRange(wallConfig.height.min, wallConfig.height.max);
+
+                        // Create wall segments
+                        this.createWallSegments(wallX, wallY, tileSize, wallHeight, openings, 'horizontal');
+                    }
+                }
+
+                // Create vertical walls (between columns)
+                for (let tileX = 0; tileX <= tilesX; tileX++) {
+                    for (let tileY = 0; tileY < tilesY; tileY++) {
+                        // Skip walls that would border the camp cell
+                        const isCampBorder = (tileX === campTileX || tileX === campTileX + 1) &&
+                            (tileY >= campTileY && tileY <= campTileY + 1);
+
+                        if (isCampBorder) {
+                            console.log(`[Wall System] Skipping vertical wall at (${tileX}, ${tileY}) - camp border`);
+                            continue;
+                        }
+
+                        const wallX = tileX * tileSize;
+                        const wallY = tileY * tileSize;
+
+                        // Check if this vertical edge should have an opening
+                        const hasOpening = cellOpenings.vertical[tileX] && cellOpenings.vertical[tileX][tileY];
+                        const openings = hasOpening ? this.generateWallOpenings(tileSize, 1) : [];
+
+                        // Generate random wall height for this segment
+                        const wallHeight = this.seededRandom.randomRange(wallConfig.height.min, wallConfig.height.max);
+
+                        // Create wall segments
+                        this.createWallSegments(wallX, wallY, tileSize, wallHeight, openings, 'vertical');
+                    }
+                }
+
+                // Create mountains inside each grid cell
+                this.createMountains(tilesX, tilesY, tileSize);
+
+                console.log(`[Wall System] Created ${this.walls.length} wall segments`);
+            } catch (error) {
+                console.error('[Wall System] Error creating wall system:', error);
+                // Don't crash the game if wall system fails
+            }
+        }
+
+        createMountains(tilesX, tilesY, tileSize) {
+            const wallConfig = GameConfig.walls;
+
+            // Find the camp grid cell using the same logic as createCampArea()
+            const centralBiome = this.findCentralBiome();
+            const centerX = centralBiome.x;
+            const centerY = centralBiome.y;
+
+            // Convert center position to tile coordinates (same as createCampArea)
+            const campTileX = Math.floor(centerX / tileSize);
+            const campTileY = Math.floor(centerY / tileSize);
+
+            console.log(`[Mountains] Camp cell coordinates: (${campTileX}, ${campTileY})`);
+
+            // Create 0-4 mountains per grid cell (except camp cell)
+            for (let tileY = 0; tileY < tilesY; tileY++) {
+                for (let tileX = 0; tileX < tilesX; tileX++) {
+                    // Skip the camp grid cell
+                    if (tileX === campTileX && tileY === campTileY) {
+                        console.log(`[Mountains] Skipping camp cell at (${tileX}, ${tileY})`);
+                        continue;
+                    }
+
+                    // Random number of mountains 
+                    const mountainCount = this.seededRandom.randomInt(wallConfig.numMountains.min, wallConfig.numMountains.max + 1);
+
+                    for (let mountainIndex = 0; mountainIndex < mountainCount; mountainIndex++) {
+                        // Random mountain dimensions between 200-400
+                        const mountainWidth = this.seededRandom.randomRange(wallConfig.mountainWidth.min, wallConfig.mountainWidth.max);
+                        const mountainHeight = this.seededRandom.randomRange(wallConfig.mountainHeight.min, wallConfig.mountainHeight.max);
+
+                        // Random position within the cell (with margin to avoid edges)
+                        const margin = Math.max(mountainWidth, mountainHeight) / 2 + wallConfig.mountainMargin;
+                        const minX = tileX * tileSize + margin;
+                        const maxX = (tileX + 1) * tileSize - margin;
+                        const minY = tileY * tileSize + margin;
+                        const maxY = (tileY + 1) * tileSize - margin;
+
+                        const mountainX = this.seededRandom.randomRange(minX, maxX);
+                        const mountainY = this.seededRandom.randomRange(minY, maxY);
+
+                        // Random rotation, disabled for now
+                        //const rotation = this.seededRandom.random() * Math.PI * 2;
+                        const rotation = 0;
+
+
+                        // Create mountain as a wall rectangle
+                        const mountain = this.add.rectangle(
+                            mountainX,
+                            mountainY,
+                            mountainWidth,
+                            mountainHeight,
+                            wallConfig.wallColor
+                        ).setOrigin(0.5)
+                            .setDepth(GameConfig.ui.zIndex.walls)
+                            .setAlpha(wallConfig.alpha)
+                            .setRotation(rotation);
+
+                        // Store mountain data for collision detection
+                        const mountainData = {
+                            x: mountainX,
+                            y: mountainY,
+                            width: mountainWidth,
+                            height: mountainHeight,
+                            direction: 'mountain',
+                            visual: mountain
+                        };
+
+                        this.walls.push(mountainData);
+                    }
+                }
+            }
+        }
+
+        generatePerCellOpenings(tilesX, tilesY) {
+            const wallConfig = GameConfig.walls;
+            const cellOpenings = {
+                horizontal: {},
+                vertical: {}
+            };
+
+            // Initialize opening arrays
+            for (let y = 0; y <= tilesY; y++) {
+                cellOpenings.horizontal[y] = {};
+                for (let x = 0; x < tilesX; x++) {
+                    cellOpenings.horizontal[y][x] = false;
+                }
+            }
+            for (let x = 0; x <= tilesX; x++) {
+                cellOpenings.vertical[x] = {};
+                for (let y = 0; y < tilesY; y++) {
+                    cellOpenings.vertical[x][y] = false;
+                }
+            }
+
+            // For each cell, ensure it has 1-3 openings total
+            for (let tileY = 0; tileY < tilesY; tileY++) {
+                for (let tileX = 0; tileX < tilesX; tileX++) {
+                    // Count how many openings this cell needs (1-3)
+                    const openingCount = this.seededRandom.randomInt(
+                        wallConfig.openingsPerCell.min,
+                        wallConfig.openingsPerCell.max + 1
+                    );
+
+                    // Get the 4 edges of this cell
+                    const edges = [
+                        { type: 'horizontal', x: tileX, y: tileY }, // Top edge
+                        { type: 'horizontal', x: tileX, y: tileY + 1 }, // Bottom edge
+                        { type: 'vertical', x: tileX, y: tileY }, // Left edge
+                        { type: 'vertical', x: tileX + 1, y: tileY } // Right edge
+                    ];
+
+                    // Shuffle edges using seeded random for consistent results
+                    const shuffledEdges = [...edges];
+                    for (let i = shuffledEdges.length - 1; i > 0; i--) {
+                        const j = this.seededRandom.randomInt(0, i + 1);
+                        [shuffledEdges[i], shuffledEdges[j]] = [shuffledEdges[j], shuffledEdges[i]];
+                    }
+
+                    // Place openings on random edges
+                    for (let i = 0; i < Math.min(openingCount, shuffledEdges.length); i++) {
+                        const edge = shuffledEdges[i];
+                        if (edge && edge.type === 'horizontal') {
+                            cellOpenings.horizontal[edge.y][edge.x] = true;
+                        } else if (edge && edge.type === 'vertical') {
+                            cellOpenings.vertical[edge.x][edge.y] = true;
+                        }
+                    }
+                }
+            }
+
+            return cellOpenings;
+        }
+
+        generateWallOpenings(wallLength, openingCount) {
+            // Generate random openings along a wall with seeded randomization
+            const openings = [];
+
+            for (let i = 0; i < openingCount; i++) {
+                // Random opening size between 15% and 45% of wall length
+                const minSize = wallLength * GameConfig.walls.openingMinSizePerc;
+                const maxSize = wallLength * GameConfig.walls.openingMaxSizePerc;
+                const openingSize = this.seededRandom.randomRange(minSize, maxSize);
+
+                // Random position along the wall (not necessarily centered)
+                const maxStartPosition = wallLength - openingSize;
+                const openingStart = this.seededRandom.randomRange(0, maxStartPosition);
+                const openingEnd = openingStart + openingSize;
+
+                openings.push({
+                    start: Math.max(0, openingStart),
+                    end: Math.min(wallLength, openingEnd)
+                });
+            }
+
+            return openings;
+        }
+
+        createWallSegments(wallX, wallY, wallLength, wallHeight, openings, direction) {
+            const wallConfig = GameConfig.walls;
+
+            // Sort openings by start position
+            openings.sort((a, b) => a.start - b.start);
+
+            // Create wall segments between openings
+            for (let i = 0; i <= openings.length; i++) {
+                let segmentStart, segmentEnd;
+
+                if (i === 0) {
+                    // First segment (from start to first opening)
+                    segmentStart = 0;
+                    segmentEnd = openings.length > 0 ? openings[0].start : wallLength;
+                } else if (i === openings.length) {
+                    // Last segment (from last opening to end)
+                    segmentStart = openings[i - 1].end;
+                    segmentEnd = wallLength;
+                } else {
+                    // Middle segment (between openings)
+                    segmentStart = openings[i - 1].end;
+                    segmentEnd = openings[i].start;
+                }
+
+                // Only create wall segment if it has meaningful width
+                if (segmentEnd - segmentStart > 10) {
+                    const segmentWidth = segmentEnd - segmentStart;
+                    let segmentX, segmentY;
+
+                    if (direction === 'horizontal') {
+                        // Horizontal walls: X varies along wall, Y is fixed
+                        segmentX = wallX + segmentStart + segmentWidth / 2;
+                        segmentY = wallY + wallHeight / 2;
+                    } else {
+                        // Vertical walls: Y varies along wall, X is fixed
+                        segmentX = wallX + wallHeight / 2;
+                        segmentY = wallY + segmentStart + segmentWidth / 2;
+                    }
+
+                    // Create wall rectangle
+                    const wallSegment = this.add.rectangle(
+                        segmentX,
+                        segmentY,
+                        direction === 'horizontal' ? segmentWidth : wallHeight,
+                        direction === 'horizontal' ? wallHeight : segmentWidth,
+                        wallConfig.wallColor
+                    ).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.walls).setAlpha(wallConfig.alpha);
+
+                    // Store wall data for collision detection
+                    const wallData = {
+                        x: segmentX,
+                        y: segmentY,
+                        width: direction === 'horizontal' ? segmentWidth : wallHeight,
+                        height: direction === 'horizontal' ? wallHeight : segmentWidth,
+                        direction: direction,
+                        visual: wallSegment
+                    };
+
+                    this.walls.push(wallData);
+                }
+            }
+        }
+
+        checkWallCollision(position, radius = 0) {
+            // Check if a position collides with any wall
+            if (!GameConfig.walls.collisionEnabled) return false;
+            if (!this.walls || !Array.isArray(this.walls)) return false;
+
+            const collisionMargin = GameConfig.walls.collisionMargin;
+            const totalRadius = radius + collisionMargin;
+
+            for (const wall of this.walls) {
+                // Calculate distance from position to wall center
+                const dx = Math.abs(position.x - wall.x);
+                const dy = Math.abs(position.y - wall.y);
+
+                // Check if within collision bounds
+                const halfWidth = wall.width / 2 + totalRadius;
+                const halfHeight = wall.height / 2 + totalRadius;
+
+                if (dx <= halfWidth && dy <= halfHeight) {
+                    return true; // Collision detected
+                }
+            }
+
+            return false; // No collision
         }
 
         showNewGameConfirmation() {
@@ -5414,21 +5811,15 @@ console.log('Phaser main loaded');
                             const tileEndX = Math.min(tileStartX + tileSize, GameConfig.world.width);
                             const tileEndY = Math.min(tileStartY + tileSize, GameConfig.world.height);
 
-                            // Generate random position within tile bounds
-                            let newPosition;
-                            let attempts = 0;
-                            const maxAttempts = 20;
+                            // Generate random position within tile bounds, avoiding walls
+                            const gridCell = { x: tileX, y: tileY };
+                            const newPosition = this.findSafePositionInGridCell(gridCell, 20);
 
-                            do {
-                                newPosition = {
-                                    x: this.seededRandom.randomRange(tileStartX, tileEndX),
-                                    y: this.seededRandom.randomRange(tileStartY, tileEndY)
-                                };
-                                attempts++;
-                            } while (this.isTooCloseToVillage(newPosition) && attempts < maxAttempts);
+                            // Skip if we couldn't find a safe position
+                            if (!newPosition) continue;
 
-                            // Skip if we couldn't find a valid position
-                            if (attempts >= maxAttempts) continue;
+                            // Additional check for village proximity
+                            if (this.isTooCloseToVillage(newPosition)) continue;
 
                             // Check if position is already occupied
                             const tooClose = this.entities.some(e =>
@@ -5615,9 +6006,19 @@ console.log('Phaser main loaded');
                     const moveX = (dx / dist) * moveSpeed;
                     const moveY = (dy / dist) * moveSpeed;
 
-                    // Update animal position
-                    animal.position.x += moveX;
-                    animal.position.y += moveY;
+                    // Calculate new position
+                    const newX = animal.position.x + moveX;
+                    const newY = animal.position.y + moveY;
+
+                    // Check wall collision before applying movement
+                    const newPosition = { x: newX, y: newY };
+                    const hasCollision = this.checkWallCollision(newPosition, 10); // 10px collision radius for animals
+
+                    // Only apply movement if no collision
+                    if (!hasCollision) {
+                        animal.position.x = newX;
+                        animal.position.y = newY;
+                    }
 
                     // Keep within world bounds
                     animal.position.x = Math.max(0, Math.min(GameConfig.world.width, animal.position.x));

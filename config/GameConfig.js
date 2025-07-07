@@ -11,8 +11,8 @@
 window.GameConfig = {
     // World settings - Controls the size and layout of the game world
     world: {
-        width: window.innerWidth * 3, // 3x viewport width
-        height: window.innerHeight * 5, // 5x viewport height
+        width: 20000,
+        height: 20000,
         tileSize: 1500, // Size of each "tile" for spatial calculations (used in distance checks)
         villagerCount: 6, // Total camps (7 AI villagers + 1 player camp)
 
@@ -524,6 +524,7 @@ window.GameConfig = {
         // Z-indices - Centralized z-index definitions
         zIndex: {
             ground: 0,
+            walls: -1,
             entity: 100,
             player: 200,
             ui: 1000,
@@ -567,6 +568,38 @@ window.GameConfig = {
         maxWood: 10, // Maximum wood that can be stored in a fire
         initialWoodRange: { min: 7, max: 9 }, // Random initial wood range
         hourlyConsumption: 0.167 // Wood consumed per hour (1 unit every 6 hours)
+    },
+
+    // Wall system settings
+    walls: {
+        // Wall dimensions and positioning
+        height: { min: 60, max: 210 }, // Random height range for wall segments
+        openingsPerCell: { min: 1, max: 3 }, // Number of openings per cell (not per edge)
+
+        // Wall colors
+        wallColor: 0x000000, // Black walls
+        openingColor: 0xFFFFFF, // White openings
+
+        // Rendering settings
+        alpha: 1, // opaque
+
+        // Collision settings
+        collisionEnabled: true, // Whether walls block movement
+        collisionMargin: 0, // Extra collision margin around wall segments
+
+        // Spawning safety settings
+        spawnSafetyMargin: 50, // Minimum distance from walls for resource spawning
+        spawnCellMargin: 50, // Margin from cell edges for safe spawning
+
+        // Openings
+        openingMinSizePerc: 0.15,
+        openingMaxSizePerc: 0.45,
+
+        // Mountains
+        numMountains: { min: 0, max: 7 }, // Random height range for mountain segments
+        mountainHeight: { min: 200, max: 600 }, // Random height range for mountain segments
+        mountainWidth: { min: 200, max: 600 }, // Random width range for mountain segments
+        mountainMargin: 50, // Margin from cell edges for mountain placement
     },
 
     // Technical constants
