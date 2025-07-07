@@ -521,7 +521,7 @@ console.log('Phaser main loaded');
             this.inventory = new Array(GameConfig.player.inventorySize).fill(null);
 
             // State management - using new state machine (must be after needs and inventory are initialized)
-
+            this.isDead = false;
 
             // Daily variance for needs (different per villager)
             this.dailyDecay = this.generateDailyDecay();
@@ -551,6 +551,15 @@ console.log('Phaser main loaded');
             // Store reference to game entities and current game time
             this.gameEntities = entities;
             this.currentGameTime = gameTime;
+
+            // Check for death first
+            const isDead = this.checkDeath();
+
+            // If dead, only update visuals and return
+            if (isDead) {
+                this.updateVisuals();
+                return true;
+            }
 
             // Update needs
             this.updateNeeds(deltaTime, gameTime);
@@ -595,19 +604,29 @@ console.log('Phaser main loaded');
             // Update visual representation
             this.updateVisuals();
 
-            // Check for death
-            return this.checkDeath();
+            return false; // Villager is alive
         }
 
         generateDailyDecay() {
             // Generate unique daily decay rates for this villager using seeded random
             const variance = GameConfig.needsVariance;
             assert(this.seededRandom, 'SeededRandom required for generateDailyDecay');
+
+            // Ensure we don't divide by zero and handle edge cases
+            const safeDecayRate = (baseRate) => {
+                const rate = GameConfig.needs.decayCalculationFactor / (baseRate * GameConfig.time.minutesPerHour);
+                // Ensure rate is finite and positive
+                if (!isFinite(rate) || rate <= 0) {
+                    console.error(`[Villager] ${this.name} Invalid decay rate calculated: ${rate}`);
+                }
+                return rate * (1 + (this.seededRandom.random() - 0.5) * variance);
+            };
+
             return {
-                temperature: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.temperature * GameConfig.time.minutesPerHour) * (1 + (this.seededRandom.random() - 0.5) * variance),
-                water: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.water * GameConfig.time.minutesPerHour) * (1 + (this.seededRandom.random() - 0.5) * variance),
-                calories: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.calories * GameConfig.time.minutesPerHour) * (1 + (this.seededRandom.random() - 0.5) * variance),
-                vitamins: GameConfig.needs.decayCalculationFactor / (GameConfig.needsDrain.vitamins * GameConfig.time.minutesPerHour) * (1 + (this.seededRandom.random() - 0.5) * variance)
+                temperature: safeDecayRate(GameConfig.needsDrain.temperature),
+                water: safeDecayRate(GameConfig.needsDrain.water),
+                calories: safeDecayRate(GameConfig.needsDrain.calories),
+                vitamins: safeDecayRate(GameConfig.needsDrain.vitamins)
             };
         }
 
@@ -659,13 +678,18 @@ console.log('Phaser main loaded');
                 }
             }
 
-            // Clamp values to valid range
-            this.needs.temperature = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.temperature));
-            this.needs.water = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.water));
-            this.needs.calories = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.calories));
+            // Clamp values to valid range with NaN protection
+            const safeClamp = (value) => {
+                if (!isFinite(value)) return GameConfig.needs.minValue;
+                return Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, value));
+            };
+
+            this.needs.temperature = safeClamp(this.needs.temperature);
+            this.needs.water = safeClamp(this.needs.water);
+            this.needs.calories = safeClamp(this.needs.calories);
 
             for (let i = 0; i < this.needs.vitamins.length; i++) {
-                this.needs.vitamins[i] = Math.max(GameConfig.needs.minValue, Math.min(GameConfig.needs.maxValue, this.needs.vitamins[i]));
+                this.needs.vitamins[i] = safeClamp(this.needs.vitamins[i]);
             }
 
             // Check if any need dropped below 2 and log detailed information
@@ -762,7 +786,11 @@ console.log('Phaser main loaded');
             }
 
             // Update villager emoji based on goal and movement
-            if (this.characterCustomization) {
+            if (this.isDead) {
+                // Dead villagers show a skull emoji
+                this.phaserText.setText('💀');
+                this.phaserText.setScale(1, 1); // No flipping for skull
+            } else if (this.characterCustomization) {
                 const currentGoal = this.hierarchicalAI ? this.hierarchicalAI.goalData.currentGoal : 'maintain';
                 const emojiResult = this.characterCustomization.getCurrentEmoji(currentGoal, this.isMoving, this.movementDirection);
 
@@ -787,7 +815,7 @@ console.log('Phaser main loaded');
 
             // Update name text (always show just the name, no stats)
             this.nameText.setPosition(this.position.x, this.position.y - 40);
-            this.nameText.setText(this.name);
+            this.nameText.setText(this.isDead ? `${this.name} (DEAD)` : this.name);
 
             // Update state text with goal, action, and need (only show if debug enabled)
             this.stateText.setPosition(this.position.x, this.position.y + 30);
@@ -835,6 +863,9 @@ console.log('Phaser main loaded');
 
                 // Helper function to get color based on threshold
                 const getStatColor = (value, regularThreshold, emergencyThreshold) => {
+                    // Handle NaN or invalid values
+                    if (!isFinite(value)) return '#ff0000'; // Red for invalid values
+
                     if (value >= regularThreshold) return '#cccccc'; // Light grey - above regular threshold
                     if (value >= emergencyThreshold) return '#ff8c00'; // Dark orange - below regular but above emergency
                     return '#ff0000'; // Bright red - below emergency threshold
@@ -843,11 +874,16 @@ console.log('Phaser main loaded');
                 // Get threshold values from config
                 const thresholds = GameConfig.villager;
 
-                // Calculate values (no floating points)
-                const tempValue = Math.round(this.needs.temperature);
-                const waterValue = Math.round(this.needs.water);
-                const caloriesValue = Math.round(this.needs.calories);
-                const vitaminValues = this.needs.vitamins.map(v => Math.round(v));
+                // Calculate values (no floating points) with NaN protection
+                const safeRound = (value) => {
+                    if (!isFinite(value)) return 0;
+                    return Math.round(value);
+                };
+
+                const tempValue = safeRound(this.needs.temperature);
+                const waterValue = safeRound(this.needs.water);
+                const caloriesValue = safeRound(this.needs.calories);
+                const vitaminValues = this.needs.vitamins.map(v => safeRound(v));
 
                 // Set individual stat texts with their own colors
                 this.statTexts.temperature.setText(`T${tempValue}`);
@@ -925,20 +961,28 @@ console.log('Phaser main loaded');
         }
 
         checkDeath() {
-            // Check if any need is critically low
-            const criticalNeeds = this.needs.temperature < 1 || this.needs.water < 1 || this.needs.calories < 1 || this.needs.vitamins.some(v => v < 1);
+            // Check if any need is critically low (0 or below)
+            const criticalNeeds = this.needs.temperature <= 0 || this.needs.water <= 0 || this.needs.calories <= 0 || this.needs.vitamins.some(v => v <= 0);
 
-            if (criticalNeeds && window.summaryLoggingEnabled) {
+            if (criticalNeeds && !this.isDead) {
+                this.isDead = true;
                 console.log(`[Villager] ${this.name} has died from critical needs!`);
                 console.log(`[Villager] ${this.name} Final stats: T${this.needs.temperature.toFixed(1)} W${this.needs.water.toFixed(1)} C${this.needs.calories.toFixed(1)} V[${this.needs.vitamins.map(v => v.toFixed(1)).join(',')}]`);
                 console.log(`[Villager] ${this.name} Final position: (${Math.round(this.position.x)}, ${Math.round(this.position.y)})`);
                 const finalGoal = this.hierarchicalAI ? this.hierarchicalAI.goalData.currentGoal : 'unknown';
                 const finalAction = this.hierarchicalAI ? this.hierarchicalAI.actionData.currentAction : 'unknown';
                 console.log(`[Villager] ${this.name} Final goal: ${finalGoal}, action: ${finalAction}`);
+
+                // Stop all AI activity
+                if (this.hierarchicalAI) {
+                    this.hierarchicalAI.actionData.currentAction = 'DEAD';
+                    this.hierarchicalAI.goalData.currentGoal = 'DEAD';
+                }
+
                 return true; // Villager has died
             }
 
-            return false; // Villager is alive
+            return this.isDead; // Return true if already dead
         }
 
         // === RESOURCE INTERACTION METHODS ===
@@ -959,6 +1003,11 @@ console.log('Phaser main loaded');
          * @returns {boolean} - Whether drinking was successful
          */
         drinkFromWell(well) {
+            console.log(`[Villager] ${this.name} drinkFromWell called with:`, well);
+            console.log(`[Villager] ${this.name} well type: ${well?.type}, expected: ${GameConfig.entityTypes.well}`);
+            console.log(`[Villager] ${this.name} well waterLevel: ${well?.waterLevel}`);
+            console.log(`[Villager] ${this.name} well position: ${well?.position ? `(${Math.round(well.position.x)}, ${Math.round(well.position.y)})` : 'undefined'}`);
+
             assert(well, 'Well entity required for drinkFromWell');
             assert(well.type === GameConfig.entityTypes.well, 'Target must be a well');
 
@@ -970,6 +1019,7 @@ console.log('Phaser main loaded');
             }
 
             // Restore water need
+            assert(GameConfig.player.wellWaterRestore !== undefined, 'GameConfig.player.wellWaterRestore is missing - check GameConfig.js');
             this.needs.water = Math.min(GameConfig.needs.fullValue, this.needs.water + GameConfig.player.wellWaterRestore);
 
             console.log(`[Villager] ${this.name} drank from well at (${Math.round(well.position.x)}, ${Math.round(well.position.y)})`);
@@ -1315,6 +1365,11 @@ console.log('Phaser main loaded');
          * Main update method - called every frame
          */
         update(deltaTime, gameTime, entities, storageBoxes) {
+            // Don't update if villager is dead
+            if (this.villager.isDead) {
+                return;
+            }
+
             // Evaluate which goal should be active (highest priority)
             const newGoal = this.evaluateGoal(gameTime, entities, storageBoxes);
 
@@ -1422,8 +1477,7 @@ console.log('Phaser main loaded');
             this.actionData.actionTargets = [];
             this.actionData.actionProgress = 0;
             this.actionData.actionFailed = false;
-            // Store the current action type for use in collection logic
-            this.actionData.currentActionType = this.actionData.currentActionType;
+            this.actionData.currentActionType = null;
         }
 
         /**
@@ -2166,10 +2220,8 @@ console.log('Phaser main loaded');
                 }
             }
 
-            if (!target) {
-                this.villager.hierarchicalAI.transitionAction(ACTION_STATES.FIND_RESOURCES);
-                return;
-            }
+            target = this.villager.hierarchicalAI.actionData.actionTargets[0];
+            assert(target, `[ActionExecutor] ${this.villager.name} executeUseFacility: No target set for actionType=${actionType}`);
 
             // Check if we're close enough
             if (!GameUtils.isWithinInteractionDistance(this.villager.position, target.position, GameConfig.player.interactionThreshold)) {
@@ -2194,8 +2246,7 @@ console.log('Phaser main loaded');
                     this.villager.eatFood();
                     break;
                 default:
-                    console.warn(`[ActionExecutor] Unknown facility action: ${actionType}`);
-                    break;
+                    assert(false, `[ActionExecutor] Unknown facility action: ${actionType}`);
             }
 
             // Mark facility usage as complete
@@ -2243,7 +2294,13 @@ console.log('Phaser main loaded');
 
                 // If close enough, drink
                 if (GameUtils.isWithinInteractionDistance(this.villager.position, well.position, GameConfig.player.interactionThreshold)) {
-                    this.villager.drinkFromWell(well);
+                    const success = this.villager.drinkFromWell(well);
+
+                    // If drinking was successful and water need is now satisfied, complete the action
+                    if (success && this.villager.needs.water >= GameConfig.villager.regularThresholds.water) {
+                        // Action completed successfully - villager has enough water
+                        return;
+                    }
                 }
             }
         }
@@ -2377,10 +2434,34 @@ console.log('Phaser main loaded');
          * Helper methods (adapted from existing VillagerStateMachine)
          */
         findNearestWellWithWater() {
-            if (!this.villager.gameEntities) return null;
-            return GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity =>
+            if (!this.villager.gameEntities) {
+                console.warn(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: gameEntities is null`);
+                return null;
+            }
+
+            console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: searching through ${this.villager.gameEntities.length} entities`);
+
+            // Log all well entities for debugging
+            const wellEntities = this.villager.gameEntities.filter(entity =>
+                entity.type === GameConfig.entityTypes.well
+            );
+            console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: found ${wellEntities.length} well entities`);
+
+            wellEntities.forEach((well, index) => {
+                console.log(`[ActionExecutor] ${this.villager.name} Well ${index}: type=${well.type}, waterLevel=${well.waterLevel}, position=(${Math.round(well.position.x)}, ${Math.round(well.position.y)})`);
+            });
+
+            const nearestWell = GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity =>
                 entity.type === GameConfig.entityTypes.well && entity.waterLevel >= 1
             );
+
+            if (nearestWell) {
+                console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: found nearest well at (${Math.round(nearestWell.position.x)}, ${Math.round(nearestWell.position.y)}) with waterLevel=${nearestWell.waterLevel}`);
+            } else {
+                console.warn(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: no well with water found`);
+            }
+
+            return nearestWell;
         }
 
         findNearestFood(entities, storageBoxes, isEmergency) {
@@ -2761,14 +2842,14 @@ console.log('Phaser main loaded');
             // If either storage isn't full of food, we should forage
             if (communalFoodCount < communalCapacity || personalFoodCount < personalCapacity) {
                 // Debug logging (occasional to avoid spam)
-                if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance
+                if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) {
                     console.log(`[CollectionManager] ${this.villager.name} shouldForageFood=true: communal=${communalFoodCount}/${communalCapacity}, personal=${personalFoodCount}/${personalCapacity}`);
                 }
                 return true;
             }
 
             // Both storages are full of food, no need to forage
-            if (window.summaryLoggingEnabled && Math.random() < 0.1) { // 10% chance
+            if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) {
                 console.log(`[CollectionManager] ${this.villager.name} shouldForageFood=false: storages full`);
             }
             return false;
@@ -3333,7 +3414,8 @@ console.log('Phaser main loaded');
                             this.showTempMessage('Already fully hydrated!', GameConfig.technical.messageDurations.short);
                             return;
                         }
-                        this.playerState.needs.water = Math.min(GameConfig.needs.fullValue, this.playerState.needs.water + GameConfig.wells.drinkingAmount);
+                        assert(GameConfig.player.wellWaterRestore !== undefined, 'GameConfig.player.wellWaterRestore is missing - check GameConfig.js');
+                        this.playerState.needs.water = Math.min(GameConfig.needs.fullValue, this.playerState.needs.water + GameConfig.player.wellWaterRestore);
                         // Reduce well water level
                         entity.waterLevel = Math.max(0, entity.waterLevel - 1);
                         // Update well visuals
@@ -3376,6 +3458,11 @@ console.log('Phaser main loaded');
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         const dist = GameUtils.distance(this.playerState.position, entity.position);
+
+                        if (dist > GameConfig.player.interactionThreshold) {
+                            this.showTempMessage('Too far away from the sleepingbag!', GameConfig.technical.messageDurations.short);
+                            return;
+                        }
 
                         if (entity.isOccupied) {
                             this.showTempMessage('Sleeping bag is occupied!', GameConfig.technical.messageDurations.short);

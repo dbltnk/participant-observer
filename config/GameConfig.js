@@ -108,7 +108,10 @@ window.GameConfig = {
             water: { min: 60, max: 90 }, // Water range at game start
             calories: { min: 60, max: 90 }, // Calories range at game start
             vitamins: { min: 50, max: 80 } // Vitamin range at game start (applies to all vitamins A-E)
-        }
+        },
+
+        // Well interaction settings
+        wellWaterRestore: 50 // Amount of water restored when drinking from well
     },
 
     // Villager settings - Controls AI villager behavior and capabilities
@@ -563,7 +566,7 @@ window.GameConfig = {
     wells: {
         initialWaterLevel: 10, // Starting water level for wells
         hourlyRefill: 0.5, // Water refilled per hour (1 unit every 2 hours)
-        drinkingAmount: 50 // Amount of water restored when drinking from well
+        // Note: drinking amount is now GameConfig.player.wellWaterRestore for consistency
     },
 
     // Fire settings
