@@ -19,8 +19,12 @@ X intro screen, if no seed
 x outro screen death reasons
 x pointers to the edge of the world
 x pathfinding: NPCs
-line of sight
+xline of sight
 x do not spawn villagers and wells in walls
-random color gates kill you, NPCs know about them
-check why villagers stop contributing when they have 1+ food and 1+ burnable in inventory
+xrandom color gates kill you, NPCs know about them
+
+bugs
+villagers ignore deadly gates in pathfinding
+villagers stop contributing when they have 1+ food and 1+ burnable in inventory
+
 make sure replication and max cap works

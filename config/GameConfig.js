@@ -157,6 +157,17 @@ window.GameConfig = {
             targetInvalidationTimeout: 5000, // Time in ms before replanning if target becomes unavailable
         },
 
+        // Startup settings
+        startup: {
+            minDelayMs: 1000,    // Minimum delay before villagers start AI behavior (1 second)
+            maxDelayMs: 5000,    // Maximum delay before villagers start AI behavior (5 seconds)
+        },
+
+        // Spawn settings
+        spawn: {
+            campRadius: 80,       // Radius around camp center where villagers can spawn randomly
+        },
+
         // Villager names for random generation
         villagerNames: [
             'Alex', 'Blake', 'Casey', 'Drew', 'Emery', 'Finley', 'Gray', 'Harper',
@@ -611,8 +622,18 @@ window.GameConfig = {
         // Gates
         gates: {
             enabled: true, // Whether to create gates at wall openings
-            color: 0xFFFFFF, // White gates
-            depthRatio: 0.5, // Gate depth as ratio of wall depth (0.5 = half depth)
+            colors: [
+                0xFF0000, // Red
+                0xFF8000, // Orange
+                0xFFFF00, // Yellow
+                0x00FF00, // Green
+                0x0080FF, // Blue
+                0x8000FF, // Purple
+                0xFF0080, // Pink
+                0xFF4000, // Red-Orange
+            ],
+            deadlyCount: 8, // Number of deadly gates per seed
+            depthRatio: 0.60, // Gate depth as ratio of wall depth (0.5 = half depth)
             overlapRatio: 0.5, // Gate overlap with biomes as ratio (0.5 = half overlap)
             zIndex: -11, // Z-index for gates (above ground)
             alpha: 1, // Gate opacity

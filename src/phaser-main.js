@@ -1502,6 +1502,14 @@ console.log('Phaser main loaded');
         constructor(villager) {
             this.villager = villager;
 
+            // Startup delay - villagers wait before starting AI behavior (random 1-5 seconds per villager)
+            this.startupDelay = this.villager.seededRandom.randomRange(
+                GameConfig.villager.startup.minDelayMs,
+                GameConfig.villager.startup.maxDelayMs
+            );
+            this.startupTime = Date.now();
+            this.isStartupComplete = false;
+
             // Goal and action data structures
             this.goalData = {
                 currentGoal: GOAL_STATES.MAINTAIN,
@@ -1536,6 +1544,7 @@ console.log('Phaser main loaded');
                 console.log(`[HierarchicalVillagerAI] ${villager.name} initialized with goal: ${this.goalData.currentGoal}`);
                 console.log(`[HierarchicalVillagerAI] ${villager.name} starting needs: T${villager.needs.temperature.toFixed(1)} W${villager.needs.water.toFixed(1)} C${villager.needs.calories.toFixed(1)} V[${villager.needs.vitamins.map(v => v.toFixed(1)).join(',')}]`);
                 console.log(`[HierarchicalVillagerAI] ${villager.name} starting position: (${Math.round(villager.position.x)}, ${Math.round(villager.position.y)})`);
+                console.log(`[HierarchicalVillagerAI] ${villager.name} startup delay: ${this.startupDelay}ms`);
             }
         }
 
@@ -1546,6 +1555,20 @@ console.log('Phaser main loaded');
             // Don't update if villager is dead
             if (this.villager.isDead) {
                 return;
+            }
+
+            // Check if startup delay is complete
+            if (!this.isStartupComplete) {
+                const elapsedTime = Date.now() - this.startupTime;
+                if (elapsedTime >= this.startupDelay) {
+                    this.isStartupComplete = true;
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[HierarchicalVillagerAI] ${this.villager.name} startup delay complete, beginning AI behavior`);
+                    }
+                } else {
+                    // Still in startup delay - don't process AI
+                    return;
+                }
             }
 
             // Evaluate which goal should be active (highest priority)
@@ -2884,8 +2907,6 @@ console.log('Phaser main loaded');
             );
         }
 
-
-
         canCollectResourceWithGoldenRule(entity, entities) {
             // Golden rule: only collect if there are enough resources in the area
             const minRequired = GameConfig.villager.foraging.minResourcesPerGridCell;
@@ -3161,7 +3182,6 @@ console.log('Phaser main loaded');
             return false;
         }
 
-
         hasWoodInInventory() {
             return this.villager.inventory.some(item => item && GameUtils.isBurnable(item.type));
         }
@@ -3172,7 +3192,6 @@ console.log('Phaser main loaded');
     }
 
     // === END: HIERARCHICAL VILLAGER AI SYSTEM ===
-
 
     function generateVillagerName(seededRandom) {
         assert(seededRandom, 'SeededRandom instance required for generateVillagerName');
@@ -3321,8 +3340,6 @@ console.log('Phaser main loaded');
             this._introElements = [bg, logBg, title, planetText, ...contentLines, button];
             this._isTransitioning = false;
         }
-
-
 
         update(time, delta) {
             // Empty update method to ensure the scene has an active game loop
@@ -3511,19 +3528,26 @@ console.log('Phaser main loaded');
             // Create ground texture for better navigation (after noise is initialized)
             this.createGroundTexture();
 
-            // Create wall system between grid cells
+            // Create wall system between grid cells (includes gates)
             console.log('[MainScene] Creating wall system...');
             const wallStartTime = performance.now();
             this.createWallSystem();
             const wallEndTime = performance.now();
             console.log(`[MainScene] Wall system created in ${(wallEndTime - wallStartTime).toFixed(2)}ms`);
 
-            // Initialize A* pathfinding system (after walls are created)
+            // Initialize A* pathfinding system (after walls AND gates are created)
             console.log('[MainScene] Initializing pathfinding system...');
             const pathfinderStartTime = performance.now();
             this.pathfinder = new Pathfinder(this, GameConfig.world.width, GameConfig.world.height);
             const pathfinderEndTime = performance.now();
             console.log(`[MainScene] Pathfinding system initialized in ${(pathfinderEndTime - pathfinderStartTime).toFixed(2)}ms`);
+
+            // Initialize blocked grid after gates are created
+            console.log('[MainScene] Initializing blocked grid after gates are created...');
+            const gridStartTime = performance.now();
+            this.pathfinder.initializeBlockedGridAfterGates();
+            const gridEndTime = performance.now();
+            console.log(`[MainScene] Blocked grid initialized in ${(gridEndTime - gridStartTime).toFixed(2)}ms`);
 
             const cfg = GameConfig.world;
 
@@ -3701,18 +3725,8 @@ console.log('Phaser main loaded');
                 const camp = this.camps[i];
                 const villagerName = generateVillagerName(this.seededRandom);
 
-                // Find this villager's fireplace to spawn them at their camp
-                const villagerFireplace = this.entities.find(e =>
-                    e.type === GameConfig.entityTypes.fireplace &&
-                    e.villagerId === i - 1
-                );
-                assert(villagerFireplace, `Fireplace not found for villager ${villagerName} (villagerId: ${i - 1})`);
-
-                // Spawn villager at their fireplace position
-                const villagerSpawnPosition = {
-                    x: villagerFireplace.position.x,
-                    y: villagerFireplace.position.y
-                };
+                // Generate random spawn position within the camp cell
+                const villagerSpawnPosition = this.generateRandomCampPosition(camp.position);
 
                 const villager = new Villager(villagerName, villagerSpawnPosition, i - 1, this.seededRandom); // Use camp index for villagerId and pass seeded random
 
@@ -3764,7 +3778,7 @@ console.log('Phaser main loaded');
 
                 this.villagers.push(villager);
                 if (window.summaryLoggingEnabled) {
-                    console.log(`[MainScene] Created villager ${villagerName} at camp ${i} (spawned at fireplace at ${Math.round(villagerSpawnPosition.x)}, ${Math.round(villagerSpawnPosition.y)})`);
+                    console.log(`[MainScene] Created villager ${villagerName} at camp ${i} (spawned randomly in camp cell at ${Math.round(villagerSpawnPosition.x)}, ${Math.round(villagerSpawnPosition.y)})`);
                     console.log(`[MainScene] Assigned facilities to ${villagerName}: personal storage at (${Math.round(personalStorageBox.position.x)}, ${Math.round(personalStorageBox.position.y)}), communal storage at (${Math.round(communalStorageBox.position.x)}, ${Math.round(communalStorageBox.position.y)})`);
                 }
             }
@@ -4394,6 +4408,9 @@ console.log('Phaser main loaded');
                 this.playerState.position.x = newX;
                 this.playerState.position.y = newY;
             }
+
+            // Check for deadly gate collision
+            this.checkGateCollision(newPosition);
 
             // Allow player to move freely within the large world bounds
             // Only clamp to prevent going outside the actual world boundaries
@@ -5421,8 +5438,38 @@ console.log('Phaser main loaded');
             assert(GameConfig.walls.gates, 'Gate configuration is required');
             assert(openings && openings.length > 0, 'Openings array must be provided and non-empty');
             assert(direction === 'horizontal' || direction === 'vertical', 'Direction must be horizontal or vertical');
+            assert(typeof wallX === 'number' && typeof wallY === 'number', 'Wall position must be valid numbers');
+            assert(typeof wallLength === 'number' && wallLength > 0, 'Wall length must be a positive number');
+            assert(typeof wallHeight === 'number' && wallHeight > 0, 'Wall height must be a positive number');
 
             const gateConfig = GameConfig.walls.gates;
+
+            // Initialize gate tracking if not already done
+            if (!this.gateTracker) {
+                this.gateTracker = {
+                    totalGatesCreated: 0,
+                    deadlyGatesCreated: 0,
+                    gateColors: [...gateConfig.colors], // All available gate colors (can be reused)
+                    deadlyColors: new Set() // Colors that are deadly
+                };
+
+                // Randomly select which colors are deadly (8 out of 8 colors)
+                const colorCount = gateConfig.colors.length;
+                const deadlyCount = Math.min(gateConfig.deadlyCount, colorCount);
+
+                // Randomly select which colors are deadly
+                const availableColorIndices = [...Array(colorCount).keys()];
+                for (let i = 0; i < deadlyCount; i++) {
+                    const randomIndex = this.seededRandom.randomInt(0, availableColorIndices.length);
+                    const colorIndex = availableColorIndices.splice(randomIndex, 1)[0];
+                    this.gateTracker.deadlyColors.add(gateConfig.colors[colorIndex]);
+                }
+
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Gate System] Initialized with ${this.gateTracker.gateColors.length} gate types, ${this.gateTracker.deadlyColors.size} deadly types`);
+                    console.log(`[Gate System] Deadly colors: ${Array.from(this.gateTracker.deadlyColors).map(c => '0x' + c.toString(16).toUpperCase())}`);
+                }
+            }
 
             for (const opening of openings) {
                 assert(opening.start >= 0, 'Opening start must be non-negative');
@@ -5431,8 +5478,19 @@ console.log('Phaser main loaded');
 
                 // Calculate gate dimensions
                 const openingWidth = opening.end - opening.start;
+                assert(openingWidth > 0, `Opening width must be positive, got: ${openingWidth}`);
+
                 const gateWidth = openingWidth; // Gate width matches opening width
-                const gateDepth = wallHeight * gateConfig.depthRatio; // Half the wall depth
+                const gateDepth = wallHeight * gateConfig.depthRatio; // Gate depth as ratio of wall depth
+
+                assert(gateWidth > 0, `Gate width must be positive, got: ${gateWidth}`);
+                assert(gateDepth > 0, `Gate depth must be positive, got: ${gateDepth} (wallHeight: ${wallHeight}, depthRatio: ${gateConfig.depthRatio})`);
+
+                // Ensure minimum gate size for visibility
+                const minGateSize = 5; // Minimum 5 pixels for visibility
+                if (gateWidth < minGateSize || gateDepth < minGateSize) {
+                    console.warn(`[Gate System] Gate dimensions too small: ${Math.round(gateWidth)}x${Math.round(gateDepth)} at (${Math.round(wallX)}, ${Math.round(wallY)})`);
+                }
 
                 // Calculate gate position
                 let gateX, gateY;
@@ -5446,16 +5504,46 @@ console.log('Phaser main loaded');
                     gateY = wallY + opening.start + openingWidth / 2;
                 }
 
+                // Validate gate position
+                assert(typeof gateX === 'number' && !isNaN(gateX), `Gate X position must be a valid number, got: ${gateX}`);
+                assert(typeof gateY === 'number' && !isNaN(gateY), `Gate Y position must be a valid number, got: ${gateY}`);
+
+                // Randomly select a gate color (colors can be reused)
+                assert(this.gateTracker.gateColors && this.gateTracker.gateColors.length > 0,
+                    'Gate colors array must exist and be non-empty');
+                // Use exclusive upper bound to prevent array index out of bounds
+                const randomColorIndex = this.seededRandom.randomInt(0, this.gateTracker.gateColors.length - 1);
+                assert(randomColorIndex >= 0 && randomColorIndex < this.gateTracker.gateColors.length,
+                    `Gate color index ${randomColorIndex} is out of bounds for array length ${this.gateTracker.gateColors.length}`);
+                const gateColor = this.gateTracker.gateColors[randomColorIndex];
+                assert(typeof gateColor === 'number' && gateColor > 0,
+                    `Gate color must be a valid positive number, got: ${gateColor}`);
+
+                // Check if this color is deadly
+                const isDeadly = this.gateTracker.deadlyColors.has(gateColor);
+
+                // Update tracking
+                this.gateTracker.totalGatesCreated++;
+                if (isDeadly) {
+                    this.gateTracker.deadlyGatesCreated++;
+                }
+
                 // Create gate rectangle
                 const gate = this.add.rectangle(
                     gateX,
                     gateY,
                     direction === 'horizontal' ? gateWidth : gateDepth,
                     direction === 'horizontal' ? gateDepth : gateWidth,
-                    gateConfig.color
+                    gateColor
                 ).setOrigin(0.5)
                     .setDepth(gateConfig.zIndex)
                     .setAlpha(gateConfig.alpha);
+
+                // Validate gate creation
+                assert(gate, 'Gate rectangle must be created successfully');
+                assert(gate.visible !== false, 'Gate must be visible');
+                assert(gate.alpha > 0, `Gate alpha must be greater than 0, got: ${gate.alpha}`);
+                assert(gate.width > 0 && gate.height > 0, `Gate dimensions must be positive: ${gate.width}x${gate.height}`);
 
                 // Store gate data for future use
                 const gateData = {
@@ -5465,14 +5553,49 @@ console.log('Phaser main loaded');
                     height: direction === 'horizontal' ? gateDepth : gateWidth,
                     direction: direction,
                     opening: opening,
+                    color: gateColor,
+                    isDeadly: isDeadly,
                     visual: gate
                 };
+
+                // Validate gate data structure
+                assert(typeof gateData.x === 'number' && typeof gateData.y === 'number',
+                    'Gate data must have valid x,y coordinates');
+                assert(typeof gateData.width === 'number' && gateData.width > 0,
+                    'Gate data must have valid width');
+                assert(typeof gateData.height === 'number' && gateData.height > 0,
+                    'Gate data must have valid height');
+                assert(typeof gateData.isDeadly === 'boolean',
+                    'Gate data must have isDeadly boolean property');
+                assert(gateData.visual, 'Gate data must have visual element');
+
+                // Add debug text for gate type
+                const gateTypeText = this.add.text(
+                    gateX,
+                    gateY - 20,
+                    isDeadly ? 'DEADLY' : 'SAFE',
+                    {
+                        fontSize: '12px',
+                        fontFamily: 'monospace',
+                        color: isDeadly ? '#ff0000' : '#00ff00',
+                        backgroundColor: '#000',
+                        padding: { left: 2, right: 2, top: 1, bottom: 1 }
+                    }
+                ).setOrigin(0.5).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
+
+                gateData._debugText = gateTypeText;
 
                 this.gates.push(gateData);
 
                 // Debug: Log gate creation occasionally
                 if (Math.random() < 0.01 && window.summaryLoggingEnabled) {
-                    console.log(`[Gate System] Created ${direction} gate at (${Math.round(gateX)}, ${Math.round(gateY)}) with size ${Math.round(direction === 'horizontal' ? gateWidth : gateDepth)}x${Math.round(direction === 'horizontal' ? gateDepth : gateWidth)}`);
+                    console.log(`[Gate System] Created ${direction} gate at (${Math.round(gateX)}, ${Math.round(gateY)}) with color 0x${gateColor.toString(16).toUpperCase()} ${isDeadly ? '(DEADLY)' : '(safe)'}`);
+                    console.log(`[Gate System] Progress: ${this.gateTracker.deadlyGatesCreated} deadly gates out of ${this.gateTracker.totalGatesCreated} total gates created`);
+                }
+
+                // Always log gate creation for debugging invisible gate issue
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Gate System] Gate created: color=0x${gateColor.toString(16).toUpperCase()}, alpha=${gateConfig.alpha}, zIndex=${gateConfig.zIndex}, size=${Math.round(gateWidth)}x${Math.round(gateDepth)}`);
                 }
             }
         }
@@ -5513,6 +5636,31 @@ console.log('Phaser main loaded');
             }
 
             return false; // No collision
+        }
+
+        checkGateCollision(position) {
+            // Check if player collides with any deadly gates
+            if (!this.gates || !Array.isArray(this.gates)) return;
+
+            const playerRadius = 20; // Same radius as wall collision
+
+            for (const gate of this.gates) {
+                if (!gate.isDeadly) continue; // Only check deadly gates
+
+                // Calculate distance from position to gate center
+                const dx = Math.abs(position.x - gate.x);
+                const dy = Math.abs(position.y - gate.y);
+
+                // Check if within collision bounds
+                const halfWidth = gate.width / 2 + playerRadius;
+                const halfHeight = gate.height / 2 + playerRadius;
+
+                if (dx <= halfWidth && dy <= halfHeight) {
+                    // Player hit a deadly gate - trigger death
+                    this.playerState.deathCause = "Patient died from electrocution by force field.";
+                    return; // Exit early since player is dead
+                }
+            }
         }
 
         showNewGameConfirmation() {
@@ -5639,6 +5787,18 @@ console.log('Phaser main loaded');
             if (this.biomeDebugTexts) {
                 for (const debugText of this.biomeDebugTexts) {
                     debugText.setVisible(window.villagerDebugEnabled);
+                }
+            }
+
+            // Update gate debug texts
+            if (this.gates && Array.isArray(this.gates)) {
+                for (const gate of this.gates) {
+                    if (gate._debugText) {
+                        gate._debugText.setVisible(window.villagerDebugEnabled);
+                        if (window.villagerDebugEnabled) {
+                            gate._debugText.setPosition(gate.x, gate.y - 20);
+                        }
+                    }
                 }
             }
 
@@ -6928,6 +7088,24 @@ console.log('Phaser main loaded');
                 storage: { x: campCenter.x + storageOffset.x, y: campCenter.y + storageOffset.y }
             };
         }
+
+        // Generate random position within a camp cell area
+        generateRandomCampPosition(campCenter) {
+            assert(campCenter && typeof campCenter.x === 'number' && typeof campCenter.y === 'number',
+                'Camp center must have valid x,y coordinates');
+
+            // Define camp cell radius (area where villager can spawn)
+            const campRadius = GameConfig.villager.spawn.campRadius;
+
+            // Generate random angle and distance from camp center
+            const angle = this.seededRandom.random() * Math.PI * 2;
+            const distance = this.seededRandom.randomRange(0, campRadius);
+
+            return {
+                x: campCenter.x + Math.cos(angle) * distance,
+                y: campCenter.y + Math.sin(angle) * distance
+            };
+        }
     }
     function getPhaserBarColor(type) {
         const colors = {
@@ -7129,10 +7307,17 @@ console.log('Phaser main loaded');
                 gridDebugInfo: null // Grid debug information
             };
 
+            // Don't initialize blocked grid immediately - wait for gates to be created
+            this.blockedGrid = null;
+            this.wallPartitions = null;
+        }
+
+        // Method to initialize the blocked grid after gates are created
+        initializeBlockedGridAfterGates() {
+            console.log(`[Pathfinder] Initializing blocked grid after gates are created...`);
+
             // Pre-calculate blocked grid cells
             this.initializeBlockedGrid();
-
-
         }
 
         // Convert world coordinates to grid coordinates
@@ -7187,7 +7372,18 @@ console.log('Phaser main loaded');
                     const worldPos = this.gridToWorld({ x: gridX, y: gridY });
 
                     // Check if the center of the grid cell is blocked by walls (using spatial partitioning)
-                    const isBlocked = this.checkWallCollisionOptimized(worldPos, this.gridSize / 2);
+                    const isBlockedByWalls = this.checkWallCollisionOptimized(worldPos, this.gridSize / 2);
+
+                    // Check if the center of the grid cell is blocked by deadly gates
+                    const isBlockedByDeadlyGates = this.checkDeadlyGateCollision(worldPos, this.gridSize / 2);
+
+                    // Grid cell is blocked if either walls or deadly gates block it
+                    const isBlocked = isBlockedByWalls || isBlockedByDeadlyGates;
+
+                    // Debug: Log when gates are blocking pathfinding
+                    if (isBlockedByDeadlyGates && window.summaryLoggingEnabled) {
+                        console.log(`[Pathfinder] Grid cell blocked by deadly gate at (${Math.round(worldPos.x)}, ${Math.round(worldPos.y)})`);
+                    }
 
                     this.blockedGrid[gridX][gridY] = isBlocked;
 
@@ -7367,10 +7563,69 @@ console.log('Phaser main loaded');
             return distanceSquared <= radius ** 2;
         }
 
+        // Check collision between a position and deadly gates
+        checkDeadlyGateCollision(position, radius) {
+            assert(position && typeof position.x === 'number' && typeof position.y === 'number',
+                'Position must have valid x,y coordinates for deadly gate collision check');
+            assert(typeof radius === 'number' && radius >= 0,
+                'Radius must be a non-negative number for deadly gate collision check');
+
+            // Get gates from the scene
+            const gates = this.scene.gates;
+            if (!gates || !Array.isArray(gates)) {
+                // If gates aren't available yet, return false (no blocking)
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Pathfinder] Gates not available yet for deadly gate collision check at (${Math.round(position.x)}, ${Math.round(position.y)})`);
+                }
+                return false;
+            }
+
+            // Debug: Log gate count occasionally
+            if (Math.random() < 0.0001 && window.summaryLoggingEnabled) {
+                const deadlyGates = gates.filter(g => g.isDeadly);
+                console.log(`[Pathfinder] Checking deadly gate collision with ${gates.length} total gates, ${deadlyGates.length} deadly gates`);
+            }
+
+            for (const gate of gates) {
+                assert(gate && typeof gate.x === 'number' && typeof gate.y === 'number',
+                    'Gate must have valid x,y coordinates');
+                assert(typeof gate.width === 'number' && typeof gate.height === 'number',
+                    'Gate must have valid width/height');
+                assert(typeof gate.isDeadly === 'boolean',
+                    'Gate must have isDeadly boolean property');
+
+                if (!gate.isDeadly) continue; // Only check deadly gates
+
+                // Calculate distance from position to gate center
+                const dx = Math.abs(position.x - gate.x);
+                const dy = Math.abs(position.y - gate.y);
+
+                // Check if within collision bounds
+                const halfWidth = gate.width / 2 + radius;
+                const halfHeight = gate.height / 2 + radius;
+
+                if (dx <= halfWidth && dy <= halfHeight) {
+                    // Debug: Log collision detection occasionally
+                    if (Math.random() < 0.001 && window.summaryLoggingEnabled) {
+                        console.log(`[Pathfinder] Deadly gate collision detected at (${Math.round(position.x)}, ${Math.round(position.y)}) with gate at (${Math.round(gate.x)}, ${Math.round(gate.y)})`);
+                    }
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         // Check if a grid cell is blocked by walls (using pre-calculated data)
         isGridCellBlocked(gridX, gridY) {
             assert(gridX >= 0 && gridX < this.gridWidth, 'Grid X out of bounds');
             assert(gridY >= 0 && gridY < this.gridHeight, 'Grid Y out of bounds');
+
+            // Check if blocked grid is initialized
+            if (!this.blockedGrid) {
+                console.warn('[Pathfinder] Blocked grid not initialized yet, treating cell as unblocked');
+                return false;
+            }
 
             // Use pre-calculated blocked grid
             return this.blockedGrid[gridX][gridY];
@@ -7694,12 +7949,6 @@ console.log('Phaser main loaded');
 
             return path;
         }
-
-
-
-
-
-
     }
 
     function getCurrentSeed() {
@@ -7771,6 +8020,11 @@ console.log('Phaser main loaded');
         assert(playerState.needs.calories >= GameConfig.needs.minValue && playerState.needs.calories <= GameConfig.needs.maxValue, 'Calories out of bounds');
     }
     function checkGameOver(playerState) {
+        // Check for custom death cause first (e.g., gate electrocution)
+        if (playerState.deathCause) {
+            return playerState.deathCause;
+        }
+
         const n = playerState.needs;
         if (n.temperature <= 0) return 'Patient died from hypothermia.';
         if (n.water <= 0) return 'Patient died from dehydration.';
