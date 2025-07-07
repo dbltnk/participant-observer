@@ -2310,6 +2310,22 @@ console.log('Phaser main loaded');
                 }
             }
 
+            // For fireRefill actions, if no target is set, find the villager's own fire
+            if (!target && actionType === 'fireRefill') {
+                target = this.villager.fireplace;
+                if (target && target.wood < GameConfig.fires.maxWood) {
+                    this.villager.hierarchicalAI.actionData.actionTargets = [target];
+                }
+            }
+
+            // For eat actions, if no target is set, find the nearest burning fire
+            if (!target && actionType === 'eat') {
+                target = this.findNearestBurningFire();
+                if (target) {
+                    this.villager.hierarchicalAI.actionData.actionTargets = [target];
+                }
+            }
+
             target = this.villager.hierarchicalAI.actionData.actionTargets[0];
             assert(target, `[ActionExecutor] ${this.villager.name} executeUseFacility: No target set for actionType=${actionType}`);
 
@@ -3766,9 +3782,12 @@ console.log('Phaser main loaded');
                     textObj.setInteractive({ useHandCursor: true });
                     textObj.on('pointerdown', () => {
                         if (entity.collected) return;
+
                         // Check player is near
                         const dist = GameUtils.distance(this.playerState.position, entity.position);
-                        assert(dist <= GameConfig.player.interactionThreshold, 'Tried to collect resource out of range');
+                        if (dist >= GameConfig.player.interactionThreshold) {
+                            return;
+                        }
 
                         // Use shared collection logic
                         const collectionSuccess = GameUtils.collectResource(entity, this.playerState.inventory, 'Player');
