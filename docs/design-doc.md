@@ -1,258 +1,99 @@
----
+# Participant Observer - Design Document
 
-## Game Design Document: Participant Observer
+## The Big Vision: Full Game
 
-### I. Core Concept
+**Setting:** Sci-fi survival mystery on an alien planet after civilization's collapse. Emergency escape pods scattered survivors across a hostile landscape. The player is stranded and must master both movement techniques and resource management to explore distant landmarks that reveal the planet's secrets and other survivors' fates.
 
-**V1 (Current):** The game centers on **sustainability** in a low-fantasy world inspired by the Alps. Players must manage their needs (temperature, water, calories, vitamins) while interacting with a shared, finite world. The core dynamic explores the tension between personal survival and the well-being of other inhabitants, with the implicit goal of not driving the environment out of balance. The game world is not small; it takes at least 5 minutes of walking to reach an edge.
+**Core Gameplay:** Players are attracted by far-away points of interest (like in Tears of the Kingdom) that reveal new background story. Progress requires mastering advanced nutrition, medicine crafting, terrain navigation, and water source mapping - knowledge shared by NPCs who have adapted to this hostile world.
 
-**V2 (Future):** The game evolves into a **mystery of survival** where players must learn through observation and experimentation. Every seed generates a unique world with different nutritional properties, poisonous plants, and survival strategies. The core gameplay becomes about **following your neighbors to learn from them** - observing what they eat, when they get sick, and why certain resources thrive or die out. Players must replay each seed multiple times to discover the secrets of survival and help their community thrive.
+**Social Learning:** This is fundamentally about learning from others instead of going it alone. Players first explore independently and fail, then learn to watch their neighbors and imitate successful strategies, then learn from neighbors when they actively teach, and ultimately surpass their neighbors' knowledge by innovating on their own. Later, this could expand to learning from other human players in a shared world.
 
-**V3 (Future):** The game expands into a **movement and crafting mystery** where players must master both physical navigation and resource transformation. Every seed generates unique terrain patterns, crafting recipes, and movement challenges. The core gameplay becomes about **learning movement patterns and crafting techniques from your neighbors** - observing how they navigate difficult terrain, what they craft and when, and why certain crafting combinations succeed or fail. Players must experiment with movement mastery and crafting discovery to unlock the secrets of both physical and technological survival.
+**Sustainability Requirement:** Interacting with the environment has a sustainability requirement - you can easily bring the ecosystem out of balance if you do not make sure to fit in. Over-harvesting, disrupting animal populations, or ignoring resource regeneration patterns can collapse the local environment, making survival impossible for everyone.
 
-**The Player Experience:** The player's journey follows a clear progression: first exploring independently and failing, then learning to watch their neighbors and imitate their successful strategies, then learning from neighbors when they actively teach, and ultimately surpassing their neighbors' knowledge and skills by innovating on their own. 
+**The Mystery:** Every seed generates a unique world with different nutritional properties, poisonous plants, terrain challenges, and survival strategies. Players must replay each seed multiple times to discover the secrets of survival and help their community thrive.
 
-**FULL GAME:** The experience expands into a sci-fi survival mystery where the player is stranded on a foreign planet after their civilization's collapse. Emergency escape pods scattered survivors across the alien landscape, and the player must master both movement techniques and resource management to explore distant landmarks that reveal the planet's secrets and other survivors' fates. Players are attracted by far away points of interest (like in Tears of the Kingdom) that reveal new background story. Progress requires mastering advanced nutrition, medicine crafting, terrain navigation, and water source mapping - knowledge shared by NPCs who have adapted to this hostile world. The journey culminates in discovering other human players' remnants (Death Stranding-style) and potentially finding living survivors, all while uncovering the tragic story of their civilization's exodus and the planet's mysterious properties that both threaten and sustain human life.
-
----
-
-### II. Technical Specifications
-
-* **Platform:** Widescreen computers and laptops.
-* **Input:** Mouse and keyboard (WASD for movement, mouse for interaction).
-* **Technology Stack:** HTML/CSS/JS with **Phaser 3** for game engine and rendering. All game objects are rendered as emoji text sprites using Phaser's text system. UI elements are handled through Phaser's native UI components.
-* **Game Session:** Single-player, single-session. No save or load functionality in V1.
-* **Random Seed:** Every game uses a random seed, displayed on-screen. V2 will allow loading games from a specific seed. An empty seed input will result in a random seed, which will then be displayed. Default seed is 23.
+**End Goal:** Discover other human players' remnants (Death Stranding-style) and potentially find living survivors, all while uncovering the tragic story of their civilization's exodus and the planet's mysterious properties that both threaten and sustain human life.
 
 ---
 
-### III. Game World & Environment
+## What We've Built: Representative Prototype
 
-* **Setting:** A low-fantasy world inspired by the Alps.
-* **Technology Level:** Pre-agricultural, low-tech. No magic.
-* **Visuals:**
-    * **V1:** All in-game objects rendered as **emojis** using Phaser 3 text sprites (simple, maintainable approach).
-    * **V2:** Pixel art with a slightly eerie, somber aesthetic. Color palette emphasizes darker, bluer, and less saturated tones, akin to *Gothic 1* with the greys and greens of the Alps.
-* **Map Structure:**
-    * **Village:** At the center with a communal well and a large communal storage box (size: 20).
-    * **Camps:** Seven camps surround the village. Each camp contains a fireplace, a sleeping bag, and a personal storage box (size: 4).
-    * **Wells:** Other wells are sparsely distributed across the map, approximately 2 minutes walking distance from each other and from the village.
-    * **Initial Map Size:** 3-4 screens width/height (configurable), expanding to 20+ screens in any direction for V2.
-* **Resource Generation:**
-    * **V1:** Three food plants of each type per villager (including the player) are randomly spawned in a general, believable pattern (Perlin noise) outside the village. Trees are also present and can be harvested for wood.
-    * **V2:** Biomes will be introduced for more detailed distribution.
-    * **Resource Cap:** Global cap of 10 animals and 10 plants per villager for now.
-    * **Spawn & Spread:** Animals and plants spawn near the village at low density, but in groups, slowly spreading out. The intent is a "decent stock but decreasing as I venture out" vibe.
-    * **Propagation:** If there are 2 plants or animals within a certain radius, they have a chance of spawning a third one overnight, but not if there are too many others nearby. This allows for slow growth into stability if the player does not intervene. The exact radius for propagation will be determined during development.
-* **Wells:** Limited capacity. Each well starts with 10 water portions and refills 1 unit every 2 hours. Wells scale up to 3x size as they fill (3 water = normal, 10 water = 3x). Wells fade out as they drop below 5 water, fully invisible at 0.
+### ✅ Core V2 Features Implemented
 
----
+**Procedural Nutrition per Seed**
+- Every seed generates different nutritional properties for all resources
+- What's healthy in one world might be poisonous in another
+- Players must learn through observation and experimentation
 
-### IV. Characters & Needs
+**Social Learning Foundation**
+- **Gates as Terrain Learning**: Deadly gates teach players about dangerous navigation through villager behavior
+- **Resource Collection Patterns**: Villagers show "Golden Rule" foraging (only collect when 3+ resources in area)
+- **Animal Speed Learning**: Animals have variable speeds - players learn which are catchable by watching villagers
+- **Water Source Discovery**: Players learn well locations and regeneration patterns from villager behavior
 
-* **Player Character:** You spawn next to your camp.
-* **Villagers:**
-    * Seven villagers, one per camp (excluding the player's camp). Each villager has a randomly generated first name from a 100-long list.
-    * Villagers have the same hidden needs (temperature, water, calories, vitamins) as the player.
-    * Villagers die when any of their hidden bars reach zero. Their **corpse** remains at the location of death and does not decompose.
-    * Their name and **happiness/health emoji** will float above them.
-    * **Memory System:** Villagers remember where they found resources and will return to known locations. They only explore new areas when they don't know of any food in their current area. Each villager starts with knowledge of some nearby food sources.
-* **Needs (Player & Villagers):**
-    * **Temperature:** Increases slowly during the day, decreases quickly at night unless near a burning fire, where it also increases back to full.
-    * **Water:** Can only be drunk directly from wells. Cannot be carried.
-    * **Calories:** Depleted by activity.
-    * **Vitamins (A-E):** Five distinct vitamins. Each food type provides some calories and 1-2 specific vitamins. To meet all vitamin needs, a player will need to find at least 4 different food types per day.
-* **Game End Condition:** The game ends when any of the player's visible bars (temperature, water, calories, vitamins) reaches zero. The game does NOT end if all other villagers die. If multiple bars reach zero simultaneously, the exact trigger does not matter; the player is considered dead.
+**Advanced Villager AI**
+- **Hierarchical State Machine**: 4 goals (survive, maintain, contribute, rest) with complex decision making
+- **Emergency vs Regular Behavior**: Different thresholds trigger different survival strategies
+- **Resource Memory**: Villagers remember successful locations and return to known areas
+- **Collection Batching**: Smart resource gathering with batch sizes and target invalidation
 
----
+**World Generation & Navigation**
+- **A* Pathfinding**: Full navigation system with grid-based pathfinding and collision detection
+- **Biome System**: 7 biomes with temperature-based resource spawning
+- **Wall & Gate System**: Procedural walls with deadly gates for terrain learning
+- **Line of Sight**: Fog of war system that hides distant areas
 
-### V. Gameplay Mechanics
+**Professional UI/UX**
+- **Intro Scene**: Sci-fi survival mystery with planet names and survivor logs
+- **Outro Scene**: Detailed death screen with vital signs and cause of death
+- **Smoke Indicator**: Directional pointer to distant points of interest
+- **Debug Visualization**: Pathfinding and system state visualization
 
-* **Movement:**
-    * **V1:** WASD for movement with basic collision detection. Villagers use directional movement with simple obstacle avoidance.
-    * **V2:** Blockers and basic pathfinding for villagers.
-* **Interaction:**
-    * **Left-click:** Collect/use.
-    * **Right-click:** Secondary action (e.g., eating when near a fire).
-    * If a player attempts to use a sleeping bag, fireplace, or other resource that is occupied by a villager, the interaction will result in a "busy" message.
-* **Inventory:** Minecraft-style hotbar, size 6, at the bottom of the screen. Simple click-to-move between inventory and storage boxes (no drag & drop).
-* **Resources:**
-    * **Food:** 10 categories of food, including specific examples like Blackberries and Rabbits.
-    * Animals run away from players and other villagers at 80% movement speed.
-    * Food can only be eaten when near a burning fire. You cannot eat if too far away from a burning fire.
-    * **Wood:** Harvested from trees, works like any other plant resource. Used to fuel fires.
-* **Fires:**
-    * Require wood to burn (1 wood every 6 in-game hours).
-    * Can store a maximum of 10 wood.
-    * Start with 7-9 logs randomly when world is generated.
-    * Scale up to 2x size as wood increases from 0 to 10.
-    * Fade out as wood drops below 3, fully invisible at 0.
-    * A fire that runs out of wood cannot be rekindled ever.
-* **Sleeping:** At your sleeping bag, you can "sleep," which speeds up time until 08:00, passing within 10 seconds.
-* **Storage Boxes:** All personal and communal storage boxes are available to both the player and all villagers. However, villagers prioritize their own box for both storing and retrieving items and will not "rob" the player unless necessary. If a villager's personal storage box and the communal box are both full, excess resources will remain in their inventory for consumption if needed.
+### ❌ V2 Features We Left Out
+
+**Villager Learning & Teaching**
+- No villager memory of what made them sick
+- No visible symptoms from poisonous food
+- No villagers learning from each other's successes/failures
+- No personality traits affecting survival strategies
+- No active teaching from villagers to players
+
+**Advanced Resource System**
+- No seasonal changes affecting resource availability
+- No dynamic nutrition based on preparation method
+- No poisonous variants that look identical to safe ones
+- No complex growth patterns based on environmental factors
+
+**Knowledge System**
+- No observation journal for players
+- No hypothesis testing mechanics
+- No community knowledge sharing
+- No discovery rewards for optimal strategies
+
+**Conversation System**
+- No LLM-driven chat with NPCs
+- No way to ask villagers about their strategies
 
 ---
 
-### VI. Villager AI & Routines
+## Technical Foundation
 
-* **Daily Routine:**
-    * Driven by a **real-time clock** that also controls the time of day visually (blue-ish and darker at night, with transitions in the morning and evening).
-    * **Time Scale:** 1 game day = 10 minutes real time (massively accelerated).
-    1.  **Wake up:** 08:00
-    2.  **Eat and drink** (if needed).
-    3.  **Forage:** Go into the wilderness to forage for both food (to maximize carrying capacity, up to 4 food items) and wood (always bringing a maximum of 2 wood, leaving at least one inventory slot for wood).
-    4.  **Return to camp:** 18:00 (or earlier if all slots are full). They will go home even if empty or half-empty at 18:00.
-    5.  **Eat and drink** (if needed).
-    6.  **Restock Fire:** Put 1 wood into their camp's fireplace.
-    7.  **Sleep.**
-* **Resource Management:**
-    * Villagers are "smart": they prefer their own personal storage box, sleeping bag, and fireplace. If these are unavailable (e.g., already in use by another villager), they will attempt to use another nearby one. Each can only be used by one villager at a time.
-    * After eating at night, villagers will place any leftover resources from their personal inventory into their personal storage box (size: 4).
-    * Any other resources will be placed into the communal storage box (size: 20).
-* **AI Update Frequency:** Every frame for V1 (can be optimized later).
+**Platform:** Widescreen computers/laptops with mouse/keyboard input
+**Engine:** HTML/CSS/JS with Phaser 3, emoji-based rendering
+**Architecture:** Config-driven with comprehensive logging and assert system
+**Performance:** Spatial partitioning, update intervals, caching optimizations
+
+**Key Systems:**
+- Seeded random generation for consistent worlds
+- Hierarchical AI with goal-action state machines
+- A* pathfinding with collision detection
+- Procedural resource generation with nutrition per seed
+- Comprehensive config system (851 lines in GameConfig.js)
 
 ---
 
-### VII. User Interface (UI)
+## Current Status: V1.5
 
-* **Top Right:** Current day, current time, temperature display (freezing/cold/moderate/warm/hot), "**Neighbours: x**" (counts only living villagers).
-* **Top Left:** Bars for Temperature, Water, Calories, and 5 Vitamins (A to E) - instant updates, no animations.
-* **Bottom:** Player inventory hotbar (Minecraft style, size 6).
-* **Bottom Right:** Seed selection UI.
-    * Defaults to a fixed seed (23).
-    * Allows any integer input.
-    * Leaving empty selects a random seed (displayed for the next game).
-    * "New Game" button next to it.
+We've built a **survival game with advanced AI and world generation** that includes many V2 learning mechanics. The foundation for "learning through observation" is there - players can learn from villager behavior about gates, resources, and navigation. However, we're missing the deeper mystery elements and villager teaching systems that would make it a true "detective game disguised as survival."
 
----
-
-### VIII. Game Dynamic & Vibe
-
-* **V1 Expected Dynamic:** The player attempts to survive by any means, which can inadvertently lead to the demise of other villagers (through resource depletion from communal/personal boxes or over-harvesting of plants and animals).
-* **V1 Vibe:** Slightly eerie, somber. More purgatory than a full-on fight for survival or a happy fantasy adventure.
-
-* **V2 Expected Dynamic:** The player becomes a **detective of survival**, observing patterns in villager behavior, resource growth, and environmental changes. Each seed presents unique challenges that require multiple playthroughs to understand. The goal shifts from simple survival to **community sustainability through knowledge**.
-* **V2 Vibe:** Mysterious, contemplative. A puzzle game disguised as a survival game, where the real challenge is understanding the world's hidden rules.
-
----
-
-### IX. Implementation Philosophy
-
-* **Dead-simple approach:** Prioritize readability and maintainability over optimization. Optimize only when needed.
-* **Minimal project structure:** Separate code into logical modules but avoid over-engineering.
-* **Basic error handling:** Use assert-like error logs for unexpected states.
-* **Configurable parameters:** Make key values easily adjustable for balancing.
-
----
-
-### X. Future Enhancements (V2)
-
-#### Core V2 Concept: "Learning Through Observation"
-
-**The Mystery of Survival:**
-* **Procedural Nutrition:** Every seed generates different nutritional properties for all resources. What's healthy in one world might be poisonous in another.
-* **Villager Behavior Patterns:** Villagers develop unique eating habits and survival strategies based on what works in their world. Players must observe these patterns to learn.
-* **Environmental Clues:** Resource growth rates, animal behavior, and seasonal changes provide hints about what's safe to eat and when.
-* **Multiple Playthroughs Required:** Each seed requires 3-5 playthroughs to fully understand the survival mechanics of that specific world.
-
-**Enhanced Villager AI:**
-* **Learning Villagers:** Villagers remember what made them sick and what kept them healthy, developing preferences over time.
-* **Behavioral Clues:** Villagers show visible symptoms when eating poisonous food, helping players identify dangerous resources.
-* **Social Learning:** Villagers can learn from each other's successes and failures, creating emergent survival strategies.
-* **Personality Traits:** Each villager has unique risk tolerance and learning speed, affecting their survival strategies.
-
-**Advanced Resource System:**
-* **Dynamic Nutrition:** Food properties change based on season, location, and preparation method.
-* **Poisonous Variants:** Some resources have poisonous variants that look identical to safe ones.
-* **Growth Patterns:** Resources grow and die based on complex environmental factors that players must learn to predict.
-* **Seasonal Changes:** Different resources become available or dangerous based on the time of year.
-
-**Knowledge System:**
-* **Observation Journal:** Players can record observations about villager behavior and resource properties.
-* **Hypothesis Testing:** Players can test theories about what's safe to eat by observing villager reactions.
-* **Community Knowledge:** Successful strategies can be shared with villagers through specific actions.
-* **Discovery Rewards:** Finding the optimal survival strategy for a seed unlocks special insights.
-
-**Conversation System:**
-* **LLM-driven chat:** You can talk to NPCs to learn about what they are doing and why. They might not always have all information or understand exactly why they are doing things but they will not lie to you either.
-
-**Technical Enhancements:**
-* Ability to load a game from a specific random seed.
-* Pixel art visuals and refined color palettes.
-* Music and SFX.
-* Collision detection for movement.
-* Basic pathfinding for villagers.
-* Biomes with unique environmental rules.
-* Expanded map size (20+ screens in any direction).
-* Advanced UI for observation and note-taking.
-* Replay system to review past attempts at the same seed.
-
-**V2 Success Metrics:**
-* Players willingly replay the same seed multiple times to discover its secrets.
-* Emergent storytelling through villager behavior and community survival.
-* Each seed feels like a unique puzzle to solve rather than a generic survival challenge.
-* Players develop genuine attachment to their villagers and community.
-
----
-
-### XI. V1 vs V2 Comparison
-
-| Aspect | V1 (Current) | V2 (Future) |
-|--------|--------------|-------------|
-| **Core Goal** | Survive and manage resources | Learn the world's secrets through observation |
-| **Replayability** | Different seeds = different layouts | Same seed = multiple playthroughs to understand |
-| **Villager Role** | Resource competition and community management | Teachers and subjects of observation |
-| **Resource System** | Fixed nutritional properties | Procedurally generated properties per seed |
-| **Player Agency** | Direct survival actions | Detective work and hypothesis testing |
-| **Success Condition** | Survive as long as possible | Discover optimal survival strategy for the community |
-| **Learning Curve** | Learn game mechanics once | Learn unique world rules for each seed |
-| **Emotional Investment** | Resource management tension | Community building and discovery satisfaction |
-
----
-
-### XII. V3 Future Vision: "Learning Movement & Crafting"
-
-**The Mystery of Navigation:**
-* **Terrain Mastery:** Every seed generates unique terrain patterns, obstacles, and movement challenges. Players must observe how villagers navigate efficiently to learn optimal paths.
-* **Movement Clues:** Villagers develop unique traversal strategies based on terrain type, weather conditions, and resource locations. Players learn by watching their pathfinding decisions.
-* **Environmental Navigation:** Different terrain types (swamps, mountains, dense forests) require different movement techniques that villagers discover through trial and error.
-* **Multiple Playthroughs Required:** Each seed's terrain requires 3-5 playthroughs to fully understand the optimal movement strategies.
-
-**Enhanced Movement Learning:**
-* **Villager Pathfinding:** Villagers remember successful routes and avoid dangerous terrain, developing efficient movement patterns over time.
-* **Movement Clues:** Villagers show visible signs when they discover new efficient paths or encounter movement obstacles.
-* **Social Movement Learning:** Villagers can learn from each other's successful navigation strategies, creating emergent pathfinding knowledge.
-* **Movement Personality:** Each villager has unique movement preferences and risk tolerance for different terrain types.
-
-**Advanced Crafting System:**
-* **Dynamic Crafting:** Crafting recipes and material properties change based on seed, terrain, and environmental conditions.
-* **Crafting Discovery:** Players must observe villager crafting behavior to learn what materials work best in each world.
-* **Terrain-Specific Tools:** Different terrain types require different tools and crafting approaches that villagers discover through experimentation.
-* **Seasonal Crafting:** Crafting materials and techniques change based on the time of year and environmental conditions.
-
-**Movement & Crafting Knowledge System:**
-* **Navigation Journal:** Players can record observations about villager movement patterns and terrain traversal.
-* **Crafting Hypothesis Testing:** Players can test theories about optimal crafting by observing villager tool usage and success rates.
-* **Community Movement Knowledge:** Successful navigation strategies can be shared with villagers through specific actions.
-* **Crafting Discovery Rewards:** Finding optimal movement and crafting strategies for a seed unlocks special insights.
-
-**V3 Success Metrics:**
-* Players willingly replay the same seed multiple times to discover optimal movement and crafting strategies.
-* Emergent pathfinding and crafting knowledge through villager behavior observation.
-* Each seed feels like a unique navigation and crafting puzzle to solve.
-* Players develop genuine attachment to their villagers' movement and crafting expertise.
-
----
-
-### XIII. V1 vs V2 vs V3 Comparison
-
-| Aspect | V1 (Current) | V2 (Future) | V3 (Future) |
-|--------|--------------|-------------|-------------|
-| **Core Goal** | Survive and manage resources | Learn the world's secrets through observation | Learn movement and crafting through observation |
-| **Replayability** | Different seeds = different layouts | Same seed = multiple playthroughs to understand survival | Same seed = multiple playthroughs to understand movement & crafting |
-| **Villager Role** | Resource competition and community management | Teachers and subjects of observation | Movement and crafting teachers |
-| **Resource System** | Fixed nutritional properties | Procedurally generated properties per seed | Procedurally generated terrain and crafting properties per seed |
-| **Player Agency** | Direct survival actions | Detective work and hypothesis testing | Movement and crafting detective work |
-| **Success Condition** | Survive as long as possible | Discover optimal survival strategy for the community | Discover optimal movement and crafting strategies |
-| **Learning Curve** | Learn game mechanics once | Learn unique world rules for each seed | Learn unique terrain and crafting rules for each seed |
-| **Emotional Investment** | Resource management tension | Community building and discovery satisfaction | Movement mastery and crafting discovery satisfaction |
+The prototype successfully demonstrates the core social learning concept while maintaining the technical foundation needed for the full vision.
