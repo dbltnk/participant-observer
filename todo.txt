@@ -13,15 +13,13 @@ x reproduction is possible if there are 2 of a type in a biome
 x force villager states for debug
 x villager have perfect knowledge of what to eat (not poisonous, not too fast)
 x villagers never take the last 2 of any type in a biomes
-
-check why villagers stop contributing when they have 1+ food and 1+ burnable in inventory
-make sure replication and max cap works
 x add topology: biome walls
-pathfinding: fleeing mobs and NPCs
-line of sight
-
 x seed via domain parameter, else random
 X intro screen, if no seed
 x outro screen death reasons
 x pointers to the edge of the world
+pathfinding: fleeing mobs and NPCs
+line of sight
 random color gates kill you, NPCs know about them
+check why villagers stop contributing when they have 1+ food and 1+ burnable in inventory
+make sure replication and max cap works

@@ -6189,52 +6189,31 @@ console.log('Phaser main loaded');
         }
 
         updateSmokeIndicator() {
-            // Calculate direction from player to smoke location
-            const playerPos = this.playerState.position;
-            const smokePos = this.smokeLocation;
+            // Always point to 135 degrees (southeast)
+            const angle = Math.PI * 0.25;
 
-            const dx = smokePos.x - playerPos.x;
-            const dy = smokePos.y - playerPos.y;
-            const angle = Math.atan2(dy, dx);
-
-            // Calculate arrow position on screen edge (20 pixels from edge)
+            // Always place in bottom-right quadrant for simplicity
             const screenWidth = window.innerWidth;
             const screenHeight = window.innerHeight;
-            const edgeMargin = 40;
+            const margin = GameConfig.smokeIndicator.edgeMargin;
             const arrowSize = GameConfig.smokeIndicator.arrowSize;
 
-            // Determine which edge the arrow should be on based on angle
-            let edgeX, edgeY;
+            // Fixed position in bottom-right corner
+            const edgeX = screenWidth - margin;
+            const edgeY = screenHeight - margin;
 
-            // Convert angle to degrees for easier edge determination
-            const angleDegrees = (angle * 180 / Math.PI + 360) % 360;
-
-            // Restrict to between south (180°) and east (90°) - only bottom and right edges
-            if (angleDegrees >= 90 && angleDegrees < 180) {
-                // Bottom edge (south direction)
-                edgeX = screenWidth / 2 + Math.tan(angle - Math.PI / 2) * (screenHeight / 2 - edgeMargin);
-                edgeY = screenHeight - edgeMargin;
-            } else {
-                // Right edge (east direction)
-                edgeX = screenWidth - edgeMargin;
-                edgeY = screenHeight / 2 + Math.tan(angle) * (screenWidth / 2 - edgeMargin);
-            }
-
-            // Clamp to screen bounds
-            edgeX = Math.max(edgeMargin, Math.min(screenWidth - edgeMargin, edgeX));
-            edgeY = Math.max(edgeMargin, Math.min(screenHeight - edgeMargin, edgeY));
 
             // Update arrow position and rotation
             this.smokeArrow.clear();
             this.smokeArrow.lineStyle(3, GameConfig.smokeIndicator.arrowColor, GameConfig.smokeIndicator.arrowAlpha);
             this.smokeArrow.fillStyle(GameConfig.smokeIndicator.arrowColor, GameConfig.smokeIndicator.arrowAlpha);
 
-            // Draw arrow triangle pointing toward the edge of the screen
+            // Draw arrow triangle pointing in the direction of smoke
             const arrowLength = arrowSize;
             const arrowWidth = arrowSize * 0.6;
 
-            // Arrow points toward the edge (opposite of smoke direction)
-            const arrowAngle = angle + Math.PI;
+            // Arrow points toward smoke direction
+            const arrowAngle = angle;
 
             // Calculate arrow points
             const tipX = edgeX + Math.cos(arrowAngle) * arrowLength;
@@ -6255,19 +6234,9 @@ console.log('Phaser main loaded');
             this.smokeArrow.fill();
             this.smokeArrow.stroke();
 
-            // Position text inside the screen, to the left/up of the arrow
-            const textOffset = arrowSize + 30;
-            let textX, textY;
-
-            if (angleDegrees >= 90 && angleDegrees < 180) {
-                // Bottom edge - text above and to the left
-                textX = edgeX - 15;
-                textY = edgeY - textOffset;
-            } else {
-                // Right edge - text to the left
-                textX = edgeX - textOffset;
-                textY = edgeY - 5;
-            }
+            // Position text to the left and above the arrow
+            const textX = edgeX - arrowSize - 20;
+            const textY = edgeY - arrowSize + 10;
 
             this.smokeText.setPosition(textX, textY);
         }

@@ -763,7 +763,7 @@ window.GameConfig = {
         distanceMultiplier: 3,
 
         // Edge positioning settings
-        edgeMargin: 5, // Distance from screen edge
+        edgeMargin: 40, // Distance from screen edge
         arrowSize: 20, // Size of the arrow sprite
 
         // Visual settings
