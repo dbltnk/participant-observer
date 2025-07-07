@@ -1018,11 +1018,20 @@ console.log('Phaser main loaded');
                 return false;
             }
 
+            // Check if well has sufficient water (minimum 1.0 unit)
+            if (well.waterLevel < 1.0) {
+                console.warn(`[Villager] ${this.name} tried to drink from empty well`);
+                return false;
+            }
+
             // Restore water need
             assert(GameConfig.player.wellWaterRestore !== undefined, 'GameConfig.player.wellWaterRestore is missing - check GameConfig.js');
             this.needs.water = Math.min(GameConfig.needs.fullValue, this.needs.water + GameConfig.player.wellWaterRestore);
 
-            console.log(`[Villager] ${this.name} drank from well at (${Math.round(well.position.x)}, ${Math.round(well.position.y)})`);
+            // Reduce well water level (same as player system)
+            well.waterLevel = Math.max(0, well.waterLevel - 1);
+
+            console.log(`[Villager] ${this.name} drank from well at (${Math.round(well.position.x)}, ${Math.round(well.position.y)}) - water level now: ${well.waterLevel}`);
             return true;
         }
 
