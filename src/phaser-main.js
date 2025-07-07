@@ -3482,6 +3482,7 @@ console.log('Phaser main loaded');
         constructor() {
             super({ key: 'MainScene' });
             this.lastPropagationDay = -1; // Track last propagation day to prevent duplicates
+            this.gates = []; // Array to store all gates for future use
         }
         preload() { }
         create() {
@@ -5407,6 +5408,71 @@ console.log('Phaser main loaded');
                     };
 
                     this.walls.push(wallData);
+                }
+            }
+
+            // Create gates at each opening if enabled
+            if (GameConfig.walls.gates.enabled && openings.length > 0) {
+                this.createGatesAtOpenings(wallX, wallY, wallLength, wallHeight, openings, direction);
+            }
+        }
+
+        createGatesAtOpenings(wallX, wallY, wallLength, wallHeight, openings, direction) {
+            assert(GameConfig.walls.gates, 'Gate configuration is required');
+            assert(openings && openings.length > 0, 'Openings array must be provided and non-empty');
+            assert(direction === 'horizontal' || direction === 'vertical', 'Direction must be horizontal or vertical');
+
+            const gateConfig = GameConfig.walls.gates;
+
+            for (const opening of openings) {
+                assert(opening.start >= 0, 'Opening start must be non-negative');
+                assert(opening.end > opening.start, 'Opening end must be greater than start');
+                assert(opening.end <= wallLength, 'Opening end must not exceed wall length');
+
+                // Calculate gate dimensions
+                const openingWidth = opening.end - opening.start;
+                const gateWidth = openingWidth; // Gate width matches opening width
+                const gateDepth = wallHeight * gateConfig.depthRatio; // Half the wall depth
+
+                // Calculate gate position
+                let gateX, gateY;
+                if (direction === 'horizontal') {
+                    // Horizontal walls: X varies along wall, Y spans the boundary
+                    gateX = wallX + opening.start + openingWidth / 2;
+                    gateY = wallY;
+                } else {
+                    // Vertical walls: Y varies along wall, X spans the boundary
+                    gateX = wallX;
+                    gateY = wallY + opening.start + openingWidth / 2;
+                }
+
+                // Create gate rectangle
+                const gate = this.add.rectangle(
+                    gateX,
+                    gateY,
+                    direction === 'horizontal' ? gateWidth : gateDepth,
+                    direction === 'horizontal' ? gateDepth : gateWidth,
+                    gateConfig.color
+                ).setOrigin(0.5)
+                    .setDepth(gateConfig.zIndex)
+                    .setAlpha(gateConfig.alpha);
+
+                // Store gate data for future use
+                const gateData = {
+                    x: gateX,
+                    y: gateY,
+                    width: direction === 'horizontal' ? gateWidth : gateDepth,
+                    height: direction === 'horizontal' ? gateDepth : gateWidth,
+                    direction: direction,
+                    opening: opening,
+                    visual: gate
+                };
+
+                this.gates.push(gateData);
+
+                // Debug: Log gate creation occasionally
+                if (Math.random() < 0.01 && window.summaryLoggingEnabled) {
+                    console.log(`[Gate System] Created ${direction} gate at (${Math.round(gateX)}, ${Math.round(gateY)}) with size ${Math.round(direction === 'horizontal' ? gateWidth : gateDepth)}x${Math.round(direction === 'horizontal' ? gateDepth : gateWidth)}`);
                 }
             }
         }

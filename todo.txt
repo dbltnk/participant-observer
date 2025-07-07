@@ -20,7 +20,7 @@ x outro screen death reasons
 x pointers to the edge of the world
 x pathfinding: NPCs
 line of sight
-x do not spawn villagers in walls
+x do not spawn villagers and wells in walls
 random color gates kill you, NPCs know about them
 check why villagers stop contributing when they have 1+ food and 1+ burnable in inventory
 make sure replication and max cap works

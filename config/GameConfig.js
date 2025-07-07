@@ -607,6 +607,16 @@ window.GameConfig = {
         mountainHeight: { min: 200, max: 600 }, // Random height range for mountain segments
         mountainWidth: { min: 200, max: 600 }, // Random width range for mountain segments
         mountainMargin: 50, // Margin from cell edges for mountain placement
+
+        // Gates
+        gates: {
+            enabled: true, // Whether to create gates at wall openings
+            color: 0xFFFFFF, // White gates
+            depthRatio: 0.5, // Gate depth as ratio of wall depth (0.5 = half depth)
+            overlapRatio: 0.5, // Gate overlap with biomes as ratio (0.5 = half overlap)
+            zIndex: -11, // Z-index for gates (above ground)
+            alpha: 1, // Gate opacity
+        },
     },
 
     // Navigation settings - A* pathfinding system
