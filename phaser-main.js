@@ -1716,6 +1716,24 @@ console.log('Phaser main loaded');
                         this.actionData.actionTargets = [];
                         this.transitionAction(ACTION_STATES.USE_FACILITY);
                         this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
+                    } else if (actionType === 'eat' && this.collectionManager.hasFoodInInventory()) {
+                        // Special case: If we want to eat and already have food in inventory, go directly to facility
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} EAT_DIRECT: Already have food in inventory, going directly to fire`);
+                        }
+                        // Clear action targets for facility-based actions to prevent using old targets
+                        this.actionData.actionTargets = [];
+                        this.transitionAction(ACTION_STATES.USE_FACILITY);
+                        this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
+                    } else if (actionType === 'fireRefill' && this.collectionManager.hasWoodInInventory()) {
+                        // Special case: If we want to refill fire and already have wood in inventory, go directly to facility
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} FIREREFILL_DIRECT: Already have wood in inventory, going directly to fire`);
+                        }
+                        // Clear action targets for facility-based actions to prevent using old targets
+                        this.actionData.actionTargets = [];
+                        this.transitionAction(ACTION_STATES.USE_FACILITY);
+                        this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
                     } else {
                         // Start action sequence for resource-based actions
                         this.startNewActionSequence(); // Clear data when starting new sequence
@@ -1742,6 +1760,24 @@ console.log('Phaser main loaded');
                         this.actionData.actionTargets = [];
                         this.transitionAction(ACTION_STATES.USE_FACILITY);
                         this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
+                    } else if (actionType === 'eat' && this.collectionManager.hasFoodInInventory()) {
+                        // Special case: If we want to eat and already have food in inventory, go directly to facility
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} EAT_DIRECT: Already have food in inventory, going directly to fire`);
+                        }
+                        // Clear action targets for facility-based actions to prevent using old targets
+                        this.actionData.actionTargets = [];
+                        this.transitionAction(ACTION_STATES.USE_FACILITY);
+                        this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
+                    } else if (actionType === 'fireRefill' && this.collectionManager.hasWoodInInventory()) {
+                        // Special case: If we want to refill fire and already have wood in inventory, go directly to facility
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} FIREREFILL_DIRECT: Already have wood in inventory, going directly to fire`);
+                        }
+                        // Clear action targets for facility-based actions to prevent using old targets
+                        this.actionData.actionTargets = [];
+                        this.transitionAction(ACTION_STATES.USE_FACILITY);
+                        this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
                     } else {
                         // Check if we found a target
                         if (this.actionData.actionTargets.length > 0) {
@@ -1755,20 +1791,39 @@ console.log('Phaser main loaded');
                     break;
 
                 case ACTION_STATES.MOVE_TO_RESOURCE:
-                    // Check if we're close enough to interact
-                    if (this.actionData.actionTargets.length > 0) {
-                        const target = this.actionData.actionTargets[0];
-                        if (GameUtils.isWithinInteractionDistance(this.villager.position, target.position, GameConfig.player.interactionThreshold)) {
-                            this.transitionAction(ACTION_STATES.COLLECT_RESOURCE);
-                            this.actionExecutor.executeCollectResource(deltaTime, entities, storageBoxes);
-                        } else {
-                            // Keep moving
-                            this.actionExecutor.executeMoveToResource(deltaTime, entities, storageBoxes);
+                    // Check if we already have the resource we need in inventory (optimization)
+                    if (actionType === 'eat' && this.collectionManager.hasFoodInInventory()) {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} EAT_DIRECT: Already have food in inventory, going directly to fire`);
                         }
+                        // Clear action targets for facility-based actions to prevent using old targets
+                        this.actionData.actionTargets = [];
+                        this.transitionAction(ACTION_STATES.USE_FACILITY);
+                        this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
+                    } else if (actionType === 'fireRefill' && this.collectionManager.hasWoodInInventory()) {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} FIREREFILL_DIRECT: Already have wood in inventory, going directly to fire`);
+                        }
+                        // Clear action targets for facility-based actions to prevent using old targets
+                        this.actionData.actionTargets = [];
+                        this.transitionAction(ACTION_STATES.USE_FACILITY);
+                        this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
                     } else {
-                        // Target lost, go back to finding
-                        this.transitionAction(ACTION_STATES.FIND_RESOURCES);
-                        this.actionExecutor.executeFindResources(actionType, deltaTime, entities, storageBoxes, isEmergency);
+                        // Check if we're close enough to interact
+                        if (this.actionData.actionTargets.length > 0) {
+                            const target = this.actionData.actionTargets[0];
+                            if (GameUtils.isWithinInteractionDistance(this.villager.position, target.position, GameConfig.player.interactionThreshold)) {
+                                this.transitionAction(ACTION_STATES.COLLECT_RESOURCE);
+                                this.actionExecutor.executeCollectResource(deltaTime, entities, storageBoxes);
+                            } else {
+                                // Keep moving
+                                this.actionExecutor.executeMoveToResource(deltaTime, entities, storageBoxes);
+                            }
+                        } else {
+                            // Target lost, go back to finding
+                            this.transitionAction(ACTION_STATES.FIND_RESOURCES);
+                            this.actionExecutor.executeFindResources(actionType, deltaTime, entities, storageBoxes, isEmergency);
+                        }
                     }
                     break;
 

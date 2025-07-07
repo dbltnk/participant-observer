@@ -10,9 +10,10 @@ x grid cells are tagged as biomes
 x exclude the center as village biome
 x some animals are faster
 x reproduction is possible if there are 2 of a type in a biome
-force villager states for debug
-villager have perfect knowledge of what to eat (not poisonous, not too fast)
-villagers never take the last 2 of any type in a biomes
-make sure max cap works
-villager states debug
+x force villager states for debug
+x villager have perfect knowledge of what to eat (not poisonous, not too fast)
+x villagers never take the last 2 of any type in a biomes
+
+check why villagers stop contributing when they have 1+ food and 1+ burnable in inventory
+make sure replication and max cap works
 add topology: biome walls
