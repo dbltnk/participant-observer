@@ -647,7 +647,6 @@ console.log('Phaser main loaded');
             };
 
             // Apply decay based on config values
-            if (isNight) this.needs.temperature -= this.dailyDecay.temperature * inGameMinutes;
             this.needs.water -= this.dailyDecay.water * inGameMinutes;
             this.needs.calories -= this.dailyDecay.calories * inGameMinutes;
 
@@ -655,6 +654,7 @@ console.log('Phaser main loaded');
                 this.needs.vitamins[i] -= this.dailyDecay.vitamins * inGameMinutes;
             }
 
+            let isNearFire = false;
             // Apply fire temperature effects for villagers (same as player)
             if (this.gameEntities) {
                 for (const entity of this.gameEntities) {
@@ -669,13 +669,16 @@ console.log('Phaser main loaded');
 
                             this.needs.temperature = Math.min(GameConfig.needs.fullValue, this.needs.temperature + temperatureGain);
 
-                            // Wood consumption is now handled globally in MainScene.applyFireTemperatureEffects()
-                            // No need to consume wood here to avoid double consumption
+                            isNearFire = true;
 
                             break; // Only apply from one fire
                         }
                     }
                 }
+            }
+
+            if (!isNearFire && isNight) {
+                this.needs.temperature -= this.dailyDecay.temperature * inGameMinutes;
             }
 
             // Clamp values to valid range with NaN protection
