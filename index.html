@@ -6,6 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Participant Observer</title>
 
+    <!-- Cache-busting meta tags -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
+    <!-- Version parameter for cache busting -->
+    <script>
+        // Add version parameter to force cache refresh
+        window.GAME_VERSION = Date.now();
+    </script>
+
     <!-- Early console capture - must be first! -->
     <script>
         // Capture ALL console output from the very beginning
@@ -129,9 +140,21 @@
     <div id="game-area"></div>
 
     <!-- Game Scripts -->
-    <script src="config/GameConfig.js"></script>
-    <script src="lib/phaser.js"></script>
-    <script src="phaser-main.js"></script>
+    <script>
+        // Dynamically load scripts with cache-busting parameters
+        const version = window.GAME_VERSION || Date.now();
+        const scripts = [
+            'config/GameConfig.js',
+            'lib/phaser.js',
+            'phaser-main.js'
+        ];
+
+        scripts.forEach(src => {
+            const script = document.createElement('script');
+            script.src = `${src}?v=${version}`;
+            document.body.appendChild(script);
+        });
+    </script>
 </body>
 
 </html>
