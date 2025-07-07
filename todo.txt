@@ -1,28 +1,3 @@
-x chunky cells
-x spawn by grid cell density
-x res have fire value
-x make biome list incl village
-x res are tagged to biomes
-x fix NPC visuals
-x download phaser3
-x res are proc genned
-x grid cells are tagged as biomes
-x exclude the center as village biome
-x some animals are faster
-x reproduction is possible if there are 2 of a type in a biome
-x force villager states for debug
-x villager have perfect knowledge of what to eat (not poisonous, not too fast)
-x villagers never take the last 2 of any type in a biomes
-x add topology: biome walls
-x seed via domain parameter, else random
-X intro screen, if no seed
-x outro screen death reasons
-x pointers to the edge of the world
-x pathfinding: NPCs
-xline of sight
-x do not spawn villagers and wells in walls
-xrandom color gates kill you, NPCs know about them
-
 bugs
 villagers ignore deadly gates in pathfinding
 villagers stop contributing when they have 1+ food and 1+ burnable in inventory
