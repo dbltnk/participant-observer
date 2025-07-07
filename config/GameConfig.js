@@ -39,7 +39,7 @@ window.GameConfig = {
         resourceVillageMinDistance: 512, // Minimum distance from village center for resources
         wellMinDistance: 2000, // Minimum distance between wells
         wellCount: 30, // Number of additional wells beyond village well
-        wellMaxAttempts: 50, // Maximum attempts to place a well
+        wellMaxAttempts: 500, // Maximum attempts to place a well
     },
 
     // Time settings - Controls how fast game time passes relative to real time

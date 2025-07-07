@@ -3767,27 +3767,40 @@ console.log('Phaser main loaded');
                     console.log(`[MainScene] Assigned facilities to ${villagerName}: personal storage at (${Math.round(personalStorageBox.position.x)}, ${Math.round(personalStorageBox.position.y)}), communal storage at (${Math.round(communalStorageBox.position.x)}, ${Math.round(communalStorageBox.position.y)})`);
                 }
             }
+
+            // Calculate number of tiles in the world (needed for well spawning)
+            const tileSize = GameConfig.world.tileSize;
+            const tilesX = Math.ceil(cfg.width / tileSize);
+            const tilesY = Math.ceil(cfg.height / tileSize);
+
             // --- Additional wells ---
             this.wells = [villageWell];
             for (let i = 0; i < cfg.wellCount; i++) {
                 let attempts = 0, pos;
                 do {
-                    pos = { x: this.seededRandom.randomRange(0, cfg.width), y: this.seededRandom.randomRange(0, cfg.height) };
+                    // Use safe positioning system like resources to avoid walls
+                    const randomTileX = this.seededRandom.randomInt(0, tilesX);
+                    const randomTileY = this.seededRandom.randomInt(0, tilesY);
+                    const gridCell = { x: randomTileX, y: randomTileY };
+                    pos = this.findSafePositionInGridCell(gridCell, 50);
+
+                    // If no safe position found in this cell, try a different cell
+                    if (!pos) {
+                        attempts++;
+                        continue;
+                    }
+
                     attempts++;
                 } while (this.isTooCloseToExistingWell(pos) && attempts < cfg.wellMaxAttempts);
-                if (attempts < cfg.wellMaxAttempts) {
+                if (attempts < cfg.wellMaxAttempts && pos) {
                     const well = { position: pos, type: GameConfig.entityTypes.well, emoji: '💧', waterLevel: GameConfig.wells.initialWaterLevel };
                     this.entities.push(well);
                     this.wells.push(well);
                 }
             }
+
             // --- Resources (Density-based spawning across all tiles) ---
             const densityConfig = GameConfig.resources.density;
-            const tileSize = GameConfig.world.tileSize;
-
-            // Calculate number of tiles in the world
-            const tilesX = Math.ceil(cfg.width / tileSize);
-            const tilesY = Math.ceil(cfg.height / tileSize);
             const totalTiles = tilesX * tilesY;
 
             console.log(`[World Generation] Generating resources using density system: ${tilesX}x${tilesY} tiles (${totalTiles} total)`);
