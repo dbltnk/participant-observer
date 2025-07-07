@@ -722,6 +722,29 @@ window.GameConfig = {
         titleMargin: 40,
         contentMargin: 20,
         lineSpacing: 8
+    },
+
+    // Smoke indicator settings - Controls the directional smoke pointer
+    smokeIndicator: {
+        // Distance multiplier for smoke location (3x world size)
+        distanceMultiplier: 3,
+
+        // Edge positioning settings
+        edgeMargin: 5, // Distance from screen edge
+        arrowSize: 20, // Size of the arrow sprite
+
+        // Visual settings
+        fontSize: 24,
+        textColor: '#ffffff',
+        backgroundColor: 'rgba(0, 0, 0, 0)',
+        padding: 8,
+
+        // Text label
+        label: 'smoke',
+
+        // Arrow color
+        arrowColor: 0xffffff,
+        arrowAlpha: 0.9
     }
 };
 

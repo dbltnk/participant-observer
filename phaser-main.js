@@ -4048,11 +4048,17 @@ console.log('Phaser main loaded');
             // FPS counter (above debug button) - fixed to camera viewport
             this.ui.fpsCounter = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.fpsCounterOffset, 'FPS: 60', { fontSize: GameConfig.ui.fontSizes.fps, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.fpsBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
             this.uiContainer.add(this.ui.fpsCounter);
+
+            // Smoke indicator - directional pointer to distant smoke
+            this.createSmokeIndicator();
         }
 
         update(time, delta) {
             // Update day/night lighting
             this.updateDayNightLighting();
+
+            // Update smoke indicator direction
+            this.updateSmokeIndicator();
 
             // Check if player is sleeping
             if (this.isSleeping && this.sleepingBag) {
@@ -5735,6 +5741,156 @@ console.log('Phaser main loaded');
                     this.updateFireVisuals(fire);
                 }
             }
+        }
+
+        createSmokeIndicator() {
+            // Generate smoke location based on seed (3x world distance)
+            const worldWidth = GameConfig.world.width;
+            const worldHeight = GameConfig.world.height;
+            const distanceMultiplier = GameConfig.smokeIndicator.distanceMultiplier;
+
+            // Use seeded random to generate consistent smoke direction
+            const angle = this.seededRandom.random() * 2 * Math.PI;
+            const distance = Math.max(worldWidth, worldHeight) * distanceMultiplier;
+
+            this.smokeLocation = {
+                x: Math.cos(angle) * distance,
+                y: Math.sin(angle) * distance
+            };
+
+            console.log(`[SmokeIndicator] Generated smoke location at (${Math.round(this.smokeLocation.x)}, ${Math.round(this.smokeLocation.y)})`);
+
+            // Create smoke indicator UI elements
+            const config = GameConfig.smokeIndicator;
+
+            // Create arrow sprite (triangle shape)
+            this.smokeArrow = this.add.graphics()
+                .setScrollFactor(0)
+                .setDepth(GameConfig.ui.zIndex.overlayContent);
+
+            // Create text label (50% smaller)
+            this.smokeText = this.add.text(0, 0, `💨 ${config.label}`, {
+                fontSize: (config.fontSize * 0.5) + 'px',
+                fontFamily: 'monospace',
+                color: config.textColor,
+                backgroundColor: config.backgroundColor,
+                padding: { x: config.padding, y: config.padding }
+            })
+                .setOrigin(0.5, 0.5)
+                .setScrollFactor(0)
+                .setDepth(GameConfig.ui.zIndex.overlayContent);
+
+            // Add to UI container
+            this.uiContainer.add([this.smokeArrow, this.smokeText]);
+
+            // Start gentle blinking animation
+            this.startSmokeBlinking();
+        }
+
+        updateSmokeIndicator() {
+            // Calculate direction from player to smoke location
+            const playerPos = this.playerState.position;
+            const smokePos = this.smokeLocation;
+
+            const dx = smokePos.x - playerPos.x;
+            const dy = smokePos.y - playerPos.y;
+            const angle = Math.atan2(dy, dx);
+
+            // Calculate arrow position on screen edge (20 pixels from edge)
+            const screenWidth = window.innerWidth;
+            const screenHeight = window.innerHeight;
+            const edgeMargin = 40;
+            const arrowSize = GameConfig.smokeIndicator.arrowSize;
+
+            // Determine which edge the arrow should be on based on angle
+            let edgeX, edgeY;
+
+            // Convert angle to degrees for easier edge determination
+            const angleDegrees = (angle * 180 / Math.PI + 360) % 360;
+
+            // Restrict to between south (180°) and east (90°) - only bottom and right edges
+            if (angleDegrees >= 90 && angleDegrees < 180) {
+                // Bottom edge (south direction)
+                edgeX = screenWidth / 2 + Math.tan(angle - Math.PI / 2) * (screenHeight / 2 - edgeMargin);
+                edgeY = screenHeight - edgeMargin;
+            } else {
+                // Right edge (east direction)
+                edgeX = screenWidth - edgeMargin;
+                edgeY = screenHeight / 2 + Math.tan(angle) * (screenWidth / 2 - edgeMargin);
+            }
+
+            // Clamp to screen bounds
+            edgeX = Math.max(edgeMargin, Math.min(screenWidth - edgeMargin, edgeX));
+            edgeY = Math.max(edgeMargin, Math.min(screenHeight - edgeMargin, edgeY));
+
+            // Update arrow position and rotation
+            this.smokeArrow.clear();
+            this.smokeArrow.lineStyle(3, GameConfig.smokeIndicator.arrowColor, GameConfig.smokeIndicator.arrowAlpha);
+            this.smokeArrow.fillStyle(GameConfig.smokeIndicator.arrowColor, GameConfig.smokeIndicator.arrowAlpha);
+
+            // Draw arrow triangle pointing toward the edge of the screen
+            const arrowLength = arrowSize;
+            const arrowWidth = arrowSize * 0.6;
+
+            // Arrow points toward the edge (opposite of smoke direction)
+            const arrowAngle = angle + Math.PI;
+
+            // Calculate arrow points
+            const tipX = edgeX + Math.cos(arrowAngle) * arrowLength;
+            const tipY = edgeY + Math.sin(arrowAngle) * arrowLength;
+
+            const base1X = edgeX + Math.cos(arrowAngle + Math.PI / 2) * arrowWidth / 2;
+            const base1Y = edgeY + Math.sin(arrowAngle + Math.PI / 2) * arrowWidth / 2;
+
+            const base2X = edgeX + Math.cos(arrowAngle - Math.PI / 2) * arrowWidth / 2;
+            const base2Y = edgeY + Math.sin(arrowAngle - Math.PI / 2) * arrowWidth / 2;
+
+            // Draw arrow triangle
+            this.smokeArrow.beginPath();
+            this.smokeArrow.moveTo(tipX, tipY);
+            this.smokeArrow.lineTo(base1X, base1Y);
+            this.smokeArrow.lineTo(base2X, base2Y);
+            this.smokeArrow.closePath();
+            this.smokeArrow.fill();
+            this.smokeArrow.stroke();
+
+            // Position text inside the screen, to the left/up of the arrow
+            const textOffset = arrowSize + 30;
+            let textX, textY;
+
+            if (angleDegrees >= 90 && angleDegrees < 180) {
+                // Bottom edge - text above and to the left
+                textX = edgeX - 15;
+                textY = edgeY - textOffset;
+            } else {
+                // Right edge - text to the left
+                textX = edgeX - textOffset;
+                textY = edgeY - 5;
+            }
+
+            this.smokeText.setPosition(textX, textY);
+        }
+
+        startSmokeBlinking() {
+            const config = GameConfig.smokeIndicator;
+
+            this.tweens.add({
+                targets: this.smokeArrow,
+                alpha: 0.4,
+                duration: 750,
+                ease: 'Sine.easeInOut',
+                yoyo: true,
+                repeat: -1
+            });
+
+            this.tweens.add({
+                targets: this.smokeText,
+                alpha: 0.6,
+                duration: 750,
+                ease: 'Sine.easeInOut',
+                yoyo: true,
+                repeat: -1,
+            });
         }
     }
     function getPhaserBarColor(type) {
