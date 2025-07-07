@@ -395,8 +395,7 @@ window.GameConfig = {
         needBarSpacing: 5, // Spacing between need bars
         inventorySlotSize: 50, // Size of inventory slots in pixels (width and height)
 
-        // Seed input
-        seedInputWidth: 60, // Width of seed input field in pixels
+        // Seed validation (for URL parameters)
         seedInputMaxValue: 999, // Maximum seed value
         seedInputMinValue: 1, // Minimum seed value
 
@@ -503,11 +502,6 @@ window.GameConfig = {
             },
 
             // UI element dimensions
-            seedInputHeight: 20,
-            seedInputWidth: 60,
-            seedBoxWidth: 200,
-            seedInputOffset: 30,
-            seedButtonOffset: 85,
             fpsCounterOffset: 150,
             debugButtonOffset: 120,
             logSpamButtonOffset: 90,
@@ -553,7 +547,6 @@ window.GameConfig = {
     storage: {
         communalCapacity: 20, // Capacity of communal storage box
         personalCapacity: 8, // Capacity of personal storage boxes
-        localStorageKey: 'alpine-seed', // LocalStorage key for seed persistence
 
         // Random initial items configuration
         initialItems: {
@@ -598,10 +591,6 @@ window.GameConfig = {
             barStartOffset: 5, // Offset for bars after icons
             valueOffset: 10, // Offset for value text after bars
             inventorySlotSpacing: 56, // Spacing between inventory slots
-            seedBoxWidth: 200, // Width of seed input box
-            seedInputOffset: 30, // Offset for seed input field
-            seedButtonOffset: 85, // Offset for seed buttons
-            seedButtonSpacing: 15, // Spacing for seed buttons
             buttonSpacing: 60, // Spacing between buttons
             titleOffset: 60, // Offset for titles
             messageOffset: 20, // Offset for messages

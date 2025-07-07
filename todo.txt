@@ -17,3 +17,10 @@ x villagers never take the last 2 of any type in a biomes
 check why villagers stop contributing when they have 1+ food and 1+ burnable in inventory
 make sure replication and max cap works
 add topology: biome walls
+
+
+
+seed via domain parameter, else random
+intro screen, if no seed
+outro screen death reasons
+pointers to the edge of the world

@@ -3748,57 +3748,11 @@ console.log('Phaser main loaded');
             updateLogSpamBtn.call(this);
             this.uiContainer.add(this.ui.logSpamBtn);
 
-
-            // Seed control box (bottom right) - use viewport dimensions
-            const seedBoxY = window.innerHeight - margin;
-            const seedBoxWidth = GameConfig.ui.dimensions.seedBoxWidth;
-            const seedBoxX = window.innerWidth - margin - seedBoxWidth;
-
-            // Seed label - fixed to camera viewport
-            this.ui.seedLabel = this.add.text(seedBoxX, seedBoxY - 25, '🌱 Seed:', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0, 1).setScrollFactor(0);
-            this.uiContainer.add(this.ui.seedLabel);
-
-            // Seed input background - fixed to camera viewport
-            this.ui.seedInputBg = this.add.rectangle(seedBoxX + GameConfig.ui.dimensions.seedInputOffset, seedBoxY - 15, GameConfig.ui.dimensions.seedInputWidth, GameConfig.ui.dimensions.seedInputHeight, GameConfig.ui.colors.slotBackground).setOrigin(0, 1).setStrokeStyle(1, GameConfig.ui.colors.slotBorder).setScrollFactor(0);
-            this.uiContainer.add(this.ui.seedInputBg);
-
-            // Seed input text - fixed to camera viewport
-            this.ui.seedInputText = this.add.text(seedBoxX + 56, seedBoxY - 17, getCurrentSeed().toString(), { fontSize: GameConfig.ui.fontSizes.medium, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0.5, 1).setScrollFactor(0);
-            this.uiContainer.add(this.ui.seedInputText);
-
-            // Decrement button (-) - fixed to camera viewport
-            this.ui.seedDecrementBtn = this.add.text(seedBoxX + 25, seedBoxY - 15, '-', { fontSize: GameConfig.ui.fontSizes.large, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonSecondary, padding: GameConfig.ui.dimensions.buttonPadding.small }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-            this.ui.seedDecrementBtn.on('pointerdown', () => {
-                console.log('[Seed] Decrement button clicked');
-                this.decrementSeed();
-            });
-            this.uiContainer.add(this.ui.seedDecrementBtn);
-
-            // Increment button (+) - fixed to camera viewport
-            this.ui.seedIncrementBtn = this.add.text(seedBoxX + GameConfig.ui.dimensions.seedButtonOffset, seedBoxY - 15, '+', { fontSize: GameConfig.ui.fontSizes.large, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonSecondary, padding: GameConfig.ui.dimensions.buttonPadding.small }).setOrigin(0.5, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-            this.ui.seedIncrementBtn.on('pointerdown', () => {
-                console.log('[Seed] Increment button clicked');
-                this.incrementSeed();
-            });
-            this.uiContainer.add(this.ui.seedIncrementBtn);
-
-            // New Game button - fixed to camera viewport
-            this.ui.newGameBtn = this.add.text(seedBoxX + 100, seedBoxY - 15, '🔄 New Game', { fontSize: GameConfig.ui.fontSizes.medium, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonPrimary, padding: GameConfig.ui.dimensions.buttonPadding.medium }).setOrigin(0, 1).setInteractive({ useHandCursor: true }).setScrollFactor(0);
-            this.ui.newGameBtn.on('pointerdown', () => {
-                console.log('[NewGame] New Game button clicked');
-                this.showNewGameConfirmation();
-            });
-            this.uiContainer.add(this.ui.newGameBtn);
-
-            // Initialize current seed value
-            this.currentSeedValue = getCurrentSeed();
-
             // FPS counter (above debug button) - fixed to camera viewport
             this.ui.fpsCounter = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.fpsCounterOffset, 'FPS: 60', { fontSize: GameConfig.ui.fontSizes.fps, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.fpsBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
             this.uiContainer.add(this.ui.fpsCounter);
-
-
         }
+
         update(time, delta) {
             // Update day/night lighting
             this.updateDayNightLighting();
@@ -4009,10 +3963,7 @@ console.log('Phaser main loaded');
             // Count living villagers
             const livingVillagers = this.villagers ? this.villagers.filter(v => !v.isDead).length : 0;
             this.ui.timeText.setText(`📅 Day ${t.day}\n${timeEmoji} ${String(t.hour).padStart(2, '0')}:${String(t.minute).padStart(2, '0')}\n${tempEmoji} ${tempLabel}\n👥 Neighbours: ${livingVillagers}`);
-            // Seed UI
-            assert(this.currentSeedValue !== undefined, 'MainScene missing currentSeedValue property');
-            const currentSeed = this.currentSeedValue;
-            this.ui.seedInputText.setText(currentSeed.toString());
+
 
             // Update debug elements
             this.updateDebugElements();
@@ -4142,24 +4093,6 @@ console.log('Phaser main loaded');
                 .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
             btn.on('pointerdown', () => { window.location.reload(); });
             this._gameOverOverlay = [bg, text, reasonText, btn];
-        }
-
-        incrementSeed() {
-            let currentSeed = parseInt(this.ui.seedInputText.text, 10);
-            if (isNaN(currentSeed)) currentSeed = GameConfig.ui.seedInputMinValue;
-            currentSeed = Math.min(GameConfig.ui.seedInputMaxValue, currentSeed + 1);
-            this.ui.seedInputText.setText(currentSeed.toString());
-            // Store the new seed value for when New Game is clicked
-            this.currentSeedValue = currentSeed;
-        }
-
-        decrementSeed() {
-            let currentSeed = parseInt(this.ui.seedInputText.text, 10);
-            if (isNaN(currentSeed)) currentSeed = GameConfig.ui.seedInputMinValue;
-            currentSeed = Math.max(GameConfig.ui.seedInputMinValue, currentSeed - 1);
-            this.ui.seedInputText.setText(currentSeed.toString());
-            // Store the new seed value for when New Game is clicked
-            this.currentSeedValue = currentSeed;
         }
 
         generateBiomeData() {
@@ -4451,14 +4384,9 @@ console.log('Phaser main loaded');
             const h = this.cameras.main.height;
 
             // Get current seed from stored value or UI
-            let seed = this.currentSeedValue;
-            if (!seed) {
-                const seedText = this.ui.seedInputText.text;
-                seed = parseInt(seedText, 10);
-            }
-            if (isNaN(seed) || seed < GameConfig.ui.seedInputMinValue) {
-                console.warn('[New Game] Invalid seed value, defaulting to seed 23');
-                seed = 23; // Default to seed 23
+            let seed = getCurrentSeed();
+            if (isNaN(seed) || seed < GameConfig.ui.seedInputMinValue || seed > GameConfig.ui.seedInputMaxValue) {
+                console.error('[New Game] Invalid seed value');
             } else if (seed > GameConfig.ui.seedInputMaxValue) {
                 seed = GameConfig.ui.seedInputMaxValue;
             }
@@ -4478,12 +4406,6 @@ console.log('Phaser main loaded');
 
             const noBtn = this.add.text(w / 2 + GameConfig.ui.dimensions.buttonSpacing, h / 2 + GameConfig.ui.dimensions.buttonOffset, 'No', { fontSize: GameConfig.ui.fontSizes.button, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonSecondary, padding: GameConfig.ui.dimensions.buttonPadding.large })
                 .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
-
-            // Button handlers
-            yesBtn.on('pointerdown', () => {
-                localStorage.setItem(GameConfig.storage.localStorageKey, seed.toString());
-                window.location.reload();
-            });
 
             noBtn.on('pointerdown', () => {
                 this._confirmDialog.forEach(obj => obj.destroy());
@@ -5668,16 +5590,22 @@ console.log('Phaser main loaded');
     }
 
     function getCurrentSeed() {
-        let currentSeed = parseInt(localStorage.getItem(GameConfig.storage.localStorageKey), 10);
-        if (!currentSeed || isNaN(currentSeed)) {
-            console.warn('No valid seed found in localStorage, defaulting to seed 23');
-            // Default to seed 23 for consistency
-            currentSeed = 23;
-            // Store it for consistency
-            localStorage.setItem(GameConfig.storage.localStorageKey, currentSeed.toString());
+        const urlParams = new URLSearchParams(window.location.search);
+        let seed = urlParams.get('seed');
+        if (seed) {
+            const parsedSeed = parseInt(seed, 10);
+            if (!isNaN(parsedSeed) && parsedSeed >= GameConfig.ui.seedInputMinValue && parsedSeed <= GameConfig.ui.seedInputMaxValue) {
+                return parsedSeed;
+            }
         }
-        return currentSeed;
+        const randomSeed = Math.floor(Math.random() * (GameConfig.ui.seedInputMaxValue - GameConfig.ui.seedInputMinValue + 1)) + GameConfig.ui.seedInputMinValue;
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.set('seed', randomSeed.toString());
+        window.history.replaceState({}, '', newUrl);
+        console.log(`[Seed] Generated random seed: ${randomSeed} and updated URL`);
+        return randomSeed;
     }
+
     function updateNeeds(playerState, delta) {
         const realSecondsPerGameDay = GameConfig.time.realSecondsPerGameDay;
         const inGameMinutesPerMs = (24 * 60) / (realSecondsPerGameDay * 1000);
