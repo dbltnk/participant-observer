@@ -629,6 +629,58 @@ window.GameConfig = {
         night: { start: 20, end: 6 }, // 20:00 to 06:59 is night (wraps around)
         // Chance for day temp to change per hour (0.25 = 25%)
         dayChangeChance: 0.25
+    },
+
+    // Intro screen settings - Controls the sci-fi survival mystery intro
+    intro: {
+        // Planet name generation
+        planetNames: [
+            'Copernicus Alpha', 'Kepler Omega', 'Galileo Zulu', 'Hubble Tango', 'Sagan Echo',
+            'Newton Delta', 'Einstein Gamma', 'Curie Sigma', 'Tyson Theta', 'Hawking Lambda',
+            'Herschel Beta', 'Brahe Phi', 'Ptolemy Rho', 'Tycho Xi', 'Cassini Omicron',
+            'Halley Pi', 'Bessel Tau', 'Struve Upsilon', 'Messier Chi', 'Hipparchus Psi'
+        ],
+
+        // Survivor log entry text
+        survivorLog: {
+            title: 'PERSONAL LOG - ENTRY #137',
+            timestamp: 'Epoch 2067413432',
+            content: [
+                'Emergency pod deployed successfully. Landing site appears to be a habitable zone.',
+                '',
+                'The locals here are... different. They pointed me to an empty bedroll but otherwise',
+                'seem not very talkative. I\'ll have to figure out what to do on my own.',
+                '',
+                'I can see smoke rising from the horizon - maybe another crash site?',
+                'Need to investigate once I get my bearings.',
+                '',
+                'Priority: Find food, water, and shelter. Then explore.',
+                '',
+                'End log.'
+            ]
+        },
+
+        // Button text
+        buttonText: 'OBSERVE CAREFULLY',
+
+        // Visual settings
+        overlayColor: 0x000000,
+        overlayAlpha: 0.9,
+        textColor: '#ffffff',
+        titleColor: '#ffaa00',
+        buttonColor: '#228B22',
+        buttonHoverColor: '#32CD32',
+
+        // Font sizes
+        titleSize: '28px',
+        contentSize: '16px',
+        buttonSize: '18px',
+
+        // Spacing
+        titleMargin: 40,
+        contentMargin: 20,
+        buttonMargin: 30,
+        lineSpacing: 8
     }
 };
 

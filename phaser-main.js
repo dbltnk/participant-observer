@@ -2998,6 +2998,164 @@ console.log('Phaser main loaded');
     }
     // === END: Villager AI System ===
 
+    class IntroScene extends Phaser.Scene {
+        constructor() {
+            super({ key: 'IntroScene' });
+        }
+
+        preload() {
+            // No assets to preload for intro - using text only
+        }
+
+        create() {
+            console.log('[Intro] IntroScene create called');
+
+            // Check if we should show intro or skip directly to main game
+            const urlParams = new URLSearchParams(window.location.search);
+            const hasSeed = urlParams.get('seed');
+
+            if (hasSeed) {
+                // Skip intro and go directly to main game
+                console.log('[Intro] Seed parameter found, skipping intro');
+                this.scene.start('MainScene');
+                return;
+            }
+
+            const w = this.cameras.main.width;
+            const h = this.cameras.main.height;
+
+            // Game title (top center) - fixed to camera viewport
+            const titleText = this.add.text(window.innerWidth / 2, 145, 'Participant Observer', {
+                fontSize: '24px',
+                fontFamily: 'Courier New, monospace',
+                fontWeight: 'bold',
+                color: '#ffffff',
+                backgroundColor: GameConfig.ui.colors.boxBackground,
+                padding: GameConfig.ui.dimensions.textPadding.large
+            }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.overlayContent);
+
+            // Get current seed and generate planet name
+            const currentSeed = getCurrentSeed();
+            const seededRandom = new SeededRandom(currentSeed);
+            const planetName = GameConfig.intro.planetNames[seededRandom.randomInt(0, GameConfig.intro.planetNames.length - 1)];
+            const fullPlanetName = `${planetName} ${currentSeed}`;
+
+            // Calculate log dimensions - make it look like a real log entry
+            const logWidth = Math.min(600, w - 100);
+            const logHeight = 520;
+            const logX = w / 2;
+            const logY = h / 2;
+
+            // Background overlay
+            const bg = this.add.rectangle(w / 2, h / 2, w, h, GameConfig.intro.overlayColor, GameConfig.intro.overlayAlpha)
+                .setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlay).setScrollFactor(0);
+
+            // Log background - looks like a terminal/computer screen
+            const logBg = this.add.rectangle(logX, logY, logWidth, logHeight, 0x001122, 0.95)
+                .setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0)
+                .setStrokeStyle(2, 0x00ff00);
+
+            // Title - left aligned
+            const title = this.add.text(logX - logWidth / 2 + 30, logY - logHeight / 2 + 30, GameConfig.intro.survivorLog.title,
+                { fontSize: GameConfig.intro.titleSize, fontFamily: 'monospace', color: GameConfig.intro.titleColor })
+                .setOrigin(0, 0).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+
+            // Planet name and timestamp - left aligned
+            const planetText = this.add.text(logX - logWidth / 2 + 30, logY - logHeight / 2 + 70, `${fullPlanetName}: ${GameConfig.intro.survivorLog.timestamp}`,
+                { fontSize: GameConfig.intro.contentSize, fontFamily: 'monospace', color: GameConfig.intro.textColor })
+                .setOrigin(0, 0).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+
+            // Content lines - left aligned with proper word wrapping
+            const contentLines = [];
+            let currentY = logY - logHeight / 2 + 140;
+            const maxLineWidth = logWidth - 60; // 30px padding on each side
+
+            for (const line of GameConfig.intro.survivorLog.content) {
+                if (line.trim() === '') {
+                    // Empty line - add extra spacing
+                    currentY += parseInt(GameConfig.intro.contentSize) + GameConfig.intro.lineSpacing;
+                    continue;
+                }
+
+                // Word wrap the text
+                const words = line.split(' ');
+                let currentLine = '';
+                let lineCount = 0;
+
+                for (const word of words) {
+                    const testLine = currentLine + (currentLine ? ' ' : '') + word;
+                    const testWidth = this.add.text(0, 0, testLine, { fontSize: GameConfig.intro.contentSize, fontFamily: 'monospace' }).width;
+
+                    if (testWidth > maxLineWidth && currentLine) {
+                        // Add current line
+                        const lineText = this.add.text(logX - logWidth / 2 + 30, currentY, currentLine,
+                            { fontSize: GameConfig.intro.contentSize, fontFamily: 'monospace', color: GameConfig.intro.textColor })
+                            .setOrigin(0, 0).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+                        contentLines.push(lineText);
+                        currentY += parseInt(GameConfig.intro.contentSize) + GameConfig.intro.lineSpacing;
+                        currentLine = word;
+                        lineCount++;
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+
+                // Add the last line
+                if (currentLine) {
+                    const lineText = this.add.text(logX - logWidth / 2 + 30, currentY, currentLine,
+                        { fontSize: GameConfig.intro.contentSize, fontFamily: 'monospace', color: GameConfig.intro.textColor })
+                        .setOrigin(0, 0).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+                    contentLines.push(lineText);
+                    currentY += parseInt(GameConfig.intro.contentSize) + GameConfig.intro.lineSpacing;
+                }
+            }
+
+            // Button - positioned below the log content
+            const button = this.add.text(logX, currentY + 70, GameConfig.intro.buttonText,
+                {
+                    fontSize: GameConfig.intro.buttonSize, fontFamily: 'monospace', color: GameConfig.intro.textColor,
+                    backgroundColor: GameConfig.intro.buttonColor, padding: GameConfig.ui.dimensions.buttonPadding.large
+                })
+                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+
+            // Button hover effect
+            button.on('pointerover', () => {
+                button.setBackgroundColor(GameConfig.intro.buttonHoverColor);
+            });
+            button.on('pointerout', () => {
+                button.setBackgroundColor(GameConfig.intro.buttonColor);
+            });
+
+            // Button click handler - start the main game scene
+            button.on('pointerdown', () => {
+                if (this._isTransitioning) return; // Check first
+                this._isTransitioning = true;
+
+                console.log('[Intro] Button clicked, starting main game');
+                this.scene.start('MainScene');
+            });
+
+            // Store references for cleanup
+            this._introElements = [bg, logBg, title, planetText, ...contentLines, button];
+            this._isTransitioning = false;
+        }
+
+
+
+        update(time, delta) {
+            // Empty update method to ensure the scene has an active game loop
+            // This is required for tweens to work properly
+        }
+
+        shutdown() {
+            // Clean up intro elements
+            if (this._introElements) {
+                this._introElements.forEach(obj => obj.destroy());
+                this._introElements = null;
+            }
+        }
+    }
+
     class MainScene extends Phaser.Scene {
         constructor() {
             super({ key: 'MainScene' });
@@ -3006,6 +3164,9 @@ console.log('Phaser main loaded');
         }
         preload() { }
         create() {
+            // Start with fade-in effect
+            this.startFadeIn();
+
             // --- World/entities ---
             this.entities = [];
             const currentSeed = getCurrentSeed();
@@ -4082,6 +4243,33 @@ console.log('Phaser main loaded');
             this._tempMsg = this.add.text(this.player.x, this.player.y - GameConfig.ui.dimensions.tempMessageOffset, msg, { fontSize: GameConfig.ui.fontSizes.overlayMessage, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.buttonPadding.medium }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug);
             this.time.delayedCall(duration, () => { if (this._tempMsg) { this._tempMsg.destroy(); this._tempMsg = null; } });
         }
+        startFadeIn() {
+            // Create fade overlay starting at full opacity
+            this._fadeOverlay = this.add.rectangle(
+                this.cameras.main.width / 2,
+                this.cameras.main.height / 2,
+                this.cameras.main.width,
+                this.cameras.main.height,
+                0x000000,
+                1
+            ).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlay + 1).setScrollFactor(0);
+
+            // Fade in over 2.4 seconds (3x longer)
+            this.tweens.add({
+                targets: this._fadeOverlay,
+                alpha: 0,
+                duration: 2400,
+                ease: 'Power2',
+                onComplete: () => {
+                    // Remove fade overlay after fade in
+                    if (this._fadeOverlay) {
+                        this._fadeOverlay.destroy();
+                        this._fadeOverlay = null;
+                    }
+                }
+            });
+        }
+
         showGameOverOverlay(reason) {
             if (this._gameOverOverlay) return;
             const w = this.cameras.main.width;
@@ -4094,6 +4282,8 @@ console.log('Phaser main loaded');
             btn.on('pointerdown', () => { window.location.reload(); });
             this._gameOverOverlay = [bg, text, reasonText, btn];
         }
+
+
 
         generateBiomeData() {
             // Generate biome data for the entire world using Perlin noise
@@ -5592,17 +5782,30 @@ console.log('Phaser main loaded');
     function getCurrentSeed() {
         const urlParams = new URLSearchParams(window.location.search);
         let seed = urlParams.get('seed');
+
+        // Check if this is the initial load with no seed parameter
+        const isInitialLoad = !seed && !window.seedInitialized;
+
         if (seed) {
             const parsedSeed = parseInt(seed, 10);
             if (!isNaN(parsedSeed) && parsedSeed >= GameConfig.ui.seedInputMinValue && parsedSeed <= GameConfig.ui.seedInputMaxValue) {
+                window.seedInitialized = true;
                 return parsedSeed;
             }
         }
+
         const randomSeed = Math.floor(Math.random() * (GameConfig.ui.seedInputMaxValue - GameConfig.ui.seedInputMinValue + 1)) + GameConfig.ui.seedInputMinValue;
         const newUrl = new URL(window.location);
         newUrl.searchParams.set('seed', randomSeed.toString());
         window.history.replaceState({}, '', newUrl);
         console.log(`[Seed] Generated random seed: ${randomSeed} and updated URL`);
+
+        // Track if this was the initial load for intro screen
+        if (isInitialLoad) {
+            window.showIntroScreen = true;
+        }
+
+        window.seedInitialized = true;
         return randomSeed;
     }
 
@@ -5674,7 +5877,7 @@ console.log('Phaser main loaded');
                 width: window.innerWidth,
                 height: window.innerHeight,
                 backgroundColor: '#2d3748',
-                scene: MainScene,
+                scene: [IntroScene, MainScene], // Register both scenes
                 parent: 'game-area',
                 fps: { target: 60, forceSetTimeOut: true }
             });
@@ -5685,7 +5888,7 @@ console.log('Phaser main loaded');
             width: window.innerWidth,
             height: window.innerHeight,
             backgroundColor: '#2d3748',
-            scene: MainScene,
+            scene: [IntroScene, MainScene], // Register both scenes
             parent: 'game-area',
             fps: { target: 60, forceSetTimeOut: true }
         });
