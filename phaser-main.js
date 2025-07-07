@@ -1697,7 +1697,7 @@ console.log('Phaser main loaded');
             // Execute action based on current action state
             switch (currentAction) {
                 case ACTION_STATES.WAIT:
-                    // Special case: Sleep and drink actions go directly to their respective states
+                    // Special case: Sleep, drink, and warmup actions go directly to their respective states
                     // since they don't need to find resources
                     if (actionType === 'sleep') {
                         if (window.summaryLoggingEnabled) {
@@ -1705,10 +1705,12 @@ console.log('Phaser main loaded');
                         }
                         this.transitionAction(ACTION_STATES.SLEEP);
                         this.actionExecutor.executeSleep(deltaTime, entities, storageBoxes);
-                    } else if (actionType === 'drink') {
+                    } else if (actionType === 'drink' || actionType === 'warmup') {
                         if (window.summaryLoggingEnabled) {
-                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} DRINK_DIRECT: Bypassing resource finding for drink action`);
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} ${actionType.toUpperCase()}_DIRECT: Bypassing resource finding for ${actionType} action`);
                         }
+                        // Clear action targets for facility-based actions to prevent using old targets
+                        this.actionData.actionTargets = [];
                         this.transitionAction(ACTION_STATES.USE_FACILITY);
                         this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
                     } else {
@@ -1721,7 +1723,7 @@ console.log('Phaser main loaded');
                     break;
 
                 case ACTION_STATES.FIND_RESOURCES:
-                    // Special case: If this is a sleep or drink action, transition directly to their respective states
+                    // Special case: If this is a sleep, drink, or warmup action, transition directly to their respective states
                     // since they don't need to find resources
                     if (actionType === 'sleep') {
                         if (window.summaryLoggingEnabled) {
@@ -1729,10 +1731,12 @@ console.log('Phaser main loaded');
                         }
                         this.transitionAction(ACTION_STATES.SLEEP);
                         this.actionExecutor.executeSleep(deltaTime, entities, storageBoxes);
-                    } else if (actionType === 'drink') {
+                    } else if (actionType === 'drink' || actionType === 'warmup') {
                         if (window.summaryLoggingEnabled) {
-                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} DRINK_DIRECT: Correcting from FIND_RESOURCES to USE_FACILITY`);
+                            console.log(`[HierarchicalVillagerAI] ${this.villager.name} ${actionType.toUpperCase()}_DIRECT: Correcting from FIND_RESOURCES to USE_FACILITY`);
                         }
+                        // Clear action targets for facility-based actions to prevent using old targets
+                        this.actionData.actionTargets = [];
                         this.transitionAction(ACTION_STATES.USE_FACILITY);
                         this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
                     } else {
@@ -2229,6 +2233,14 @@ console.log('Phaser main loaded');
                 }
             }
 
+            // For warmup actions, if no target is set, find the nearest burning fire
+            if (!target && actionType === 'warmup') {
+                target = this.findNearestBurningFire();
+                if (target) {
+                    this.villager.hierarchicalAI.actionData.actionTargets = [target];
+                }
+            }
+
             target = this.villager.hierarchicalAI.actionData.actionTargets[0];
             assert(target, `[ActionExecutor] ${this.villager.name} executeUseFacility: No target set for actionType=${actionType}`);
 
@@ -2465,7 +2477,7 @@ console.log('Phaser main loaded');
             );
 
             if (nearestWell) {
-                console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: found nearest well at (${Math.round(nearestWell.position.x)}, ${Math.round(nearestWell.position.y)}) with waterLevel=${nearestWell.waterLevel}`);
+                console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: found nearest well at (${Math.round(nearestWell.position.x)}, ${Math.round(nearestWell.position.y)}) with waterLevel=${nearestWell.waterLevel}, type=${nearestWell.type}`);
             } else {
                 console.warn(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: no well with water found`);
             }
