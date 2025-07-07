@@ -96,7 +96,7 @@ window.GameConfig = {
         diagonalMovementFactor: 0.707, // 1/√2 for normalized diagonal movement
 
         // Interaction constants
-        interactionThreshold: 48, // Distance threshold for interactions (pixels) - increased by 50%
+        interactionThreshold: 64, // Distance threshold for interactions (pixels) - increased by 50%
         fireHeatingRange: 144, // Distance threshold for fire heating effects (pixels) - 3x interaction threshold
 
         // Rendering
@@ -393,7 +393,6 @@ window.GameConfig = {
         barHeight: 20, // Height of need bars in pixels
         barWidth: 150, // Width of need bars in pixels
         needBarSpacing: 5, // Spacing between need bars
-        inventorySlotSize: 50, // Size of inventory slots in pixels (width and height)
 
         // Seed validation (for URL parameters)
         seedInputMaxValue: 999, // Maximum seed value
@@ -602,11 +601,31 @@ window.GameConfig = {
         mountainMargin: 50, // Margin from cell edges for mountain placement
     },
 
+    // Navigation settings - A* pathfinding system
+    navigation: {
+        gridSize: 64, // Size of each grid cell in pixels (back to 64px with caching)
+        partitioningGridSize: 1024, // Size of each grid cell in pixels (back to 64px with caching)
+        minDistanceForPathfinding: 0, // Only use pathfinding for targets > 1 grid cell away
+        maxPathfindingAttempts: 2000, // Maximum iterations for A* algorithm (increased for complex wall systems)
+        enableForVillagers: true, // Enable pathfinding for villagers
+
+        // Debug visualization settings
+        debugVisualization: {
+            enabled: true, // Enable path visualization
+        },
+
+        // Path following settings
+        waypointReachDistance: 32, // Distance within which a waypoint is considered "reached" (pixels)
+        targetReachDistance: 32, // Distance within which the final target is considered "reached" (pixels)
+        pathReplanningTolerance: 32, // Distance change that triggers path replanning (pixels)
+    },
+
     // Technical constants
     technical: {
         // Distance constants
         distances: {
-            animalFleeDistance: 100, // Distance at which animals flee
+            animalSenseDistance: 100, // When animals sense you to flee
+            animalFleeDistance: 1000, // How far animals flee
             animalWanderRange: { min: 50, max: 150 }, // Range for animal wandering
             resourcePlacementAttempts: 100, // Max attempts to place resources
         },

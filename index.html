@@ -141,19 +141,37 @@
 
     <!-- Game Scripts -->
     <script>
-        // Dynamically load scripts with cache-busting parameters
+        // Dynamically load scripts with cache-busting parameters in sequence
         const version = window.GAME_VERSION || Date.now();
         const scripts = [
             'config/GameConfig.js',
             'lib/phaser.js',
-            'phaser-main.js'
+            'src/phaser-main.js'
         ];
 
-        scripts.forEach(src => {
+        // Load scripts sequentially to ensure proper order
+        function loadScript(index) {
+            if (index >= scripts.length) {
+                return; // All scripts loaded
+            }
+
             const script = document.createElement('script');
-            script.src = `${src}?v=${version}`;
+            script.src = `${scripts[index]}?v=${version}`;
+
+            script.onload = () => {
+                // Load next script after this one finishes
+                loadScript(index + 1);
+            };
+
+            script.onerror = (error) => {
+                console.error(`Failed to load ${scripts[index]}:`, error);
+            };
+
             document.body.appendChild(script);
-        });
+        }
+
+        // Start loading from the first script
+        loadScript(0);
     </script>
 </body>
 

@@ -18,8 +18,8 @@ x seed via domain parameter, else random
 X intro screen, if no seed
 x outro screen death reasons
 x pointers to the edge of the world
-pathfinding: fleeing mobs and NPCs
-line of sight
+x pathfinding: NPCs
 random color gates kill you, NPCs know about them
+line of sight
 check why villagers stop contributing when they have 1+ food and 1+ burnable in inventory
 make sure replication and max cap works

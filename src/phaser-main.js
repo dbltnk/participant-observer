@@ -195,7 +195,9 @@ console.log('Phaser main loaded');
                 fireValue: GameUtils.getFireValue(entity.type)
             };
 
-            console.log(`[${collectorName}] collected ${entity.type} from (${Math.round(entity.position.x)}, ${Math.round(entity.position.y)})`);
+            if (window.summaryLoggingEnabled) {
+                console.log(`[${collectorName}] collected ${entity.type} from (${Math.round(entity.position.x)}, ${Math.round(entity.position.y)})`);
+            }
             return true;
         }
     };
@@ -604,6 +606,8 @@ console.log('Phaser main loaded');
             // Update visual representation
             this.updateVisuals();
 
+
+
             return false; // Villager is alive
         }
 
@@ -746,6 +750,148 @@ console.log('Phaser main loaded');
         moveTowards(target, deltaTime) {
             if (!target) return;
 
+            const distance = GameUtils.distance(this.position, target);
+
+            // Use pathfinding for longer distances, direct movement for close targets
+            if (distance > GameConfig.navigation.minDistanceForPathfinding &&
+                GameConfig.navigation.enableForVillagers &&
+                this.scene && this.scene.pathfinder) {
+
+                // Check if we need a new path (no current path or target changed)
+                const needsNewPath = !this.currentPath ||
+                    !this.pathTarget ||
+                    GameUtils.distance(this.pathTarget, target) > GameConfig.navigation.pathReplanningTolerance;
+
+                if (needsNewPath) {
+                    // Log when pathfinding is triggered (rarely)
+                    if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) {
+                        console.log(`[Villager] ${this.name} TRIGGERING PATHFINDING: distance=${Math.round(distance)}px to (${Math.round(target.x)}, ${Math.round(target.y)})`);
+                    }
+
+                    // Try to find a path
+                    const path = this.scene.pathfinder.findPath(this.position, target, null, this);
+
+                    if (path && path.length > 1) {
+                        // Store the path and target for following
+                        this.currentPath = path;
+                        this.pathTarget = { x: target.x, y: target.y };
+                        this.pathIndex = 0; // Start at index 0 (first waypoint)
+
+                        // Track path for debug visualization
+                        if (this.scene.pathfinder && GameConfig.navigation.debugVisualization.enabled) {
+                            this.scene.pathfinder.addActivePath(this, path, target);
+                        }
+
+                        // Log pathfinding success
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.name} PATHFINDING SUCCESS: Found path with ${path.length} waypoints from (${Math.round(this.position.x)}, ${Math.round(this.position.y)}) to (${Math.round(target.x)}, ${Math.round(target.y)})`);
+                        }
+                    } else {
+                        // Pathfinding failed, use direct movement as fallback
+                        if (window.summaryLoggingEnabled) {
+                            console.warn(`[Villager] ${this.name} PATHFINDING FAILED: NPC at (${Math.round(this.position.x)}, ${Math.round(this.position.y)}) trying to reach (${Math.round(target.x)}, ${Math.round(target.y)}) - Using direct movement fallback`);
+
+                        }
+                        this.currentPath = null;
+                        this.pathTarget = null;
+                        this.pathIndex = null;
+
+                        // Remove from debug visualization
+                        if (this.scene.pathfinder && GameConfig.navigation.debugVisualization.enabled) {
+                            this.scene.pathfinder.removeActivePath(this);
+                        }
+
+                        this.moveTowardsDirect(target, deltaTime); // Re-enabled fallback
+                        return;
+                    }
+                }
+
+                // Follow the current path
+                if (this.currentPath && this.pathIndex < this.currentPath.length) {
+                    const nextWaypoint = this.currentPath[this.pathIndex];
+
+                    // Move towards the next waypoint
+                    this.moveTowardsDirect(nextWaypoint, deltaTime);
+
+                    // Check if we've reached the waypoint (after movement)
+                    const waypointDistance = GameUtils.distance(this.position, nextWaypoint);
+                    if (waypointDistance < GameConfig.navigation.waypointReachDistance) {
+                        this.pathIndex++;
+                        this.waypointStuckTimer = 0; // Reset stuck timer when waypoint reached
+
+                        // Update debug visualization waypoint
+                        if (this.scene.pathfinder && GameConfig.navigation.debugVisualization.enabled) {
+                            this.scene.pathfinder.updateActivePathWaypoint(this, this.pathIndex);
+                        }
+
+                        // Log waypoint progress
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.name} REACHED WAYPOINT: ${this.pathIndex}/${this.currentPath.length} at (${Math.round(this.position.x)}, ${Math.round(this.position.y)})`);
+                        }
+                    } else {
+                        // Initialize stuck timer if not exists
+                        if (!this.waypointStuckTimer) {
+                            this.waypointStuckTimer = 0;
+                        }
+                        this.waypointStuckTimer += deltaTime;
+
+                        // Skip waypoint if stuck for more than 2 seconds
+                        if (this.waypointStuckTimer > 2000) {
+                            this.pathIndex++;
+                            this.waypointStuckTimer = 0;
+                            console.log(`[Villager] ${this.name} SKIPPING STUCK WAYPOINT: ${this.pathIndex}/${this.currentPath.length} after 2 seconds`);
+                        } else {
+                            // Log when villager is stuck at waypoint
+                            if (Math.random() < 0.1 && window.summaryLoggingEnabled) { // 10% chance to log stuck villagers
+                                console.log(`[Villager] ${this.name} STUCK AT WAYPOINT: Distance ${Math.round(waypointDistance)}px (threshold: ${GameConfig.navigation.waypointReachDistance}px) to waypoint ${this.pathIndex}/${this.currentPath.length} at (${Math.round(nextWaypoint.x)}, ${Math.round(nextWaypoint.y)}) - Villager speed: ${GameConfig.villager.moveSpeed}px/s - Stuck for ${Math.round(this.waypointStuckTimer)}ms`);
+                            }
+                        }
+                    }
+
+                    // Check if we've reached the final target
+                    if (this.pathIndex >= this.currentPath.length) {
+                        const finalDistance = GameUtils.distance(this.position, target);
+                        if (finalDistance < GameConfig.navigation.targetReachDistance) {
+                            // Reached the target, clear path
+                            this.currentPath = null;
+                            this.pathTarget = null;
+                            this.pathIndex = null;
+
+                            // Remove from debug visualization
+                            if (this.scene.pathfinder && GameConfig.navigation.debugVisualization.enabled) {
+                                this.scene.pathfinder.removeActivePath(this);
+                            }
+
+                            if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) {
+                                console.log(`[Villager] ${this.name} REACHED TARGET: (${Math.round(target.x)}, ${Math.round(target.y)})`);
+                            }
+                        }
+                    }
+                } else {
+                    // No valid path, use direct movement
+                    this.moveTowardsDirect(target, deltaTime);
+                }
+            } else {
+                // Use direct movement for close targets or when pathfinding is disabled
+                this.currentPath = null;
+                this.pathTarget = null;
+                this.pathIndex = null;
+
+                // Remove from debug visualization
+                if (this.scene.pathfinder && GameConfig.navigation.debugVisualization.enabled) {
+                    this.scene.pathfinder.removeActivePath(this);
+                }
+
+                this.moveTowardsDirect(target, deltaTime);
+            }
+        }
+
+
+
+        // Direct movement (original moveTowards logic)
+        moveTowardsDirect(target, deltaTime) {
+            if (!target) return;
+
             const dx = target.x - this.position.x;
             const dy = target.y - this.position.y;
             const distance = GameUtils.distance(this.position, target);
@@ -767,6 +913,13 @@ console.log('Phaser main loaded');
                 if (!hasCollision) {
                     this.position.x = newX;
                     this.position.y = newY;
+                } else {
+                    // Debug: Log wall collisions occasionally
+                    if (Math.random() < 0.01) { // 1% chance to log
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Villager] ${this.name} WALL COLLISION at (${Math.round(newPosition.x)}, ${Math.round(newPosition.y)})`);
+                        }
+                    }
                 }
 
                 // Log movement occasionally (1% chance per frame, behind spam gate)
@@ -1379,9 +1532,11 @@ console.log('Phaser main loaded');
             assert(villager.campPosition, 'Villager must have campPosition');
 
             // Log initial state
-            console.log(`[HierarchicalVillagerAI] ${villager.name} initialized with goal: ${this.goalData.currentGoal}`);
-            console.log(`[HierarchicalVillagerAI] ${villager.name} starting needs: T${villager.needs.temperature.toFixed(1)} W${villager.needs.water.toFixed(1)} C${villager.needs.calories.toFixed(1)} V[${villager.needs.vitamins.map(v => v.toFixed(1)).join(',')}]`);
-            console.log(`[HierarchicalVillagerAI] ${villager.name} starting position: (${Math.round(villager.position.x)}, ${Math.round(villager.position.y)})`);
+            if (window.summaryLoggingEnabled) {
+                console.log(`[HierarchicalVillagerAI] ${villager.name} initialized with goal: ${this.goalData.currentGoal}`);
+                console.log(`[HierarchicalVillagerAI] ${villager.name} starting needs: T${villager.needs.temperature.toFixed(1)} W${villager.needs.water.toFixed(1)} C${villager.needs.calories.toFixed(1)} V[${villager.needs.vitamins.map(v => v.toFixed(1)).join(',')}]`);
+                console.log(`[HierarchicalVillagerAI] ${villager.name} starting position: (${Math.round(villager.position.x)}, ${Math.round(villager.position.y)})`);
+            }
         }
 
         /**
@@ -1649,7 +1804,7 @@ console.log('Phaser main loaded');
                         return 'emergency calories';
                     } else if (this.villager.needs.temperature < GameConfig.villager.emergencyThresholds.temperature) {
                         return 'emergency temp';
-                    } else if (this.collectionManager.shouldRefillFire(true, this.villager.gameEntities || [])) {
+                    } else if (this.collectionManager.shouldRefillFire(true, this.villager.gameEntities)) {
                         return 'emergency fire';
                     }
                     return 'survive (no emergency)';
@@ -1662,16 +1817,16 @@ console.log('Phaser main loaded');
                         return 'temp';
                     } else if (this.villager.needs.calories < GameConfig.villager.regularThresholds.calories) {
                         return 'calories';
-                    } else if (this.collectionManager.shouldRefillFire(false, this.villager.gameEntities || [])) {
+                    } else if (this.collectionManager.shouldRefillFire(false, this.villager.gameEntities)) {
                         return 'fire';
                     }
                     return 'maintain (satisfied)';
 
                 case GOAL_STATES.CONTRIBUTE:
                     // Check which contribution task is being done
-                    if (this.collectionManager.shouldForageFood(this.villager.gameEntities?.filter(e => e.type === 'storage_box') || [])) {
+                    if (this.collectionManager.shouldForageFood(this.villager.gameEntities?.filter(e => e.type === 'storage_box'))) {
                         return 'forage food';
-                    } else if (this.collectionManager.shouldForageBurnable(this.villager.gameEntities?.filter(e => e.type === 'storage_box') || [])) {
+                    } else if (this.collectionManager.shouldForageBurnable(this.villager.gameEntities?.filter(e => e.type === 'storage_box'))) {
                         return 'forage fuel';
                     }
                     return 'contribute (idle)';
@@ -1918,7 +2073,7 @@ console.log('Phaser main loaded');
             const nearbyObjects = [];
 
             // Find nearby entities
-            for (const entity of this.villager.gameEntities || []) {
+            for (const entity of this.villager.gameEntities) {
                 const dist = GameUtils.distance(this.villager.position, entity.position);
                 nearbyObjects.push({
                     type: entity.type,
@@ -3240,9 +3395,12 @@ console.log('Phaser main loaded');
                 .setOrigin(0, 0).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
 
             // Get player stats from the data passed to this scene
-            const playerStats = this.scene.settings.data || {};
-            const needs = playerStats.needs || {};
-            const causeOfDeath = playerStats.causeOfDeath || 'Unknown causes';
+            const playerStats = this.scene.settings.data;
+            assert(playerStats, 'Player stats data is required for death log');
+            const needs = playerStats.needs;
+            assert(needs, 'Player needs data is required for death log');
+            const causeOfDeath = playerStats.causeOfDeath;
+            assert(causeOfDeath, 'Cause of death is required for death log');
 
             // Content lines - left aligned with proper word wrapping
             const contentLines = [];
@@ -3258,14 +3416,14 @@ console.log('Phaser main loaded');
 
                 // Replace placeholders with actual values
                 let processedLine = line
-                    .replace('{temperature}', Math.round(needs.temperature || 0))
-                    .replace('{water}', Math.round(needs.water || 0))
-                    .replace('{calories}', Math.round(needs.calories || 0))
-                    .replace('{vitaminA}', Math.round(needs.vitamins?.[0] || 0))
-                    .replace('{vitaminB}', Math.round(needs.vitamins?.[1] || 0))
-                    .replace('{vitaminC}', Math.round(needs.vitamins?.[2] || 0))
-                    .replace('{vitaminD}', Math.round(needs.vitamins?.[3] || 0))
-                    .replace('{vitaminE}', Math.round(needs.vitamins?.[4] || 0))
+                    .replace('{temperature}', Math.round(needs.temperature))
+                    .replace('{water}', Math.round(needs.water))
+                    .replace('{calories}', Math.round(needs.calories))
+                    .replace('{vitaminA}', Math.round(needs.vitamins[0]))
+                    .replace('{vitaminB}', Math.round(needs.vitamins[1]))
+                    .replace('{vitaminC}', Math.round(needs.vitamins[2]))
+                    .replace('{vitaminD}', Math.round(needs.vitamins[3]))
+                    .replace('{vitaminE}', Math.round(needs.vitamins[4]))
                     .replace('{causeOfDeath}', causeOfDeath);
 
                 // Word wrap the text
@@ -3353,7 +3511,18 @@ console.log('Phaser main loaded');
             this.createGroundTexture();
 
             // Create wall system between grid cells
+            console.log('[MainScene] Creating wall system...');
+            const wallStartTime = performance.now();
             this.createWallSystem();
+            const wallEndTime = performance.now();
+            console.log(`[MainScene] Wall system created in ${(wallEndTime - wallStartTime).toFixed(2)}ms`);
+
+            // Initialize A* pathfinding system (after walls are created)
+            console.log('[MainScene] Initializing pathfinding system...');
+            const pathfinderStartTime = performance.now();
+            this.pathfinder = new Pathfinder(this, GameConfig.world.width, GameConfig.world.height);
+            const pathfinderEndTime = performance.now();
+            console.log(`[MainScene] Pathfinding system initialized in ${(pathfinderEndTime - pathfinderStartTime).toFixed(2)}ms`);
 
             const cfg = GameConfig.world;
 
@@ -3535,6 +3704,9 @@ console.log('Phaser main loaded');
                 };
 
                 const villager = new Villager(villagerName, villagerSpawnPosition, i - 1, this.seededRandom); // Use camp index for villagerId and pass seeded random
+
+                // Set scene reference for pathfinding access
+                villager.scene = this;
 
                 // Create unique character customization for this villager
                 villager.characterCustomization = new CharacterCustomization(this.seededRandom);
@@ -4157,6 +4329,9 @@ console.log('Phaser main loaded');
             // UI update
             this.updatePhaserUI();
 
+            // Debug visualization for pathfinding
+            this.updatePathfindingDebugVisualization();
+
             // Game over
             const reason = checkGameOver(this.playerState);
             if (reason) {
@@ -4240,8 +4415,86 @@ console.log('Phaser main loaded');
             // --- Visual Temperature State Update ---
             // No longer caching - recalculated every frame in updatePhaserUI()
         }
+
+        updatePathfindingDebugVisualization() {
+            // Only render if debug visualization is enabled AND debug button is on
+            if (!GameConfig.navigation.debugVisualization.enabled || !this.pathfinder || !window.villagerDebugEnabled) {
+                if (this.debugGraphics) this.debugGraphics.clear();
+                return;
+            }
+
+            // Clear previous debug graphics
+            if (this.debugGraphics) {
+                this.debugGraphics.clear();
+            } else {
+                // Create debug graphics layer if it doesn't exist
+                this.debugGraphics = this.add.graphics();
+                this.debugGraphics.setDepth(1000); // Render on top of everything
+            }
+
+            const debugData = this.pathfinder.getDebugData();
+            const config = GameConfig.navigation.debugVisualization;
+
+            // Draw active paths
+            if (config.showPaths && debugData.activePaths) {
+                for (const activePath of debugData.activePaths) {
+                    if (!activePath.path || activePath.path.length < 2) continue;
+
+                    // Draw path lines
+                    this.debugGraphics.lineStyle(config.pathWidth, config.pathColor, config.pathAlpha);
+
+                    // Start from entity position
+                    this.debugGraphics.moveTo(activePath.entity.position.x, activePath.entity.position.y);
+
+                    // Draw lines to each waypoint
+                    for (let i = 0; i < activePath.path.length; i++) {
+                        const waypoint = activePath.path[i];
+                        this.debugGraphics.lineTo(waypoint.x, waypoint.y);
+                    }
+
+                    // Draw waypoint markers
+                    for (let i = 0; i < activePath.path.length; i++) {
+                        const waypoint = activePath.path[i];
+                        const isCurrentWaypoint = i === activePath.currentWaypointIndex;
+                        const color = isCurrentWaypoint ? config.waypointColor : config.pathColor;
+                        const size = isCurrentWaypoint ? config.waypointSize * 1.5 : config.waypointSize;
+
+                        this.debugGraphics.fillStyle(color, config.pathAlpha);
+                        this.debugGraphics.fillCircle(waypoint.x, waypoint.y, size);
+                    }
+
+                    // Draw target marker
+                    if (activePath.target) {
+                        this.debugGraphics.fillStyle(config.targetColor, config.pathAlpha);
+                        this.debugGraphics.fillCircle(activePath.target.x, activePath.target.y, config.targetSize);
+                    }
+                }
+            }
+
+            // Draw grid (optional, can be performance intensive)
+            if (config.showGrid && this.pathfinder) {
+                this.debugGraphics.lineStyle(1, config.gridColor, config.gridAlpha);
+
+                const gridSize = this.pathfinder.gridSize;
+                const worldWidth = this.pathfinder.worldWidth;
+                const worldHeight = this.pathfinder.worldHeight;
+
+                // Draw vertical lines
+                for (let x = 0; x <= worldWidth; x += gridSize) {
+                    this.debugGraphics.moveTo(x, 0);
+                    this.debugGraphics.lineTo(x, worldHeight);
+                }
+
+                // Draw horizontal lines
+                for (let y = 0; y <= worldHeight; y += gridSize) {
+                    this.debugGraphics.moveTo(0, y);
+                    this.debugGraphics.lineTo(worldWidth, y);
+                }
+            }
+        }
+
         updatePhaserUI() {
-            // Needs bars
+            // Needs
             const needs = this.playerState.needs;
             const needTypes = ['temperature', 'water', 'calories', 'vitaminA', 'vitaminB', 'vitaminC', 'vitaminD', 'vitaminE'];
             for (let i = 0; i < needTypes.length; i++) {
@@ -4493,8 +4746,10 @@ console.log('Phaser main loaded');
 
         showGameOverOverlay(reason) {
             // Get player stats for the outro
+            assert(this.playerState, 'Player state is required for game over');
+            assert(this.playerState.needs, 'Player needs are required for game over');
             const playerStats = {
-                needs: this.playerState?.needs || {},
+                needs: this.playerState.needs,
                 causeOfDeath: reason
             };
             this.scene.start('OutroScene', playerStats);
@@ -4806,7 +5061,9 @@ console.log('Phaser main loaded');
                 const campTileX = Math.floor(centerX / tileSize);
                 const campTileY = Math.floor(centerY / tileSize);
 
-                console.log(`[Wall System] Camp cell coordinates: (${campTileX}, ${campTileY})`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Wall System] Camp cell coordinates: (${campTileX}, ${campTileY})`);
+                }
 
                 // Generate per-cell opening plan
                 const cellOpenings = this.generatePerCellOpenings(tilesX, tilesY);
@@ -4819,7 +5076,9 @@ console.log('Phaser main loaded');
                             (tileX >= campTileX && tileX <= campTileX + 1);
 
                         if (isCampBorder) {
-                            console.log(`[Wall System] Skipping horizontal wall at (${tileX}, ${tileY}) - camp border`);
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Wall System] Skipping horizontal wall at (${tileX}, ${tileY}) - camp border`);
+                            }
                             continue;
                         }
 
@@ -4846,7 +5105,9 @@ console.log('Phaser main loaded');
                             (tileY >= campTileY && tileY <= campTileY + 1);
 
                         if (isCampBorder) {
-                            console.log(`[Wall System] Skipping vertical wall at (${tileX}, ${tileY}) - camp border`);
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Wall System] Skipping vertical wall at (${tileX}, ${tileY}) - camp border`);
+                            }
                             continue;
                         }
 
@@ -4868,7 +5129,9 @@ console.log('Phaser main loaded');
                 // Create mountains inside each grid cell
                 this.createMountains(tilesX, tilesY, tileSize);
 
-                console.log(`[Wall System] Created ${this.walls.length} wall segments`);
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[Wall System] Created ${this.walls.length} wall segments`);
+                }
             } catch (error) {
                 console.error('[Wall System] Error creating wall system:', error);
                 // Don't crash the game if wall system fails
@@ -4887,14 +5150,18 @@ console.log('Phaser main loaded');
             const campTileX = Math.floor(centerX / tileSize);
             const campTileY = Math.floor(centerY / tileSize);
 
-            console.log(`[Mountains] Camp cell coordinates: (${campTileX}, ${campTileY})`);
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Mountains] Camp cell coordinates: (${campTileX}, ${campTileY})`);
+            }
 
             // Create 0-4 mountains per grid cell (except camp cell)
             for (let tileY = 0; tileY < tilesY; tileY++) {
                 for (let tileX = 0; tileX < tilesX; tileX++) {
                     // Skip the camp grid cell
                     if (tileX === campTileX && tileY === campTileY) {
-                        console.log(`[Mountains] Skipping camp cell at (${tileX}, ${tileY})`);
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[Mountains] Skipping camp cell at (${tileX}, ${tileY})`);
+                        }
                         continue;
                     }
 
@@ -5104,6 +5371,13 @@ console.log('Phaser main loaded');
             const collisionMargin = GameConfig.walls.collisionMargin;
             const totalRadius = radius + collisionMargin;
 
+            // Log wall collision checks occasionally
+            if (Math.random() < 0.0001) { // Very rare logging
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[WallCollision] Checking collision at (${Math.round(position.x)}, ${Math.round(position.y)}) with radius ${radius}, total radius ${totalRadius}, walls count: ${this.walls.length}`);
+                }
+            }
+
             for (const wall of this.walls) {
                 // Calculate distance from position to wall center
                 const dx = Math.abs(position.x - wall.x);
@@ -5114,6 +5388,12 @@ console.log('Phaser main loaded');
                 const halfHeight = wall.height / 2 + totalRadius;
 
                 if (dx <= halfWidth && dy <= halfHeight) {
+                    // Log collision detection occasionally
+                    if (Math.random() < 0.0001) {
+                        if (window.summaryLoggingEnabled) {
+                            console.log(`[WallCollision] COLLISION DETECTED at (${Math.round(position.x)}, ${Math.round(position.y)}) with wall at (${Math.round(wall.x)}, ${Math.round(wall.y)})`);
+                        }
+                    }
                     return true; // Collision detected
                 }
             }
@@ -5447,7 +5727,9 @@ console.log('Phaser main loaded');
 
             // Check current time before starting sleep
             const currentTime = getCurrentTime(this.playerState);
-            console.log(`[Sleep] Starting sleep at ${currentTime.hour}:${currentTime.minute}`);
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Sleep] Starting sleep at ${currentTime.hour}:${currentTime.minute}`);
+            }
 
             // Mark as occupied
             sleepingBag.isOccupied = true;
@@ -5475,7 +5757,9 @@ console.log('Phaser main loaded');
                     this.sleepZZZ = null;
                 }
 
-                console.log('[Sleep] Player stopped sleeping');
+                if (window.summaryLoggingEnabled) {
+                    console.log('[Sleep] Player stopped sleeping');
+                }
             }
         }
 
@@ -5893,8 +6177,6 @@ console.log('Phaser main loaded');
             return this.entities.filter(e => e.type === resourceType && !e.collected).length;
         }
 
-
-
         updateAnimalFleeing(delta) {
             // Get all animals (only check entities that are in resourceData)
             const animals = this.entities.filter(e => {
@@ -5915,16 +6197,21 @@ console.log('Phaser main loaded');
 
                 // Check distance to player
                 const distToPlayer = GameUtils.distance(this.playerState.position, animal.position);
-                if (distToPlayer < GameConfig.technical.distances.animalFleeDistance) { // Flee if player is within 100 pixels
+                if (distToPlayer < GameConfig.technical.distances.animalSenseDistance) {
                     this.fleeFromTarget(animal, this.playerState.position, delta);
                     isFleeing = true;
+
+                    // Set fleeing sprite to blue cube emoji
+                    if (animal.phaserText) {
+                        animal.phaserText.setText('🟦');
+                    }
                 }
 
                 // Check distance to villagers
                 for (const villager of this.villagers) {
                     if (villager && !villager.isDead) {
                         const distToVillager = GameUtils.distance(villager.position, animal.position);
-                        if (distToVillager < GameConfig.technical.distances.animalFleeDistance) { // Flee if villager is within 100 pixels
+                        if (distToVillager < GameConfig.technical.distances.animalSenseDistance) {
                             this.fleeFromTarget(animal, villager.position, delta);
                             isFleeing = true;
                             break; // Only flee from one threat at a time
@@ -5946,15 +6233,72 @@ console.log('Phaser main loaded');
             const dist = Math.sqrt(dx * dx + dy * dy);
 
             if (dist > 0) {
-                // Move away at procedurally generated animal speed using actual delta time
-                const animalSpeed = GameUtils.getRunspeed(animal.type);
-                const fleeSpeed = animalSpeed * (delta / 1000); // Procedurally generated animal speed, actual delta
-                const moveX = (dx / dist) * fleeSpeed;
-                const moveY = (dy / dist) * fleeSpeed;
+                // Calculate flee target 
+                const fleeDistance = GameConfig.technical.distances.animalFleeDistance;
+                const fleeTarget = {
+                    x: animal.position.x + (dx / dist) * fleeDistance,
+                    y: animal.position.y + (dy / dist) * fleeDistance
+                };
 
-                // Update animal position
-                animal.position.x += moveX;
-                animal.position.y += moveY;
+                // Keep flee target within world bounds
+                fleeTarget.x = Math.max(0, Math.min(GameConfig.world.width, fleeTarget.x));
+                fleeTarget.y = Math.max(0, Math.min(GameConfig.world.height, fleeTarget.y));
+
+                // Use direct fleeing (no A* pathfinding for animals)
+                // Remove from debug visualization
+                if (this.pathfinder && GameConfig.navigation.debugVisualization.enabled) {
+                    this.pathfinder.removeActivePath(animal);
+                }
+
+                // Direct movement to flee target
+                this.moveAnimalTowards(animal, fleeTarget, delta);
+            }
+        }
+
+        // Helper method for animal movement
+        moveAnimalTowards(animal, target, delta) {
+            const dx = target.x - animal.position.x;
+            const dy = target.y - animal.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > 0) {
+                // Move at procedurally generated animal speed using actual delta time
+                const animalSpeed = GameUtils.getRunspeed(animal.type);
+                const moveSpeed = animalSpeed * (delta / 1000); // Procedurally generated animal speed, actual delta
+                const moveX = (dx / dist) * moveSpeed;
+                const moveY = (dy / dist) * moveSpeed;
+
+                // Calculate new position
+                const newX = animal.position.x + moveX;
+                const newY = animal.position.y + moveY;
+
+                // Check wall collision before applying movement
+                const newPosition = { x: newX, y: newY };
+                const hasCollision = this.checkWallCollision(newPosition, 10); // 10px collision radius for animals
+
+                // Only apply movement if no collision
+                if (!hasCollision) {
+                    animal.position.x = newX;
+                    animal.position.y = newY;
+                } else {
+                    // If we hit a wall, try to move along the wall instead of stopping completely
+                    // This helps animals navigate around obstacles
+                    const reducedMoveSpeed = moveSpeed * 0.5; // Move slower when hitting walls
+
+                    // Try horizontal movement only
+                    const horizontalMoveX = (dx / dist) * reducedMoveSpeed;
+                    const horizontalPosition = { x: animal.position.x + horizontalMoveX, y: animal.position.y };
+                    if (!this.checkWallCollision(horizontalPosition, 10)) {
+                        animal.position.x += horizontalMoveX;
+                    } else {
+                        // Try vertical movement only
+                        const verticalMoveY = (dy / dist) * reducedMoveSpeed;
+                        const verticalPosition = { x: animal.position.x, y: animal.position.y + verticalMoveY };
+                        if (!this.checkWallCollision(verticalPosition, 10)) {
+                            animal.position.y += verticalMoveY;
+                        }
+                    }
+                }
 
                 // Keep within world bounds
                 animal.position.x = Math.max(0, Math.min(GameConfig.world.width, animal.position.x));
@@ -6013,7 +6357,7 @@ console.log('Phaser main loaded');
                 wander.changeDirectionInterval = GameConfig.animals.directionChangeInterval.min + this.seededRandom.random() * (GameConfig.animals.directionChangeInterval.max - GameConfig.animals.directionChangeInterval.min); // 2-5 seconds
             }
 
-            // Move towards target if we have one
+            // Move towards target if we have one (DIRECT MOVEMENT ONLY - NO PATHFINDING)
             if (wander.targetPosition) {
                 const dx = wander.targetPosition.x - animal.position.x;
                 const dy = wander.targetPosition.y - animal.position.y;
@@ -6281,6 +6625,14 @@ console.log('Phaser main loaded');
                 repeat: -1,
             });
         }
+
+        shutdown() {
+            // Clean up debug graphics
+            if (this.debugGraphics) {
+                this.debugGraphics.destroy();
+                this.debugGraphics = null;
+            }
+        }
     }
     function getPhaserBarColor(type) {
         const colors = {
@@ -6454,6 +6806,605 @@ console.log('Phaser main loaded');
             assert(this.generatedNutrition[resourceName].runspeed !== undefined, `Resource ${resourceName} missing runspeed property`);
             return this.generatedNutrition[resourceName].runspeed;
         }
+    }
+
+    // A* Pathfinding system for villagers and animals
+    class Pathfinder {
+        constructor(scene, worldWidth, worldHeight) {
+            assert(scene, 'Scene required for pathfinder');
+            assert(worldWidth > 0, 'World width must be positive');
+            assert(worldHeight > 0, 'World height must be positive');
+
+            this.scene = scene;
+            this.worldWidth = worldWidth;
+            this.worldHeight = worldHeight;
+            this.gridSize = GameConfig.navigation.gridSize;
+            this.walls = scene.walls || []; // Store reference to wall data
+
+            // Calculate grid dimensions
+            this.gridWidth = Math.ceil(worldWidth / this.gridSize);
+            this.gridHeight = Math.ceil(worldHeight / this.gridSize);
+
+            console.log(`[Pathfinder] Initialized with ${this.gridWidth}x${this.gridHeight} grid (${this.gridSize}px cells) and ${this.walls.length} walls`);
+
+            // Debug visualization data
+            this.debugData = {
+                activePaths: [], // Array of { entity, path, target, startTime }
+                lastPathfindingResult: null, // Last pathfinding attempt result
+                gridDebugInfo: null // Grid debug information
+            };
+
+            // Pre-calculate blocked grid cells
+            this.initializeBlockedGrid();
+
+
+        }
+
+        // Convert world coordinates to grid coordinates
+        worldToGrid(worldPos) {
+            assert(worldPos && typeof worldPos.x === 'number' && typeof worldPos.y === 'number', 'Invalid world position');
+
+            const gridX = Math.floor(worldPos.x / this.gridSize);
+            const gridY = Math.floor(worldPos.y / this.gridSize);
+
+            // Clamp to grid bounds
+            return {
+                x: Math.max(0, Math.min(gridX, this.gridWidth - 1)),
+                y: Math.max(0, Math.min(gridY, this.gridHeight - 1))
+            };
+        }
+
+        // Convert grid coordinates to world coordinates (center of cell)
+        gridToWorld(gridPos) {
+            assert(gridPos && typeof gridPos.x === 'number' && typeof gridPos.y === 'number', 'Invalid grid position');
+            assert(gridPos.x >= 0 && gridPos.x < this.gridWidth, 'Grid X out of bounds');
+            assert(gridPos.y >= 0 && gridPos.y < this.gridHeight, 'Grid Y out of bounds');
+
+            return {
+                x: gridPos.x * this.gridSize + this.gridSize / 2,
+                y: gridPos.y * this.gridSize + this.gridSize / 2
+            };
+        }
+
+        // Initialize blocked grid cells (pre-calculated for performance)
+        initializeBlockedGrid() {
+            console.log(`[Pathfinder] Pre-calculating blocked grid cells...`);
+            const startTime = performance.now();
+
+            // Create 2D array for blocked cells
+            this.blockedGrid = new Array(this.gridWidth);
+            for (let x = 0; x < this.gridWidth; x++) {
+                this.blockedGrid[x] = new Array(this.gridHeight);
+            }
+
+            // Build spatial partition for walls
+            this.buildWallSpatialPartition();
+
+            let blockedCount = 0;
+            let totalCells = 0;
+
+            // Check each grid cell
+            for (let gridX = 0; gridX < this.gridWidth; gridX++) {
+                for (let gridY = 0; gridY < this.gridHeight; gridY++) {
+                    totalCells++;
+
+                    // Convert grid cell center to world coordinates
+                    const worldPos = this.gridToWorld({ x: gridX, y: gridY });
+
+                    // Check if the center of the grid cell is blocked by walls (using spatial partitioning)
+                    const isBlocked = this.checkWallCollisionOptimized(worldPos, this.gridSize / 2);
+
+                    this.blockedGrid[gridX][gridY] = isBlocked;
+
+                    if (isBlocked) {
+                        blockedCount++;
+                    }
+                }
+            }
+
+            const endTime = performance.now();
+            const duration = endTime - startTime;
+
+            console.log(`[Pathfinder] Grid initialization complete: ${blockedCount}/${totalCells} cells blocked (${(blockedCount / totalCells * 100).toFixed(1)}%) in ${duration.toFixed(2)}ms`);
+
+            // Debug: Log a few sample blocked cells
+            if (blockedCount > 0) {
+                let sampleCount = 0;
+                for (let gridX = 0; gridX < this.gridWidth && sampleCount < 5; gridX++) {
+                    for (let gridY = 0; gridY < this.gridHeight && sampleCount < 5; gridY++) {
+                        if (this.blockedGrid[gridX][gridY]) {
+                            const worldPos = this.gridToWorld({ x: gridX, y: gridY });
+                            console.log(`[Pathfinder] Sample blocked cell: grid(${gridX}, ${gridY}) = world(${Math.round(worldPos.x)}, ${Math.round(worldPos.y)})`);
+                            sampleCount++;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Build spatial partition for walls to optimize collision checks
+        buildWallSpatialPartition() {
+            console.log(`[Pathfinder] Building wall spatial partition...`);
+
+            // Get all wall segments from the stored wall data (same as movement collision)
+            const wallSegments = this.walls;
+            if (!wallSegments || wallSegments.length === 0) {
+                console.warn(`[Pathfinder] Wall segments array is missing or empty. Expected non-empty array, got: ${wallSegments}`);
+                return;
+            }
+
+            // Create spatial grid for walls (coarser than pathfinding grid)
+            const partitionSize = GameConfig.navigation.partitioningGridSize;
+            this.wallPartitionSize = partitionSize;
+            this.wallPartitionWidth = Math.ceil(this.worldWidth / partitionSize);
+            this.wallPartitionHeight = Math.ceil(this.worldHeight / partitionSize);
+
+            // Initialize partition grid
+            this.wallPartitions = new Array(this.wallPartitionWidth);
+            for (let x = 0; x < this.wallPartitionWidth; x++) {
+                this.wallPartitions[x] = new Array(this.wallPartitionHeight);
+                for (let y = 0; y < this.wallPartitionHeight; y++) {
+                    this.wallPartitions[x][y] = [];
+                }
+            }
+
+            // Assign wall segments to partitions
+            let totalWalls = 0;
+            for (const wall of wallSegments) {
+                totalWalls++;
+
+                // Get wall bounds
+                const bounds = this.getWallBounds(wall);
+
+                // Find all partitions this wall intersects
+                const partitions = this.getPartitionsForBounds(bounds);
+
+                // Add wall to each relevant partition
+                for (const partition of partitions) {
+                    this.wallPartitions[partition.x][partition.y].push(wall);
+                }
+            }
+
+            console.log(`[Pathfinder] Spatial partition complete: ${totalWalls} walls distributed across ${this.wallPartitionWidth}x${this.wallPartitionHeight} partitions`);
+
+            // Debug: Log first few walls to verify data structure
+            if (totalWalls > 0) {
+                console.log(`[Pathfinder] Sample wall data:`, wallSegments.slice(0, 3).map(w => ({ x: w.x, y: w.y, width: w.width, height: w.height })));
+            }
+        }
+
+        // Get bounding box for a wall segment
+        getWallBounds(wall) {
+            // Wall segments are typically rectangles, so we need their bounds
+            // This assumes wall objects have position and size properties
+            assert(wall, 'Wall object is required for bounds calculation');
+            assert(typeof wall.x === 'number', `Wall x position must be a number, got: ${typeof wall.x}`);
+            assert(typeof wall.y === 'number', `Wall y position must be a number, got: ${typeof wall.y}`);
+            assert(typeof wall.width === 'number', `Wall width must be a number, got: ${typeof wall.width}`);
+            assert(typeof wall.height === 'number', `Wall height must be a number, got: ${typeof wall.height}`);
+
+            const x = wall.x;
+            const y = wall.y;
+            const width = wall.width;
+            const height = wall.height;
+
+            return {
+                minX: x - width / 2,
+                maxX: x + width / 2,
+                minY: y - height / 2,
+                maxY: y + height / 2
+            };
+        }
+
+        // Get partition coordinates for a bounding box
+        getPartitionsForBounds(bounds) {
+            const partitions = [];
+
+            const minPartX = Math.floor(bounds.minX / this.wallPartitionSize);
+            const maxPartX = Math.floor(bounds.maxX / this.wallPartitionSize);
+            const minPartY = Math.floor(bounds.minY / this.wallPartitionSize);
+            const maxPartY = Math.floor(bounds.maxY / this.wallPartitionSize);
+
+            for (let x = Math.max(0, minPartX); x <= Math.min(this.wallPartitionWidth - 1, maxPartX); x++) {
+                for (let y = Math.max(0, minPartY); y <= Math.min(this.wallPartitionHeight - 1, maxPartY); y++) {
+                    partitions.push({ x, y });
+                }
+            }
+
+            return partitions;
+        }
+
+        // Optimized wall collision check using spatial partitioning
+        checkWallCollisionOptimized(position, radius) {
+            // Get partitions that could contain walls near this position
+            const nearbyPartitions = this.getPartitionsForPosition(position, radius);
+
+            // Check walls in nearby partitions only
+            for (const partition of nearbyPartitions) {
+                const walls = this.wallPartitions[partition.x][partition.y];
+
+                for (const wall of walls) {
+                    if (this.checkCollisionWithWall(position, radius, wall)) {
+                        // Debug: Log collision detection occasionally
+                        if (Math.random() < 0.001 && window.summaryLoggingEnabled) {
+                            console.log(`[Pathfinder] Wall collision detected at (${Math.round(position.x)}, ${Math.round(position.y)}) with wall at (${Math.round(wall.x)}, ${Math.round(wall.y)})`);
+                        }
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        // Get partitions that could contain walls near a position
+        getPartitionsForPosition(position, radius) {
+            const bounds = {
+                minX: position.x - radius,
+                maxX: position.x + radius,
+                minY: position.y - radius,
+                maxY: position.y + radius
+            };
+
+            return this.getPartitionsForBounds(bounds);
+        }
+
+        // Check collision between a position and a specific wall
+        checkCollisionWithWall(position, radius, wall) {
+            // This is a simplified collision check - you may need to adapt this
+            // based on how your wall objects are structured
+            assert(wall, 'Wall object is required for collision check');
+            assert(typeof wall.x === 'number', `Wall x position must be a number, got: ${typeof wall.x}`);
+            assert(typeof wall.y === 'number', `Wall y position must be a number, got: ${typeof wall.y}`);
+            assert(typeof wall.width === 'number', `Wall width must be a number, got: ${typeof wall.width}`);
+            assert(typeof wall.height === 'number', `Wall height must be a number, got: ${typeof wall.height}`);
+
+            const wallX = wall.x;
+            const wallY = wall.y;
+            const wallWidth = wall.width;
+            const wallHeight = wall.height;
+
+            // Simple rectangle-circle collision
+            const closestX = Math.max(wallX - wallWidth / 2, Math.min(position.x, wallX + wallWidth / 2));
+            const closestY = Math.max(wallY - wallHeight / 2, Math.min(position.y, wallY + wallHeight / 2));
+
+            const distanceSquared = (position.x - closestX) ** 2 + (position.y - closestY) ** 2;
+            return distanceSquared <= radius ** 2;
+        }
+
+        // Check if a grid cell is blocked by walls (using pre-calculated data)
+        isGridCellBlocked(gridX, gridY) {
+            assert(gridX >= 0 && gridX < this.gridWidth, 'Grid X out of bounds');
+            assert(gridY >= 0 && gridY < this.gridHeight, 'Grid Y out of bounds');
+
+            // Use pre-calculated blocked grid
+            return this.blockedGrid[gridX][gridY];
+        }
+
+        // Find path using A* algorithm
+        findPath(startPos, targetPos, maxAttempts = null, entity = null) {
+            assert(startPos && typeof startPos.x === 'number' && typeof startPos.y === 'number', 'Invalid start position');
+            assert(targetPos && typeof targetPos.x === 'number' && typeof targetPos.y === 'number', 'Invalid target position');
+
+            if (!maxAttempts) {
+                maxAttempts = GameConfig.navigation.maxPathfindingAttempts;
+            }
+
+            const startTime = performance.now();
+
+            // Convert to grid coordinates
+            const startGrid = this.worldToGrid(startPos);
+            const targetGrid = this.worldToGrid(targetPos);
+
+            // Store debug information
+            this.debugData.lastPathfindingResult = {
+                startPos: { x: startPos.x, y: startPos.y },
+                targetPos: { x: targetPos.x, y: targetPos.y },
+                startGrid: { x: startGrid.x, y: startGrid.y },
+                targetGrid: { x: targetGrid.x, y: targetGrid.y },
+                startTime: startTime,
+                success: false,
+                path: null,
+                duration: 0,
+                attempts: 0
+            };
+
+            // If start and target are in same grid cell, no pathfinding needed
+            if (startGrid.x === targetGrid.x && startGrid.y === targetGrid.y) {
+                console.log(`[Pathfinder] Same grid cell, no pathfinding needed: (${startGrid.x},${startGrid.y})`);
+                const simplePath = [targetPos];
+                this.debugData.lastPathfindingResult.success = true;
+                this.debugData.lastPathfindingResult.path = simplePath;
+                this.debugData.lastPathfindingResult.duration = performance.now() - startTime;
+                return simplePath;
+            }
+
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Pathfinder] Starting A* from grid(${startGrid.x},${startGrid.y}) to grid(${targetGrid.x},${targetGrid.y})`);
+            }
+
+            // Check if target is reachable (not blocked)
+            if (this.isGridCellBlocked(targetGrid.x, targetGrid.y)) {
+                console.warn(`[Pathfinder] Target grid cell (${targetGrid.x},${targetGrid.y}) is blocked, no path possible`);
+                this.debugData.lastPathfindingResult.duration = performance.now() - startTime;
+                return null;
+            }
+
+            // Run A* algorithm
+            let path;
+            try {
+                path = this.aStar(startGrid, targetGrid, maxAttempts, entity);
+            } catch (error) {
+                console.error(`[Pathfinder] Error during A* pathfinding:`, error);
+                this.debugData.lastPathfindingResult.duration = performance.now() - startTime;
+                return null;
+            }
+
+            const endTime = performance.now();
+            const duration = endTime - startTime;
+
+            if (!path || path.length === 0) {
+                if (window.summaryLoggingEnabled) {
+                    console.warn(`[Pathfinder] No path found from ${startPos.x},${startPos.y} to ${targetPos.x},${targetPos.y} (${duration.toFixed(2)}ms)`);
+                }
+                this.debugData.lastPathfindingResult.duration = duration;
+                return null;
+            }
+
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Pathfinder] Path found with ${path.length} waypoints in ${duration.toFixed(2)}ms`);
+            }
+
+            // Convert path back to world coordinates
+            let worldPath;
+            try {
+                worldPath = path.map(gridPos => this.gridToWorld(gridPos));
+
+                // Add original target as final waypoint for precision
+                worldPath.push(targetPos);
+
+                // Store successful pathfinding result
+                this.debugData.lastPathfindingResult.success = true;
+                this.debugData.lastPathfindingResult.path = worldPath;
+                this.debugData.lastPathfindingResult.duration = duration;
+
+            } catch (error) {
+                console.error(`[Pathfinder] Error during path conversion:`, error);
+                this.debugData.lastPathfindingResult.duration = performance.now() - startTime;
+                return null;
+            }
+
+            return worldPath;
+        }
+
+        // Debug visualization methods
+        addActivePath(entity, path, target) {
+            assert(entity, 'Entity required for active path tracking');
+            assert(path && Array.isArray(path), 'Path must be an array');
+            assert(target && typeof target.x === 'number' && typeof target.y === 'number', 'Target must have x,y coordinates');
+
+            // Remove any existing path for this entity
+            this.removeActivePath(entity);
+
+            // Add new active path
+            this.debugData.activePaths.push({
+                entity: entity,
+                path: [...path], // Copy the path array
+                target: { x: target.x, y: target.y },
+                startTime: performance.now(),
+                currentWaypointIndex: 0
+            });
+        }
+
+        removeActivePath(entity) {
+            assert(entity, 'Entity required for active path removal');
+
+            const index = this.debugData.activePaths.findIndex(activePath => activePath.entity === entity);
+            if (index !== -1) {
+                this.debugData.activePaths.splice(index, 1);
+            }
+        }
+
+        updateActivePathWaypoint(entity, waypointIndex) {
+            assert(entity, 'Entity required for waypoint update');
+            assert(typeof waypointIndex === 'number', 'Waypoint index must be a number');
+
+            const activePath = this.debugData.activePaths.find(ap => ap.entity === entity);
+            if (activePath) {
+                activePath.currentWaypointIndex = waypointIndex;
+            }
+        }
+
+        getDebugData() {
+            return this.debugData;
+        }
+
+        // A* algorithm implementation
+        aStar(startGrid, targetGrid, maxAttempts, entity = null) {
+            assert(startGrid && targetGrid, 'Start and target grid positions required');
+            assert(maxAttempts > 0, 'Max attempts must be positive');
+
+            // Priority queue for open set (using simple array for simplicity)
+            const openSet = [startGrid];
+            const closedSet = new Set(); // Track visited nodes to prevent infinite loops
+            const cameFrom = new Map();
+            const gScore = new Map();
+            const fScore = new Map();
+
+            // Initialize scores
+            gScore.set(this.gridKey(startGrid), 0);
+            fScore.set(this.gridKey(startGrid), this.heuristic(startGrid, targetGrid));
+
+            let attempts = 0;
+            let lastLogAttempt = 0;
+
+            while (openSet.length > 0 && attempts < maxAttempts) {
+                attempts++;
+
+                // Safety check: if we've explored too many nodes, something is wrong
+                if (closedSet.size > maxAttempts / 2) {
+                    console.warn(`[Pathfinder] A* safety timeout: explored ${closedSet.size} nodes`);
+                    return null;
+                }
+
+                // Log progress every 1000 attempts
+                if (attempts - lastLogAttempt >= 1000) {
+                    console.log(`[Pathfinder] A* progress: ${attempts}/${maxAttempts} attempts, openSet: ${openSet.length} nodes, closedSet: ${closedSet.size} nodes`);
+                    lastLogAttempt = attempts;
+                }
+
+                // Find node with lowest fScore (optimized for small open sets)
+                let current = openSet[0];
+                let currentIndex = 0;
+                let bestFScore = fScore.get(this.gridKey(current)) || Infinity;
+
+                for (let i = 1; i < openSet.length; i++) {
+                    const currentFScore = fScore.get(this.gridKey(openSet[i])) || Infinity;
+                    if (currentFScore < bestFScore) {
+                        current = openSet[i];
+                        currentIndex = i;
+                        bestFScore = currentFScore;
+                    }
+                }
+
+                // Check if we reached the target
+                if (current.x === targetGrid.x && current.y === targetGrid.y) {
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[Pathfinder] A* found target after ${attempts} attempts`);
+                    }
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[Pathfinder] Starting path reconstruction...`);
+                    }
+                    const path = this.reconstructPath(cameFrom, current);
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[Pathfinder] Path reconstruction complete, path length: ${path ? path.length : 'null'}`);
+                    }
+                    return path;
+                }
+
+                // Remove current from open set and add to closed set
+                openSet.splice(currentIndex, 1);
+                closedSet.add(this.gridKey(current));
+
+                // Check all neighbors
+                const neighbors = this.getNeighbors(current);
+                for (const neighbor of neighbors) {
+                    const neighborKey = this.gridKey(neighbor);
+
+                    // Skip if already visited
+                    if (closedSet.has(neighborKey)) {
+                        continue;
+                    }
+
+                    const currentGScore = gScore.get(this.gridKey(current));
+                    assert(typeof currentGScore === 'number', `G-score must be a number, got: ${typeof currentGScore}`);
+                    const tentativeGScore = currentGScore + 1;
+
+                    if (tentativeGScore < (gScore.get(neighborKey) || Infinity)) {
+                        cameFrom.set(neighborKey, current);
+                        gScore.set(neighborKey, tentativeGScore);
+                        fScore.set(neighborKey, tentativeGScore + this.heuristic(neighbor, targetGrid));
+
+                        // Add to open set if not already there
+                        if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
+                            openSet.push(neighbor);
+                        }
+                    }
+                }
+            }
+
+            const entityInfo = entity ? `${entity.name || 'Unknown'} at (${Math.round(entity.position?.x || 0)}, ${Math.round(entity.position?.y || 0)})` : 'Unknown entity';
+            if (window.summaryLoggingEnabled) {
+                console.warn(`[Pathfinder] A* timeout after ${attempts} attempts for ${entityInfo}`);
+            }
+            return null;
+        }
+
+        // Get valid neighbors for a grid position (8-directional)
+        getNeighbors(gridPos) {
+            const neighbors = [];
+            const directions = [
+                { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
+                { x: -1, y: 0 }, { x: 1, y: 0 },
+                { x: -1, y: 1 }, { x: 0, y: 1 }, { x: 1, y: 1 }
+            ];
+
+            let blockedCount = 0;
+            let totalChecked = 0;
+
+            for (const dir of directions) {
+                const neighbor = {
+                    x: gridPos.x + dir.x,
+                    y: gridPos.y + dir.y
+                };
+
+                totalChecked++;
+
+                // Check bounds and obstacles
+                if (neighbor.x >= 0 && neighbor.x < this.gridWidth &&
+                    neighbor.y >= 0 && neighbor.y < this.gridHeight &&
+                    !this.isGridCellBlocked(neighbor.x, neighbor.y)) {
+                    neighbors.push(neighbor);
+                } else {
+                    blockedCount++;
+                }
+            }
+
+            // Log neighbor checking occasionally
+            if (Math.random() < 0.0001) { // Very rare logging
+                console.log(`[Pathfinder] Neighbor check: grid(${gridPos.x},${gridPos.y}) -> ${neighbors.length} valid, ${blockedCount} blocked out of ${totalChecked} total`);
+            }
+
+            return neighbors;
+        }
+
+        // Manhattan distance heuristic
+        heuristic(pos1, pos2) {
+            return Math.abs(pos1.x - pos2.x) + Math.abs(pos1.y - pos2.y);
+        }
+
+        // Create unique key for grid position
+        gridKey(gridPos) {
+            return `${gridPos.x},${gridPos.y}`;
+        }
+
+        // Reconstruct path from cameFrom map
+        reconstructPath(cameFrom, current) {
+            const path = [current];
+            const visited = new Set(); // Prevent infinite loops in path reconstruction
+            visited.add(this.gridKey(current));
+
+            let attempts = 0;
+            const maxReconstructionAttempts = 1000; // Safety limit
+
+            while (cameFrom.has(this.gridKey(current)) && attempts < maxReconstructionAttempts) {
+                attempts++;
+                current = cameFrom.get(this.gridKey(current));
+
+                // Check for cycles
+                const currentKey = this.gridKey(current);
+                if (visited.has(currentKey)) {
+                    console.warn(`[Pathfinder] Cycle detected in path reconstruction at ${currentKey}`);
+                    break;
+                }
+
+                visited.add(currentKey);
+                path.unshift(current);
+            }
+
+            if (attempts >= maxReconstructionAttempts) {
+                console.warn(`[Pathfinder] Path reconstruction timeout after ${attempts} attempts`);
+                return null;
+            }
+
+            return path;
+        }
+
+
+
+
+
+
     }
 
     function getCurrentSeed() {
