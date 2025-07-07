@@ -3,169 +3,73 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Participant Observer - Development Conventions & Rules
+# Participant Observer - Development Rules
 
-**⚠️ CRITICAL: These rules are NOT suggestions. They are MANDATORY requirements for maintaining code quality and consistency.**
+**⚠️ These are MANDATORY requirements, not suggestions.**
 
-## 🚨 THE IRON RULE: Configuration Centralization
+## 🚨 Rule #0: Re-State The Rules
 
-### **ALL CONFIG VALUES MUST BE IN GameConfig.js**
+**Before starting to work, always briefly restate the 3 rules.**
 
-**This is the MOST IMPORTANT rule. Violation is NOT acceptable.**
+## 🚨 Rule #1: NO Silent Failures
 
-- **NO** hardcoded values in game logic
-- **NO** magic numbers scattered throughout the codebase  
-- **NO** duplicate configuration values
-- **NO** entity types, emojis, or strings defined outside GameConfig
-- **NO** timing values, thresholds, or balance parameters in main code
-
-**GameConfig.js is the SINGLE SOURCE OF TRUTH for:**
-- Game balance parameters
-- Timing values and intervals
-- Entity types and their properties
-- Emoji assignments
-- UI dimensions and styling
-- Technical constants
-- Villager behavior parameters
-- Animal behavior parameters
-- Resource limits and propagation settings
-
-**Before adding ANY new value to the codebase, ask yourself: "Should this be in GameConfig?"**
-
-## 🏗️ Architecture Rules
-
-### **Single Responsibility Principle**
-- Each class/function should have ONE clear purpose
-- If a function does multiple things, split it
-- Keep functions under 50 lines when possible
-
-### **State Management**
-- All game state must be centralized and predictable
-- Use clear state transitions with defined constants
-- NO state mutations outside designated update methods
-
-### **Error Handling**
-- Use `assert()` statements liberally to document assumptions
-- Fail fast with clear error messages
-- NO silent failures or undefined behavior
-
-## 📝 Code Style & Organization
-
-### **File Structure**
-```
-sustain/
-├── config/
-│   └── GameConfig.js          # ALL configuration values
-├── phaser-main.js             # Main game logic
-├── index.html                 # Entry point
-├── server.js                  # Logging server
-└── logs/                      # Debug output
-```
-
-### **Naming Conventions**
-- **Variables**: `camelCase` (e.g., `playerState`, `moveSpeed`)
-- **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_INVENTORY_SIZE`)
-- **Functions**: `camelCase` (e.g., `updateNeeds()`, `findNearbyFire()`)
-- **Classes**: `PascalCase` (e.g., `Villager`, `MainScene`)
-- **Files**: `kebab-case` (e.g., `phaser-main.js`)
-
-### **Comments & Documentation**
-- **NEVER** comment functions and variable names that are obvious (like `this.findUsagePatterns(); // Find usage patterns`)
-- **ALWAYS** comment complex logic and explain the underlying assumptions that are hard to see from just reading the code
-- **ALWAYS** document assumptions with `assert()` statements
-- **ALWAYS** explain WHY, not just WHAT
-- Use JSDoc for public APIs
-
-## 🔧 Technical Rules
-
-### **Performance**
-- **ONLY** optimize performance when required by the user (but use sensible defaults) 
-- **NEVER** prematurely over-optimize something that might not matter or be cut anyways
-- When asked: Optimize hot paths (game loop, rendering)
-- Use efficient data structures
-- Minimize DOM queries and updates
-
-### **Debugging & Logging**
-- Use structured logging with clear prefixes
-- Include relevant context in log messages
-- Use the built-in logging system for debugging
-
-## 🚫 ABSOLUTE PROHIBITIONS
-
-### **NEVER DO THESE:**
-- ❌ Hardcode ANY value that could be configurable
-- ❌ Duplicate configuration values across files
-- ❌ Use magic numbers without explanation
-- ❌ Create entity types outside GameConfig
-- ❌ Define emojis outside GameConfig
-- ❌ Use hardcoded timing values
-- ❌ Break existing functionality without permission
-- ❌ Ignore error handling
-- ❌ Write functions longer than 100 lines
-- ❌ Use default configurations without explicit choice
-
-### **ALWAYS DO THESE:**
-- ✅ Add new config values to GameConfig.js
-- ✅ Use assert() statements for assumptions
-- ✅ Document complex logic
-- ✅ Test changes thoroughly
-- ✅ Follow existing naming conventions
-- ✅ Handle errors gracefully
-- ✅ Keep functions focused and small
-
-## 🔍 Code Review Checklist
-
-Before submitting any code, verify:
-
-- [ ] All config values are in GameConfig.js
-- [ ] No hardcoded magic numbers
-- [ ] No duplicate configuration
-- [ ] All entity types use GameConfig constants
-- [ ] All emojis use GameConfig assignments
-- [ ] Error handling is in place
-- [ ] Functions are under 100 lines
-- [ ] Comments explain complex logic
-- [ ] assert() statements document assumptions
-- [ ] No breaking changes to existing functionality
-
-## 🎯 Configuration Categories
-
-When adding to GameConfig.js, organize into these sections:
+**Never write code that silently fails or uses mystery fallback values:**
 
 ```javascript
-window.GameConfig = {
-    world: {},           // World size, generation settings
-    time: {},            // Time-related constants
-    needs: {},           // Needs system parameters
-    player: {},          // Player-specific settings
-    villager: {},        // AI villager behavior
-    animals: {},         // Animal behavior parameters
-    resources: {},       // Resource spawning and limits
-    entityTypes: {},     // All entity type definitions
-    villagerStates: {},  // Villager state constants
-    emojis: {},          // All emoji assignments
-    ui: {},              // UI dimensions and styling
-    logging: {},         // Debug logging settings
-    technical: {},       // Math and technical constants
-    // ... other categories as needed
-};
+// ❌ NEVER DO THIS - Silent failure hell
+const x = wall.x || wall.position?.x || 0;
+const width = wall.width || wall.displayWidth || 100;
+
+// ✅ DO THIS - Explicit and debuggable
+function assert(condition, message) {
+    if (!condition) throw new Error('ASSERTION FAILED: ' + message);
+}
+
+assert(wall, "Wall object is required");
+assert(typeof wall.x === 'number', "wall.x must be a number");
+const x = wall.x;
+const width = wall.width ?? (() => {
+    console.warn("No width provided, using default 100");
+    return 100;
+})();
 ```
 
-## 🚨 Enforcement
+**Why:** When bugs happen, you need to know immediately what's wrong and where. Silent failures hide problems and make debugging take 10x longer.
 
-**These rules are enforced through:**
-- Code review requirements
-- Automated linting where possible
-- Team accountability
-- Documentation requirements
+## 🎯 Rule #2: ALL Balance Values in GameConfig.js
 
-**Violations will result in:**
-- Code review rejection
-- Required refactoring
-- Documentation updates
+**Every number that affects gameplay MUST be in GameConfig.js:**
+
+- Player movement speed
+- Villager behavior timings
+- Resource spawn rates
+- Need decay rates
+- Entity health values
+- UI dimensions
+- Animation durations
+
+**NO exceptions. NO hardcoded values in game logic.**
+
+```javascript
+// ❌ NEVER
+if (hunger < 50) { /* ... */ }
+
+// ✅ ALWAYS
+if (hunger < GameConfig.needs.hungerThreshold) { /* ... */ }
+```
+
+## 📋 Rule #3: Read the Logs First
+
+**Before starting any work, check the logs directory and console output.**
+
+The game generates debug logs that show:
+- Current game state
+- Entity behaviors
+- Performance metrics
+- Error conditions
+
+**Understanding the current state prevents you from fixing problems that don't exist or missing problems that do.**
 
 ---
 
-**Remember: The goal is maintainable, consistent, and predictable code. These rules exist to prevent technical debt and ensure the codebase remains clean and professional.**
-
-**When in doubt, ask: "Is this the most maintainable way to implement this feature?"** 
+**That's it. Three rules. Follow them religiously.**
