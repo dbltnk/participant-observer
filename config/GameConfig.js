@@ -681,6 +681,47 @@ window.GameConfig = {
         contentMargin: 20,
         buttonMargin: 30,
         lineSpacing: 8
+    },
+
+    // Outro screen settings - Controls the death log entry
+    outro: {
+        // Death log entry text
+        deathLog: {
+            title: 'PERSONAL LOG - ENTRY #138',
+            timestamp: 'Epoch 2067918790',
+            content: [
+                'No pulse detected. Medical log entry triggered.',
+                '',
+                'VITAL SIGNS:',
+                'Temperature: {temperature}%',
+                'Hydration: {water}%',
+                'Calories: {calories}%',
+                'Vitamin A: {vitaminA}%',
+                'Vitamin B: {vitaminB}%',
+                'Vitamin C: {vitaminC}%',
+                'Vitamin D: {vitaminD}%',
+                'Vitamin E: {vitaminE}%',
+                '',
+                'CAUSE OF DEATH: {causeOfDeath}',
+                '',
+                'End log.'
+            ]
+        },
+
+        // Visual settings
+        overlayColor: 0x000000,
+        overlayAlpha: 0.9,
+        textColor: '#ffffff',
+        titleColor: '#ff0000', // Red for death
+
+        // Font sizes
+        titleSize: '28px',
+        contentSize: '16px',
+
+        // Spacing
+        titleMargin: 40,
+        contentMargin: 20,
+        lineSpacing: 8
     }
 };
 

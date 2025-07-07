@@ -3156,11 +3156,147 @@ console.log('Phaser main loaded');
         }
     }
 
+    class OutroScene extends Phaser.Scene {
+        constructor() {
+            super({ key: 'OutroScene' });
+        }
+
+        preload() {
+            // No assets to preload for outro - using text only
+        }
+
+        create() {
+            console.log('[Outro] OutroScene create called');
+
+            const w = this.cameras.main.width;
+            const h = this.cameras.main.height;
+
+            // Game title (top center) - fixed to camera viewport
+            const titleText = this.add.text(window.innerWidth / 2, 145, 'Participant Observer', {
+                fontSize: '24px',
+                fontFamily: 'Courier New, monospace',
+                fontWeight: 'bold',
+                color: '#ffffff',
+                backgroundColor: GameConfig.ui.colors.boxBackground,
+                padding: GameConfig.ui.dimensions.textPadding.large
+            }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.overlayContent);
+
+            // Get current seed and generate planet name
+            const currentSeed = getCurrentSeed();
+            const seededRandom = new SeededRandom(currentSeed);
+            const planetName = GameConfig.intro.planetNames[seededRandom.randomInt(0, GameConfig.intro.planetNames.length - 1)];
+            const fullPlanetName = `${planetName} ${currentSeed}`;
+
+            // Calculate log dimensions - make it look like a real log entry
+            const logWidth = Math.min(600, w - 100);
+            const logHeight = 520;
+            const logX = w / 2;
+            const logY = h / 2;
+
+            // Background overlay
+            const bg = this.add.rectangle(w / 2, h / 2, w, h, GameConfig.outro.overlayColor, GameConfig.outro.overlayAlpha)
+                .setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlay).setScrollFactor(0);
+
+            // Log background - looks like a terminal/computer screen
+            const logBg = this.add.rectangle(logX, logY, logWidth, logHeight, 0x001122, 0.95)
+                .setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0)
+                .setStrokeStyle(2, 0xff0000); // Red border for death
+
+            // Title - left aligned
+            const title = this.add.text(logX - logWidth / 2 + 30, logY - logHeight / 2 + 30, GameConfig.outro.deathLog.title,
+                { fontSize: GameConfig.outro.titleSize, fontFamily: 'monospace', color: GameConfig.outro.titleColor })
+                .setOrigin(0, 0).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+
+            // Planet name and timestamp - left aligned
+            const planetText = this.add.text(logX - logWidth / 2 + 30, logY - logHeight / 2 + 70, `${fullPlanetName}: ${GameConfig.outro.deathLog.timestamp}`,
+                { fontSize: GameConfig.outro.contentSize, fontFamily: 'monospace', color: GameConfig.outro.textColor })
+                .setOrigin(0, 0).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+
+            // Get player stats from the data passed to this scene
+            const playerStats = this.scene.settings.data || {};
+            const needs = playerStats.needs || {};
+            const causeOfDeath = playerStats.causeOfDeath || 'Unknown causes';
+
+            // Content lines - left aligned with proper word wrapping
+            const contentLines = [];
+            let currentY = logY - logHeight / 2 + 140;
+            const maxLineWidth = logWidth - 60; // 30px padding on each side
+
+            for (const line of GameConfig.outro.deathLog.content) {
+                if (line.trim() === '') {
+                    // Empty line - add extra spacing
+                    currentY += parseInt(GameConfig.outro.contentSize) + GameConfig.outro.lineSpacing;
+                    continue;
+                }
+
+                // Replace placeholders with actual values
+                let processedLine = line
+                    .replace('{temperature}', Math.round(needs.temperature || 0))
+                    .replace('{water}', Math.round(needs.water || 0))
+                    .replace('{calories}', Math.round(needs.calories || 0))
+                    .replace('{vitaminA}', Math.round(needs.vitamins?.[0] || 0))
+                    .replace('{vitaminB}', Math.round(needs.vitamins?.[1] || 0))
+                    .replace('{vitaminC}', Math.round(needs.vitamins?.[2] || 0))
+                    .replace('{vitaminD}', Math.round(needs.vitamins?.[3] || 0))
+                    .replace('{vitaminE}', Math.round(needs.vitamins?.[4] || 0))
+                    .replace('{causeOfDeath}', causeOfDeath);
+
+                // Word wrap the text
+                const words = processedLine.split(' ');
+                let currentLine = '';
+                let lineCount = 0;
+
+                for (const word of words) {
+                    const testLine = currentLine + (currentLine ? ' ' : '') + word;
+                    const testWidth = this.add.text(0, 0, testLine, { fontSize: GameConfig.outro.contentSize, fontFamily: 'monospace' }).width;
+
+                    if (testWidth > maxLineWidth && currentLine) {
+                        // Add current line
+                        const lineText = this.add.text(logX - logWidth / 2 + 30, currentY, currentLine,
+                            { fontSize: GameConfig.outro.contentSize, fontFamily: 'monospace', color: GameConfig.outro.textColor })
+                            .setOrigin(0, 0).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+                        contentLines.push(lineText);
+                        currentY += parseInt(GameConfig.outro.contentSize) + GameConfig.outro.lineSpacing;
+                        currentLine = word;
+                        lineCount++;
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+
+                // Add the last line
+                if (currentLine) {
+                    const lineText = this.add.text(logX - logWidth / 2 + 30, currentY, currentLine,
+                        { fontSize: GameConfig.outro.contentSize, fontFamily: 'monospace', color: GameConfig.outro.textColor })
+                        .setOrigin(0, 0).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+                    contentLines.push(lineText);
+                    currentY += parseInt(GameConfig.outro.contentSize) + GameConfig.outro.lineSpacing;
+                }
+            }
+
+            // Store references for cleanup
+            this._outroElements = [bg, logBg, title, planetText, ...contentLines, button];
+            this._isTransitioning = false;
+        }
+
+        update(time, delta) {
+            // Empty update method to ensure the scene has an active game loop
+            // This is required for tweens to work properly
+        }
+
+        shutdown() {
+            // Clean up outro elements
+            if (this._outroElements) {
+                this._outroElements.forEach(obj => obj.destroy());
+                this._outroElements = null;
+            }
+        }
+    }
+
     class MainScene extends Phaser.Scene {
         constructor() {
             super({ key: 'MainScene' });
             this.lastPropagationDay = -1; // Track last propagation day to prevent duplicates
-            this._gameOverOverlay = null; // Initialize game over overlay reference
         }
         preload() { }
         create() {
@@ -4271,16 +4407,12 @@ console.log('Phaser main loaded');
         }
 
         showGameOverOverlay(reason) {
-            if (this._gameOverOverlay) return;
-            const w = this.cameras.main.width;
-            const h = this.cameras.main.height;
-            const bg = this.add.rectangle(w / 2, h / 2, GameConfig.ui.overlayDimensions.width, GameConfig.ui.overlayDimensions.height, GameConfig.ui.overlayColor, GameConfig.ui.overlayAlpha).setOrigin(0.5).setDepth(GameConfig.ui.overlayZIndex).setScrollFactor(0);
-            const text = this.add.text(w / 2, h / 2 - GameConfig.ui.dimensions.tempMessageOffset, 'Game Over', { fontSize: GameConfig.ui.fontSizes.massive, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
-            const reasonText = this.add.text(w / 2, h / 2, reason, { fontSize: GameConfig.ui.fontSizes.overlayMessage, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
-            const btn = this.add.text(w / 2, h / 2 + GameConfig.ui.dimensions.sleepingOffset, 'New Game', { fontSize: GameConfig.ui.fontSizes.huge, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.buttonPrimary, padding: GameConfig.ui.dimensions.buttonPadding.xlarge })
-                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
-            btn.on('pointerdown', () => { window.location.reload(); });
-            this._gameOverOverlay = [bg, text, reasonText, btn];
+            // Get player stats for the outro
+            const playerStats = {
+                needs: this.playerState?.needs || {},
+                causeOfDeath: reason
+            };
+            this.scene.start('OutroScene', playerStats);
         }
 
 
@@ -5849,11 +5981,11 @@ console.log('Phaser main loaded');
     }
     function checkGameOver(playerState) {
         const n = playerState.needs;
-        if (n.temperature <= 0) return 'You died from cold.';
-        if (n.water <= 0) return 'You died from dehydration.';
-        if (n.calories <= 0) return 'You died from starvation.';
+        if (n.temperature <= 0) return 'Patient died from hypothermia.';
+        if (n.water <= 0) return 'Patient died from dehydration.';
+        if (n.calories <= 0) return 'Patient died from starvation.';
         for (let i = 0; i < n.vitamins.length; i++) {
-            if (n.vitamins[i] <= 0) return `You died from vitamin ${String.fromCharCode(65 + i)} deficiency.`;
+            if (n.vitamins[i] <= 0) return `Patient died from vitamin ${String.fromCharCode(65 + i)} deficiency.`;
         }
         return null;
     }
@@ -5877,7 +6009,7 @@ console.log('Phaser main loaded');
                 width: window.innerWidth,
                 height: window.innerHeight,
                 backgroundColor: '#2d3748',
-                scene: [IntroScene, MainScene], // Register both scenes
+                scene: [IntroScene, MainScene, OutroScene], // Register all scenes
                 parent: 'game-area',
                 fps: { target: 60, forceSetTimeOut: true }
             });
@@ -5888,7 +6020,7 @@ console.log('Phaser main loaded');
             width: window.innerWidth,
             height: window.innerHeight,
             backgroundColor: '#2d3748',
-            scene: [IntroScene, MainScene], // Register both scenes
+            scene: [IntroScene, MainScene, OutroScene], // Register all scenes
             parent: 'game-area',
             fps: { target: 60, forceSetTimeOut: true }
         });

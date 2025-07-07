@@ -18,10 +18,8 @@ check why villagers stop contributing when they have 1+ food and 1+ burnable in 
 make sure replication and max cap works
 add topology: biome walls
 
-
-
 x seed via domain parameter, else random
 X intro screen, if no seed
-outro screen death reasons
+x outro screen death reasons
 pointers to the edge of the world
 random color gates kill you, NPCs know about them
