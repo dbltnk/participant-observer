@@ -3532,85 +3532,93 @@ console.log('Phaser main loaded');
             const centerY = centralBiome.y;
 
             console.log(`[World Generation] Placing village in ${centralBiome.biome.type} biome at (${Math.round(centerX)}, ${Math.round(centerY)})`);
+
             // --- Village center (no visual, just reference point) ---
             const villageCenter = { position: { x: centerX, y: centerY }, type: 'village_center' };
-            // --- Village well ---
+
+            const offx = 300;
+            const offy = 100;
+
+            // --- Village well (near center with slight variation) ---
+            const wellOffset = {
+                x: this.seededRandom.randomRange(-100, 100) - offx,
+                y: this.seededRandom.randomRange(-100, 100) - offy
+            };
             const villageWell = {
-                position: { x: centerX + cfg.villageWellOffset.x, y: centerY + cfg.villageWellOffset.y },
+                position: { x: centerX + wellOffset.x, y: centerY + wellOffset.y },
                 type: GameConfig.entityTypes.well, emoji: '💧', waterLevel: GameConfig.wells.initialWaterLevel
             };
             this.entities.push(villageWell);
-            // --- Communal storage ---
+
+            // --- Communal storage (near center but separate from well) ---
+            const storageOffset = {
+                x: this.seededRandom.randomRange(-120, 120) - offx,
+                y: this.seededRandom.randomRange(-120, 120) - offy
+            };
+            // Ensure storage isn't too close to well
+            const minWellStorageDistance = 80;
+            if (Math.abs(storageOffset.x - wellOffset.x) < minWellStorageDistance &&
+                Math.abs(storageOffset.y - wellOffset.y) < minWellStorageDistance) {
+                storageOffset.x += (storageOffset.x > 0 ? 100 : -100);
+            }
             const communalStorage = {
-                position: { x: centerX - cfg.villageCenterOffset.x, y: centerY + cfg.villageCenterOffset.y },
-                type: GameConfig.entityTypes.storage_box, emoji: '📦', capacity: GameConfig.storage.communalCapacity, items: new Array(GameConfig.storage.communalCapacity).fill(null)
+                position: { x: centerX + storageOffset.x, y: centerY + storageOffset.y },
+                type: GameConfig.entityTypes.storage_box, emoji: '📦',
+                capacity: GameConfig.storage.communalCapacity,
+                items: new Array(GameConfig.storage.communalCapacity).fill(null)
             };
             this.entities.push(communalStorage);
-            // --- Camps and facilities (simple circular placement) ---
-            this.camps = [];
 
+            // --- Organic camp placement around center ---
+            this.camps = this.createOrganicCampClusters(centerX - offx, centerY - offy, cfg.villagerCount);
+
+            // --- Create camp facilities for each camp ---
             for (let i = 0; i < cfg.villagerCount; i++) {
-                // Even circular placement with minimal randomness
-                const baseAngle = (i / cfg.villagerCount) * 2 * Math.PI;
-
-                // Small random variation to avoid perfect circles
-                const angleVariation = (this.seededRandom.random() - 0.5) * 0.3; // Reduced from 1.5 to 0.3 radians
-                const radiusVariation = (this.seededRandom.random() - 0.5) * 50; // Reduced from 200 to 50 pixels
-
-                const angle = baseAngle + angleVariation;
-                const radius = cfg.campPlacement.baseRadius + radiusVariation;
-
-                // Ensure camps don't get too close to each other
-                let attempts = 0;
-                let x, y;
-                let tooClose = false;
-
-                do {
-                    x = centerX + Math.cos(angle) * radius;
-                    y = centerY + Math.sin(angle) * radius;
-
-                    // Check distance from other camps
-                    tooClose = false;
-                    for (const existingCamp of this.camps) {
-                        const dist = GameUtils.distance({ x, y }, existingCamp.position);
-                        if (dist < cfg.campPlacement.minDistanceBetweenCamps) {
-                            tooClose = true;
-                            break;
-                        }
-                    }
-
-                    // If too close, try a slightly different position with even smaller variation
-                    if (tooClose) {
-                        const newAngle = angle + (this.seededRandom.random() - 0.5) * 0.2; // Reduced from 0.5 to 0.2
-                        const newRadius = radius + (this.seededRandom.random() - 0.5) * 25; // Reduced from 50 to 25
-                        x = centerX + Math.cos(newAngle) * newRadius;
-                        y = centerY + Math.sin(newAngle) * newRadius;
-                    }
-
-                    attempts++;
-                } while (tooClose && attempts < cfg.campPlacement.maxPlacementAttempts);
-
-                const camp = { position: { x, y }, type: 'camp', villagerId: i };
-                this.camps.push(camp);
-
-                // Don't add camp to entities since we don't want to render it
+                const camp = this.camps[i];
+                const facilities = this.placeCampFacilities(camp.position, i);
 
                 // Fireplace
                 const initialWood = this.seededRandom.randomRange(GameConfig.fires.initialWoodRange.min, GameConfig.fires.initialWoodRange.max);
-                this.entities.push({ position: { x: x + cfg.campSpacing.x, y: y }, type: GameConfig.entityTypes.fireplace, emoji: '🔥', isBurning: true, wood: initialWood, maxWood: GameConfig.fires.maxWood, villagerId: i });
+                this.entities.push({
+                    position: facilities.fireplace,
+                    type: GameConfig.entityTypes.fireplace,
+                    emoji: '🔥',
+                    isBurning: true,
+                    wood: initialWood,
+                    maxWood: GameConfig.fires.maxWood,
+                    villagerId: i
+                });
+
                 // Sleeping bag
-                this.entities.push({ position: { x: x - cfg.campSpacing.x, y: y - 30 }, type: GameConfig.entityTypes.sleeping_bag, emoji: '🛏️', isOccupied: false, villagerId: i });
+                this.entities.push({
+                    position: facilities.sleepingBag,
+                    type: GameConfig.entityTypes.sleeping_bag,
+                    emoji: '🛏️',
+                    isOccupied: false,
+                    villagerId: i
+                });
+
                 // Personal storage
-                this.entities.push({ position: { x: x, y: y + cfg.campSpacing.y }, type: GameConfig.entityTypes.storage_box, emoji: '📦', capacity: GameConfig.storage.personalCapacity, items: new Array(GameConfig.storage.personalCapacity).fill(null), isPersonal: true, villagerId: i });
+                this.entities.push({
+                    position: facilities.storage,
+                    type: GameConfig.entityTypes.storage_box,
+                    emoji: '📦',
+                    capacity: GameConfig.storage.personalCapacity,
+                    items: new Array(GameConfig.storage.personalCapacity).fill(null),
+                    isPersonal: true,
+                    villagerId: i
+                });
             }
-            // --- Player start position (bottom left of village well) ---
-            const wellPosition = {
-                x: centerX + cfg.villageWellOffset.x,
-                y: centerY + cfg.villageWellOffset.y
-            };
+            // --- Player start position (at camp 0's fireplace) ---
+            const playerFireplace = this.entities.find(e =>
+                e.type === GameConfig.entityTypes.fireplace &&
+                e.villagerId === 0
+            );
+            assert(playerFireplace, 'Player fireplace not found for camp 0');
+
             this.playerStartPosition = {
-                x: wellPosition.x - 60, // 60 pixels to the left of well
-                y: wellPosition.y + 60  // 60 pixels below the well
+                x: playerFireplace.position.x + 30,
+                y: playerFireplace.position.y + 40
             };
 
             // === ADD RANDOM INITIAL ITEMS TO STORAGE BOXES ===
@@ -3692,15 +3700,17 @@ console.log('Phaser main loaded');
                 const camp = this.camps[i];
                 const villagerName = generateVillagerName(this.seededRandom);
 
-                // Spawn villager randomly within config radius of village center
-                const villageCenter = { x: centerX, y: centerY };
-                const spawnRadius = GameConfig.world.villagerSpawnRadius;
-                const spawnAngle = this.seededRandom.random() * 2 * Math.PI;
-                const spawnDistance = this.seededRandom.random() * spawnRadius;
+                // Find this villager's fireplace to spawn them at their camp
+                const villagerFireplace = this.entities.find(e =>
+                    e.type === GameConfig.entityTypes.fireplace &&
+                    e.villagerId === i - 1
+                );
+                assert(villagerFireplace, `Fireplace not found for villager ${villagerName} (villagerId: ${i - 1})`);
 
+                // Spawn villager at their fireplace position
                 const villagerSpawnPosition = {
-                    x: villageCenter.x + Math.cos(spawnAngle) * spawnDistance,
-                    y: villageCenter.y + Math.sin(spawnAngle) * spawnDistance
+                    x: villagerFireplace.position.x,
+                    y: villagerFireplace.position.y
                 };
 
                 const villager = new Villager(villagerName, villagerSpawnPosition, i - 1, this.seededRandom); // Use camp index for villagerId and pass seeded random
@@ -3753,7 +3763,7 @@ console.log('Phaser main loaded');
 
                 this.villagers.push(villager);
                 if (window.summaryLoggingEnabled) {
-                    console.log(`[MainScene] Created villager ${villagerName} at camp ${i} (spawned randomly at ${Math.round(villagerSpawnPosition.x)}, ${Math.round(villagerSpawnPosition.y)})`);
+                    console.log(`[MainScene] Created villager ${villagerName} at camp ${i} (spawned at fireplace at ${Math.round(villagerSpawnPosition.x)}, ${Math.round(villagerSpawnPosition.y)})`);
                     console.log(`[MainScene] Assigned facilities to ${villagerName}: personal storage at (${Math.round(personalStorageBox.position.x)}, ${Math.round(personalStorageBox.position.y)}), communal storage at (${Math.round(communalStorageBox.position.x)}, ${Math.round(communalStorageBox.position.y)})`);
                 }
             }
@@ -4079,6 +4089,10 @@ console.log('Phaser main loaded');
 
             // Create player name text
             this.playerName = this.add.text(this.playerState.position.x, this.playerState.position.y - 40, 'You', { fontSize: '12px', fontFamily: 'Arial', color: '#ffffff' }).setOrigin(0.5);
+
+            // Initialize line of sight system
+            this.initializeLineOfSight();
+
             // Camera - follow player with smooth interpolation, no bounds restriction
             this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
             // Remove camera bounds to allow free exploration of the large world
@@ -4092,7 +4106,7 @@ console.log('Phaser main loaded');
             });
             // --- UI ---
             this.ui = {};
-            this.uiContainer = this.add.container(0, 0).setScrollFactor(0);
+            this.uiContainer = this.add.container(0, 0).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.ui);
             // Use margin for all UI elements
             const margin = GameConfig.ui.uiMargin;
             // Needs bars (top right)
@@ -4328,6 +4342,9 @@ console.log('Phaser main loaded');
 
             // UI update
             this.updatePhaserUI();
+
+            // Update line of sight system
+            this.updateLineOfSight(delta);
 
             // Debug visualization for pathfinding
             this.updatePathfindingDebugVisualization();
@@ -4714,7 +4731,7 @@ console.log('Phaser main loaded');
         }
         showTempMessage(msg, duration = GameConfig.ui.tempMessageDuration) {
             if (this._tempMsg) this._tempMsg.destroy();
-            this._tempMsg = this.add.text(this.player.x, this.player.y - GameConfig.ui.dimensions.tempMessageOffset, msg, { fontSize: GameConfig.ui.fontSizes.overlayMessage, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.buttonPadding.medium }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug);
+            this._tempMsg = this.add.text(this.player.x, this.player.y - GameConfig.ui.dimensions.tempMessageOffset, msg, { fontSize: GameConfig.ui.fontSizes.overlayMessage, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.buttonPadding.medium }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.ui);
             this.time.delayedCall(duration, () => { if (this._tempMsg) { this._tempMsg.destroy(); this._tempMsg = null; } });
         }
         startFadeIn() {
@@ -5071,58 +5088,62 @@ console.log('Phaser main loaded');
                 // Create horizontal walls (between rows)
                 for (let tileY = 0; tileY <= tilesY; tileY++) {
                     for (let tileX = 0; tileX < tilesX; tileX++) {
-                        // Skip walls that would border the camp cell
+                        // Check if this wall borders the camp cell
                         const isCampBorder = (tileY === campTileY || tileY === campTileY + 1) &&
                             (tileX >= campTileX && tileX <= campTileX + 1);
-
-                        if (isCampBorder) {
-                            if (window.summaryLoggingEnabled) {
-                                console.log(`[Wall System] Skipping horizontal wall at (${tileX}, ${tileY}) - camp border`);
-                            }
-                            continue;
-                        }
 
                         const wallX = tileX * tileSize;
                         const wallY = tileY * tileSize;
 
-                        // Check if this horizontal edge should have an opening
-                        const hasOpening = cellOpenings.horizontal[tileY] && cellOpenings.horizontal[tileY][tileX];
-                        const openings = hasOpening ? this.generateWallOpenings(tileSize, 1) : [];
-
                         // Generate random wall height for this segment
                         const wallHeight = this.seededRandom.randomRange(wallConfig.height.min, wallConfig.height.max);
 
-                        // Create wall segments
-                        this.createWallSegments(wallX, wallY, tileSize, wallHeight, openings, 'horizontal');
+                        if (isCampBorder) {
+                            // For camp cell borders, create walls with openings based on config
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Wall System] Creating camp border horizontal wall at (${tileX}, ${tileY}) with opening`);
+                            }
+                            // Use configurable opening count for camp cell borders
+                            const openingCount = wallConfig.campCell.wallOpeningsCount;
+                            const openings = this.generateWallOpenings(tileSize, openingCount);
+                            this.createWallSegments(wallX, wallY, tileSize, wallHeight, openings, 'horizontal');
+                        } else {
+                            // Regular wall generation for non-camp cells
+                            const hasOpening = cellOpenings.horizontal[tileY] && cellOpenings.horizontal[tileY][tileX];
+                            const openings = hasOpening ? this.generateWallOpenings(tileSize, 1) : [];
+                            this.createWallSegments(wallX, wallY, tileSize, wallHeight, openings, 'horizontal');
+                        }
                     }
                 }
 
                 // Create vertical walls (between columns)
                 for (let tileX = 0; tileX <= tilesX; tileX++) {
                     for (let tileY = 0; tileY < tilesY; tileY++) {
-                        // Skip walls that would border the camp cell
+                        // Check if this wall borders the camp cell
                         const isCampBorder = (tileX === campTileX || tileX === campTileX + 1) &&
                             (tileY >= campTileY && tileY <= campTileY + 1);
-
-                        if (isCampBorder) {
-                            if (window.summaryLoggingEnabled) {
-                                console.log(`[Wall System] Skipping vertical wall at (${tileX}, ${tileY}) - camp border`);
-                            }
-                            continue;
-                        }
 
                         const wallX = tileX * tileSize;
                         const wallY = tileY * tileSize;
 
-                        // Check if this vertical edge should have an opening
-                        const hasOpening = cellOpenings.vertical[tileX] && cellOpenings.vertical[tileX][tileY];
-                        const openings = hasOpening ? this.generateWallOpenings(tileSize, 1) : [];
-
                         // Generate random wall height for this segment
                         const wallHeight = this.seededRandom.randomRange(wallConfig.height.min, wallConfig.height.max);
 
-                        // Create wall segments
-                        this.createWallSegments(wallX, wallY, tileSize, wallHeight, openings, 'vertical');
+                        if (isCampBorder) {
+                            // For camp cell borders, create walls with openings based on config
+                            if (window.summaryLoggingEnabled) {
+                                console.log(`[Wall System] Creating camp border vertical wall at (${tileX}, ${tileY}) with opening`);
+                            }
+                            // Use configurable opening count for camp cell borders
+                            const openingCount = wallConfig.campCell.wallOpeningsCount;
+                            const openings = this.generateWallOpenings(tileSize, openingCount);
+                            this.createWallSegments(wallX, wallY, tileSize, wallHeight, openings, 'vertical');
+                        } else {
+                            // Regular wall generation for non-camp cells
+                            const hasOpening = cellOpenings.vertical[tileX] && cellOpenings.vertical[tileX][tileY];
+                            const openings = hasOpening ? this.generateWallOpenings(tileSize, 1) : [];
+                            this.createWallSegments(wallX, wallY, tileSize, wallHeight, openings, 'vertical');
+                        }
                     }
                 }
 
@@ -5154,15 +5175,22 @@ console.log('Phaser main loaded');
                 console.log(`[Mountains] Camp cell coordinates: (${campTileX}, ${campTileY})`);
             }
 
-            // Create 0-4 mountains per grid cell (except camp cell)
+            // Create 0-4 mountains per grid cell (including camp cell)
             for (let tileY = 0; tileY < tilesY; tileY++) {
                 for (let tileX = 0; tileX < tilesX; tileX++) {
-                    // Skip the camp grid cell
-                    if (tileX === campTileX && tileY === campTileY) {
+                    // Check if this is the camp grid cell
+                    const isCampCell = (tileX === campTileX && tileY === campTileY);
+
+                    // Skip camp cell if mountains are disabled for it
+                    if (isCampCell && !wallConfig.campCell.allowMountains) {
                         if (window.summaryLoggingEnabled) {
-                            console.log(`[Mountains] Skipping camp cell at (${tileX}, ${tileY})`);
+                            console.log(`[Mountains] Skipping camp cell at (${tileX}, ${tileY}) - mountains disabled`);
                         }
                         continue;
+                    }
+
+                    if (isCampCell && window.summaryLoggingEnabled) {
+                        console.log(`[Mountains] Processing camp cell at (${tileX}, ${tileY}) - allowing mountains`);
                     }
 
                     // Random number of mountains 
@@ -5330,12 +5358,14 @@ console.log('Phaser main loaded');
                     let segmentX, segmentY;
 
                     if (direction === 'horizontal') {
-                        // Horizontal walls: X varies along wall, Y is fixed
+                        // Horizontal walls: X varies along wall, Y spans the boundary
                         segmentX = wallX + segmentStart + segmentWidth / 2;
-                        segmentY = wallY + wallHeight / 2;
+                        // Position wall to span the boundary - center it on the boundary line
+                        segmentY = wallY;
                     } else {
-                        // Vertical walls: Y varies along wall, X is fixed
-                        segmentX = wallX + wallHeight / 2;
+                        // Vertical walls: Y varies along wall, X spans the boundary
+                        // Position wall to span the boundary - center it on the boundary line
+                        segmentX = wallX;
                         segmentY = wallY + segmentStart + segmentWidth / 2;
                     }
 
@@ -5347,6 +5377,11 @@ console.log('Phaser main loaded');
                         direction === 'horizontal' ? wallHeight : segmentWidth,
                         wallConfig.wallColor
                     ).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.walls).setAlpha(wallConfig.alpha);
+
+                    // Debug: Log wall positioning occasionally
+                    if (Math.random() < 0.01 && window.summaryLoggingEnabled) {
+                        console.log(`[Wall System] Created ${direction} wall segment at (${Math.round(segmentX)}, ${Math.round(segmentY)}) with size ${Math.round(direction === 'horizontal' ? segmentWidth : wallHeight)}x${Math.round(direction === 'horizontal' ? wallHeight : segmentWidth)}`);
+                    }
 
                     // Store wall data for collision detection
                     const wallData = {
@@ -5740,7 +5775,7 @@ console.log('Phaser main loaded');
             this.sleepTimeAcceleration = 25; // 25x faster
 
             // Show ZZZ above player
-            this.sleepZZZ = this.add.text(this.player.x, this.player.y - 60, '💤', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.debug);
+            this.sleepZZZ = this.add.text(this.player.x, this.player.y - 60, '💤', { fontSize: '24px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.ui);
 
             this.showTempMessage('Sleeping... (time accelerated)', GameConfig.ui.tempMessageDuration);
         }
@@ -5775,7 +5810,7 @@ console.log('Phaser main loaded');
             const bg = this.add.rectangle(w / 2, h / 2, GameConfig.ui.overlayDimensions.width, bgHeight, GameConfig.ui.overlayColor, GameConfig.ui.overlayAlpha).setOrigin(0.5).setDepth(GameConfig.ui.overlayZIndex).setScrollFactor(0);
 
             // Title
-            const title = this.add.text(w / 2, h / 2 - (bgHeight / 2) + 30, `${storageBox.isPersonal ? 'Personal' : 'Communal'} Storage`, { fontSize: '20px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
+            const title = this.add.text(w / 2, h / 2 - (bgHeight / 2) + 30, `${storageBox.isPersonal ? 'Personal' : 'Communal'} Storage`, { fontSize: '20px', fontFamily: 'monospace', color: '#fff' }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
 
             // Storage slots
             const capacity = storageBox.isPersonal ? GameConfig.storage.personalCapacity : GameConfig.storage.communalCapacity;
@@ -5786,8 +5821,8 @@ console.log('Phaser main loaded');
                 const slotX = w / 2 - 150 + (i % 5) * 60;
                 const slotY = h / 2 - (bgHeight / 2) + 80 + Math.floor(i / 5) * 60;
 
-                const slot = this.add.rectangle(slotX, slotY, 50, 50, 0x333333).setOrigin(0.5).setStrokeStyle(2, 0x666666).setDepth(1001).setScrollFactor(0);
-                const emoji = this.add.text(slotX, slotY, storageBox.items[i] ? storageBox.items[i].emoji : '', { fontSize: '20px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
+                const slot = this.add.rectangle(slotX, slotY, 50, 50, 0x333333).setOrigin(0.5).setStrokeStyle(2, 0x666666).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
+                const emoji = this.add.text(slotX, slotY, storageBox.items[i] ? storageBox.items[i].emoji : '', { fontSize: '20px', fontFamily: 'Arial', color: '#fff' }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
 
                 storageSlots.push(slot);
                 storageEmojis.push(emoji);
@@ -5800,11 +5835,11 @@ console.log('Phaser main loaded');
             }
 
             // Instructions - position below the slots
-            const instructions = this.add.text(w / 2, h / 2 + (bgHeight / 2) - 60, 'Click items to transfer to your inventory\nMove away to close', { fontSize: '12px', fontFamily: 'monospace', color: '#ccc', align: 'center' }).setOrigin(0.5).setDepth(1001).setScrollFactor(0);
+            const instructions = this.add.text(w / 2, h / 2 + (bgHeight / 2) - 60, 'Click items to transfer to your inventory\nMove away to close', { fontSize: '12px', fontFamily: 'monospace', color: '#ccc', align: 'center' }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
 
             // Close button - position at the bottom
             const closeBtn = this.add.text(w / 2, h / 2 + (bgHeight / 2) - 20, 'Close', { fontSize: '16px', fontFamily: 'monospace', color: '#fff', backgroundColor: '#666', padding: { left: 12, right: 12, top: 6, bottom: 6 } })
-                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(1001).setScrollFactor(0);
+                .setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(GameConfig.ui.zIndex.overlayContent).setScrollFactor(0);
 
             closeBtn.on('pointerdown', () => {
                 this.closeStorageInterface();
@@ -6632,6 +6667,187 @@ console.log('Phaser main loaded');
                 this.debugGraphics.destroy();
                 this.debugGraphics = null;
             }
+        }
+
+        // Line of sight system
+        initializeLineOfSight() {
+            assert(GameConfig.lineOfSight, 'Line of sight config is missing');
+            assert(GameConfig.lineOfSight.enabled !== undefined, 'Line of sight enabled flag is missing');
+
+            if (!GameConfig.lineOfSight.enabled) {
+                console.log('[LineOfSight] System disabled in config');
+                return;
+            }
+
+            console.log('[LineOfSight] Initializing line of sight system...');
+
+            // Calculate grid dimensions
+            const tileSize = GameConfig.lineOfSight.tileSize;
+            const worldWidth = GameConfig.world.width;
+            const worldHeight = GameConfig.world.height;
+
+            this.lineOfSightTilesX = Math.ceil(worldWidth / tileSize);
+            this.lineOfSightTilesY = Math.ceil(worldHeight / tileSize);
+
+            // Create overlay rectangles for each grid cell
+            this.lineOfSightOverlays = [];
+
+            for (let tileX = 0; tileX < this.lineOfSightTilesX; tileX++) {
+                this.lineOfSightOverlays[tileX] = [];
+                for (let tileY = 0; tileY < this.lineOfSightTilesY; tileY++) {
+                    const overlayX = tileX * tileSize + tileSize / 2;
+                    const overlayY = tileY * tileSize + tileSize / 2;
+
+                    const overlay = this.add.rectangle(
+                        overlayX,
+                        overlayY,
+                        tileSize,
+                        tileSize,
+                        GameConfig.lineOfSight.overlayColor
+                    ).setOrigin(0.5)
+                        .setDepth(GameConfig.ui.zIndex.lineOfSight)
+                        .setAlpha(GameConfig.lineOfSight.overlayAlpha);
+
+                    this.lineOfSightOverlays[tileX][tileY] = overlay;
+                }
+            }
+
+            // Initialize update timer
+            this.lastLineOfSightUpdate = 0;
+
+            console.log(`[LineOfSight] Created ${this.lineOfSightTilesX}x${this.lineOfSightTilesY} overlay grid`);
+        }
+
+        updateLineOfSight(deltaTime) {
+            if (!GameConfig.lineOfSight.enabled || !this.lineOfSightOverlays) {
+                return;
+            }
+
+            // Update at specified interval for performance
+            this.lastLineOfSightUpdate += deltaTime;
+            if (this.lastLineOfSightUpdate < GameConfig.lineOfSight.updateInterval) {
+                return;
+            }
+            this.lastLineOfSightUpdate = 0;
+
+            // Get player's current grid cell
+            const playerGridCell = this.getPlayerGridCell();
+            assert(playerGridCell, 'Failed to get player grid cell');
+
+            // Update visibility for all grid cells
+            for (let tileX = 0; tileX < this.lineOfSightTilesX; tileX++) {
+                for (let tileY = 0; tileY < this.lineOfSightTilesY; tileY++) {
+                    const overlay = this.lineOfSightOverlays[tileX][tileY];
+                    assert(overlay, `Missing overlay at grid cell (${tileX}, ${tileY})`);
+
+                    // Check if this cell is the player's current cell
+                    const isPlayerCell = (tileX === playerGridCell.x && tileY === playerGridCell.y);
+
+                    // Hide overlay if player is in this cell, show otherwise
+                    overlay.setVisible(!isPlayerCell);
+                }
+            }
+        }
+
+        getPlayerGridCell() {
+            assert(this.playerState, 'Player state is required');
+            assert(this.playerState.position, 'Player position is required');
+
+            const tileSize = GameConfig.lineOfSight.tileSize;
+            const position = this.playerState.position;
+
+            return {
+                x: Math.floor(position.x / tileSize),
+                y: Math.floor(position.y / tileSize)
+            };
+        }
+
+        // Organic camp clustering system
+        createOrganicCampClusters(centerX, centerY, campCount) {
+            const camps = [];
+            // Scale distances based on world size - use more space when available
+            const worldSize = Math.max(GameConfig.world.width, GameConfig.world.height);
+            const scaleFactor = Math.min(worldSize / 20000, 3); // Scale up to 3x for larger worlds
+
+            const minDistance = 250 * scaleFactor; // Minimum distance between camps
+            const maxRadius = 400 * scaleFactor;   // Maximum distance from center
+            const minCenterDistance = 250 * scaleFactor; // Minimum distance from village center
+
+            for (let i = 0; i < campCount; i++) {
+                let attempts = 0;
+                let campPosition;
+
+                do {
+                    // Use organic placement instead of perfect circle
+                    const angle = this.seededRandom.random() * Math.PI * 2;
+                    const radius = this.seededRandom.randomRange(200 * scaleFactor, maxRadius);
+
+                    // Add natural clustering variation (scaled)
+                    const clusterVariation = this.seededRandom.randomRange(-50 * scaleFactor, 50 * scaleFactor);
+                    const finalRadius = radius + clusterVariation;
+
+                    campPosition = {
+                        x: centerX + Math.cos(angle) * finalRadius,
+                        y: centerY + Math.sin(angle) * finalRadius
+                    };
+
+                    attempts++;
+                } while (
+                    this.isTooCloseToOtherCamps(campPosition, camps, minDistance) ||
+                    this.isTooCloseToCenter(campPosition, centerX, centerY, minCenterDistance) ||
+                    attempts < 50
+                );
+
+                camps.push({ position: campPosition, villagerId: i });
+            }
+
+            return camps;
+        }
+
+        isTooCloseToOtherCamps(position, existingCamps, minDistance) {
+            for (const camp of existingCamps) {
+                const dist = GameUtils.distance(position, camp.position);
+                if (dist < minDistance) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        isTooCloseToCenter(position, centerX, centerY, minDistance) {
+            const dist = GameUtils.distance(position, { x: centerX, y: centerY });
+            return dist < minDistance;
+        }
+
+        placeCampFacilities(campCenter, villagerId) {
+            // Add natural variation to facility placement
+            const orientation = this.seededRandom.random() * Math.PI * 2;
+            const baseSpacing = 60;
+            const variation = 20;
+
+            // Fireplace - slightly offset from camp center
+            const fireplaceOffset = {
+                x: Math.cos(orientation) * (baseSpacing + this.seededRandom.randomRange(-variation, variation)),
+                y: Math.sin(orientation) * (baseSpacing + this.seededRandom.randomRange(-variation, variation))
+            };
+
+            // Sleeping bag - opposite side from fireplace
+            const sleepingBagOffset = {
+                x: Math.cos(orientation + Math.PI) * (baseSpacing + this.seededRandom.randomRange(-variation, variation)),
+                y: Math.sin(orientation + Math.PI) * (baseSpacing + this.seededRandom.randomRange(-variation, variation))
+            };
+
+            // Personal storage - perpendicular to fireplace
+            const storageOffset = {
+                x: Math.cos(orientation + Math.PI / 2) * (baseSpacing + this.seededRandom.randomRange(-variation, variation)),
+                y: Math.sin(orientation + Math.PI / 2) * (baseSpacing + this.seededRandom.randomRange(-variation, variation))
+            };
+
+            return {
+                fireplace: { x: campCenter.x + fireplaceOffset.x, y: campCenter.y + fireplaceOffset.y },
+                sleepingBag: { x: campCenter.x + sleepingBagOffset.x, y: campCenter.y + sleepingBagOffset.y },
+                storage: { x: campCenter.x + storageOffset.x, y: campCenter.y + storageOffset.y }
+            };
         }
     }
     function getPhaserBarColor(type) {

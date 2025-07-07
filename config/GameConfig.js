@@ -526,6 +526,7 @@ window.GameConfig = {
             walls: -1,
             entity: 100,
             player: 200,
+            lineOfSight: 600,
             ui: 1000,
             overlay: 1000,
             overlayContent: 1001,
@@ -574,6 +575,13 @@ window.GameConfig = {
         // Wall dimensions and positioning
         height: { min: 60, max: 210 }, // Random height range for wall segments
         openingsPerCell: { min: 1, max: 3 }, // Number of openings per cell (not per edge)
+
+        // Camp cell wall settings
+        campCell: {
+            forceWallsWithOpenings: true, // Force camp cell to have 4 walls with openings
+            allowMountains: false, // Allow mountains to spawn in camp cell
+            wallOpeningsCount: 1, // Number of openings per camp cell wall
+        },
 
         // Wall colors
         wallColor: 0x000000, // Black walls
@@ -797,7 +805,16 @@ window.GameConfig = {
         // Arrow color
         arrowColor: 0xffffff,
         arrowAlpha: 0.9
-    }
+    },
+
+    // Line of sight system settings
+    lineOfSight: {
+        enabled: true, // Whether line of sight is active
+        overlayColor: 0x000000, // Black overlay for hidden areas
+        overlayAlpha: 1.0, // Fully opaque overlay
+        tileSize: 1500, // Use same tile size as world grid
+        updateInterval: 100, // Update line of sight every 100ms for performance
+    },
 };
 
 console.log('[GameConfig.js] Loaded at', new Date().toISOString(), 'cache-bust:', Math.random()); 
