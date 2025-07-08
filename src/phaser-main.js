@@ -3388,7 +3388,7 @@ console.log('Phaser main loaded');
 
             // Calculate log dimensions - make it look like a real log entry
             const logWidth = Math.min(600, w - 100);
-            const logHeight = 520;
+            const logHeight = 550;
             const logX = w / 2;
             const logY = h / 2;
 
@@ -3476,8 +3476,57 @@ console.log('Phaser main loaded');
                 }
             }
 
-            // Store references for cleanup
-            this._outroElements = [bg, logBg, title, planetText, ...contentLines, button];
+            // --- Add Restart Button ---
+            // Button positioned below the log content (like intro button)
+            const buttonY = currentY + 70; // Same positioning as intro button
+            const buttonX = logX;
+
+            // Button styled like intro button (text with background, not rectangle)
+            const restartBtn = this.add.text(buttonX, buttonY, 'RESTART (NEW WORLD)',
+                {
+                    fontSize: GameConfig.intro.buttonSize,
+                    fontFamily: 'monospace',
+                    color: GameConfig.intro.textColor,
+                    backgroundColor: GameConfig.intro.buttonColor,
+                    padding: GameConfig.ui.dimensions.buttonPadding.large
+                })
+                .setOrigin(0.5)
+                .setInteractive({ useHandCursor: true })
+                .setDepth(GameConfig.ui.zIndex.overlayContent)
+                .setScrollFactor(0);
+
+            // Button hover effect (same as intro)
+            restartBtn.on('pointerover', () => {
+                restartBtn.setBackgroundColor(GameConfig.intro.buttonHoverColor);
+            });
+            restartBtn.on('pointerout', () => {
+                restartBtn.setBackgroundColor(GameConfig.intro.buttonColor);
+            });
+
+            // Button click handler: skip intro and go directly to main scene with new seed
+            restartBtn.on('pointerdown', () => {
+                if (this._isTransitioning) return; // Prevent double-clicks
+                this._isTransitioning = true;
+
+                console.log('[Outro] Restart button clicked, starting new game with random seed');
+
+                // Generate new random seed
+                const newSeed = Math.floor(Math.random() * 999) + 1;
+
+                // Update URL with new seed and skip intro
+                const url = new URL(window.location.href);
+                url.searchParams.set('seed', newSeed.toString());
+                window.history.replaceState({}, '', url.pathname + url.search);
+
+                // Start main scene directly (skips intro)
+                this.scene.start('MainScene');
+            });
+
+            // Assert button is present
+            assert(restartBtn, 'Restart button must be created on death screen');
+
+            // Add to outro elements for cleanup
+            this._outroElements = [bg, logBg, title, planetText, ...contentLines, restartBtn];
             this._isTransitioning = false;
         }
 
@@ -3766,7 +3815,11 @@ console.log('Phaser main loaded');
 
                 // Set initial state based on game start time
                 const startHour = GameConfig.time.gameStartHour;
-                if (startHour >= GameConfig.villager.sleepSchedule && startHour < GameConfig.villager.sleepSchedule.startHour) {
+                if (startHour >= GameConfig.villager.sleepSchedule.startHour || startHour < GameConfig.villager.sleepSchedule.endHour) {
+                    if (window.summaryLoggingEnabled) {
+                        console.log(`[MainScene] Villager ${villagerName} starting in SLEEPING state (nighttime)`);
+                    }
+                } else {
                     if (window.summaryLoggingEnabled) {
                         console.log(`[MainScene] Villager ${villagerName} starting in FORAGING state (daytime)`);
                     }
