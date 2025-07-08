@@ -14,7 +14,7 @@ window.GameConfig = {
         width: 20000,
         height: 20000,
         tileSize: 1500, // Size of each "tile" for spatial calculations (used in distance checks)
-        villagerCount: 2, // Total camps (7 AI villagers + 1 player camp)
+        villagerCount: 8, // Total camps (7 AI villagers + 1 player camp)
 
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 25 }, // Offset for village storage from center
@@ -546,7 +546,7 @@ window.GameConfig = {
 
     // Logging system settings
     logging: {
-        summaryLoggingInitialState: true,
+        summaryLoggingInitialState: false, // spammy gate
         logTransmissionInterval: 2000, // Send logs every 2 seconds
         domSnapshotInterval: 5000, // Capture DOM every 5 seconds
         domElementLimit: 1000, // Maximum DOM elements to capture

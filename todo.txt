@@ -1,10 +1,10 @@
 bugs
-villagers stop contributing when they have 1+ food and 1+ burnable in inventory
-slow down NPCs actions so you can see them better
+villagers do not bring back things after filling their inventories in CONTRIBUTE
+player spawns in a villager camp or maybe the other way round, mapping is not correct
 
 QA
 make sure replication and max cap works
 
 improvements
-wood contribution text neeeds culling
+slow down NPCs actions so you can see them better
 show NPC target in debug string

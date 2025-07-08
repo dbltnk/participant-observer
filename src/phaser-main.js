@@ -4126,7 +4126,8 @@ console.log('Phaser main loaded');
                             this.updateFireVisuals(entity);
 
                             this.updatePhaserUI();
-                            this.showTempMessage(`Burned ${item.type} for ${fireValue} wood!`, GameConfig.technical.messageDurations.short);
+                            assert(typeof fireValue === 'number', 'fireValue must be a number when displaying fire stoking popup');
+                            this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, GameConfig.technical.messageDurations.short);
                         } else if (burnableSlot !== -1) {
                             this.showTempMessage('Fire is full of wood!', GameConfig.technical.messageDurations.short);
                         } else {
@@ -4272,7 +4273,7 @@ console.log('Phaser main loaded');
                                 this.updateFireVisuals(nearbyFire);
 
                                 this.updatePhaserUI();
-                                this.showTempMessage(`Burned ${item.type} for ${fireValue} wood!`, 1200);
+                                this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, 1200);
                                 return;
                             }
                         }
@@ -6258,7 +6259,7 @@ console.log('Phaser main loaded');
                     nearbyFire.wood = Math.min(GameConfig.fires.maxWood, nearbyFire.wood + fireValue);
                     this.playerState.inventory[slot] = null;
                     this.updatePhaserUI();
-                    this.showTempMessage(`Burned ${item.type} for ${fireValue} wood!`, 1200);
+                    this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, 1200);
                 } else {
                     // Otherwise, eat it as food
                     GameUtils.applyNutrition(this.playerState, item.type);
