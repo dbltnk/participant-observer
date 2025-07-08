@@ -14,7 +14,7 @@ window.GameConfig = {
         width: 20000,
         height: 20000,
         tileSize: 1500, // Size of each "tile" for spatial calculations (used in distance checks)
-        villagerCount: 8, // Total camps (7 AI villagers + 1 player camp)
+        villagerCount: 7, // Total camps (7 AI villagers + 1 player camp)
 
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 25 }, // Offset for village storage from center

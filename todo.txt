@@ -1,6 +1,7 @@
 bugs
 villagers do not bring back things after filling their inventories in CONTRIBUTE
 player spawns in a villager camp or maybe the other way round, mapping is not correct
+game breaks when villager count is > 7
 
 QA
 make sure replication and max cap works
