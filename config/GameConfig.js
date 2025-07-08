@@ -742,7 +742,7 @@ window.GameConfig = {
                 'The locals here are... different. They pointed me to an empty bedroll but otherwise',
                 'seem not very talkative. I\'ll have to figure out what to do on my own.',
                 '',
-                'I can see smoke rising from the horizon - maybe another crash site?',
+                'I can see 💨 smoke rising from the horizon - maybe another crash site?',
                 'Need to investigate once I get my bearings.',
                 '',
                 'Priority: Find food, water, and shelter. Then explore.',
