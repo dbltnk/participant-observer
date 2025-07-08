@@ -24,3 +24,7 @@ Prototype demonstrates the *core social learning loop* and technical foundation.
 ---
 
 *See `docs/design-doc.md` for the full vision and feature breakdown.* 
+
+---
+
+PS: LLM-written readme and docs. Do not believe everything you read here. 
