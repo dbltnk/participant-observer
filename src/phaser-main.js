@@ -835,11 +835,18 @@ console.log('Phaser main loaded');
                         }
                         this.waypointStuckTimer += deltaTime;
 
-                        // Skip waypoint if stuck for more than 2 seconds
-                        if (this.waypointStuckTimer > 2000) {
-                            this.pathIndex++;
+                        // Teleport to next waypoint if stuck for more than 1 second
+                        if (this.waypointStuckTimer > GameConfig.navigation.stuckDetection.teleportTimeout &&
+                            GameConfig.navigation.stuckDetection.enableTeleport &&
+                            this.pathIndex + 1 < this.currentPath.length) {
+
+                            const nextWaypoint = this.currentPath[this.pathIndex + 1];
+                            this.position.x = nextWaypoint.x;
+                            this.position.y = nextWaypoint.y;
+                            this.pathIndex++; // Move to next waypoint
                             this.waypointStuckTimer = 0;
-                            console.log(`[Villager] ${this.name} SKIPPING STUCK WAYPOINT: ${this.pathIndex}/${this.currentPath.length} after 2 seconds`);
+
+                            console.log(`[Villager] ${this.name} TELEPORTED to waypoint ${this.pathIndex}/${this.currentPath.length} at (${Math.round(nextWaypoint.x)}, ${Math.round(nextWaypoint.y)})`);
                         } else {
                             // Log when villager is stuck at waypoint
                             if (Math.random() < 0.1 && window.summaryLoggingEnabled) { // 10% chance to log stuck villagers

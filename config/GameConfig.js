@@ -660,6 +660,12 @@ window.GameConfig = {
         waypointReachDistance: 32, // Distance within which a waypoint is considered "reached" (pixels)
         targetReachDistance: 8, // Distance within which the final target is considered "reached" (pixels)
         pathReplanningTolerance: 32, // Distance change that triggers path replanning (pixels)
+
+        // Stuck detection and teleport settings
+        stuckDetection: {
+            teleportTimeout: 1000, // 1 second before teleporting to next waypoint
+            enableTeleport: true // Master switch for teleport functionality
+        },
     },
 
     // Technical constants
