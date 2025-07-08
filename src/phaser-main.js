@@ -213,6 +213,7 @@ console.log('Phaser main loaded');
 
     // Initialize logging system
     function initLogging() {
+        window.summaryLoggingEnabled = GameConfig.logging.summaryLoggingInitialState;
         console.log('[Logging] Initializing browser logging system...');
 
         // Clear logs on page load
@@ -787,10 +788,9 @@ console.log('Phaser main loaded');
                             console.log(`[Villager] ${this.name} PATHFINDING SUCCESS: Found path with ${path.length} waypoints from (${Math.round(this.position.x)}, ${Math.round(this.position.y)}) to (${Math.round(target.x)}, ${Math.round(target.y)})`);
                         }
                     } else {
-                        // Pathfinding failed, use direct movement as fallback
+                        // Pathfinding failed, do NOT use direct movement as fallback
                         if (window.summaryLoggingEnabled) {
-                            console.warn(`[Villager] ${this.name} PATHFINDING FAILED: NPC at (${Math.round(this.position.x)}, ${Math.round(this.position.y)}) trying to reach (${Math.round(target.x)}, ${Math.round(target.y)}) - Using direct movement fallback`);
-
+                            console.warn(`[Villager] ${this.name} PATHFINDING FAILED: NPC at (${Math.round(this.position.x)}, ${Math.round(this.position.y)}) trying to reach (${Math.round(target.x)}, ${Math.round(target.y)}) - NO MOVEMENT (direct fallback disabled)`);
                         }
                         this.currentPath = null;
                         this.pathTarget = null;
@@ -801,7 +801,7 @@ console.log('Phaser main loaded');
                             this.scene.pathfinder.removeActivePath(this);
                         }
 
-                        this.moveTowardsDirect(target, deltaTime); // Re-enabled fallback
+                        // Fallback direct movement is now disabled
                         return;
                     }
                 }
@@ -868,8 +868,11 @@ console.log('Phaser main loaded');
                         }
                     }
                 } else {
-                    // No valid path, use direct movement
-                    this.moveTowardsDirect(target, deltaTime);
+                    // No valid path, do NOT use direct movement
+                    if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) {
+                        console.log(`[Villager] ${this.name} has no valid path and fallback direct movement is disabled. NPC is stuck. Investigate why pathfinding failed.`);
+                    }
+                    return;
                 }
             } else {
                 // Use direct movement for close targets or when pathfinding is disabled
@@ -882,7 +885,11 @@ console.log('Phaser main loaded');
                     this.scene.pathfinder.removeActivePath(this);
                 }
 
-                this.moveTowardsDirect(target, deltaTime);
+                if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) {
+                    // Only allow direct movement if pathfinding is globally disabled (not just failed)
+                    assert(false, `[Villager] ${this.name} attempted direct movement when pathfinding should be used. Fallback is disabled.`);
+                }
+                return;
             }
         }
 

@@ -14,7 +14,7 @@ window.GameConfig = {
         width: 20000,
         height: 20000,
         tileSize: 1500, // Size of each "tile" for spatial calculations (used in distance checks)
-        villagerCount: 6, // Total camps (7 AI villagers + 1 player camp)
+        villagerCount: 2, // Total camps (7 AI villagers + 1 player camp)
 
         // Village and camp generation
         villageCenterOffset: { x: 50, y: 25 }, // Offset for village storage from center
@@ -547,12 +547,13 @@ window.GameConfig = {
 
     // Logging system settings
     logging: {
+        summaryLoggingInitialState: true,
         logTransmissionInterval: 2000, // Send logs every 2 seconds
         domSnapshotInterval: 5000, // Capture DOM every 5 seconds
         domElementLimit: 1000, // Maximum DOM elements to capture
         serverPort: 3000, // Local server port for logging
         serverUrl: 'http://localhost:3000', // Server URL for logging
-        loggingChance: 0.01 // 1% chance per frame
+        loggingChance: 0.001 // .1% chance per frame
     },
 
     // Storage settings
@@ -632,7 +633,7 @@ window.GameConfig = {
                 0xFF0080, // Pink
                 0xFF4000, // Red-Orange
             ],
-            deadlyCount: 8, // Number of deadly gates per seed
+            deadlyCount: 2, // Number of deadly gate types per seed (out of 8 types)
             depthRatio: 0.60, // Gate depth as ratio of wall depth (0.5 = half depth)
             overlapRatio: 0.5, // Gate overlap with biomes as ratio (0.5 = half overlap)
             zIndex: -11, // Z-index for gates (above ground)
@@ -642,7 +643,7 @@ window.GameConfig = {
 
     // Navigation settings - A* pathfinding system
     navigation: {
-        gridSize: 64, // Size of each grid cell in pixels (back to 64px with caching)
+        gridSize: 96, // Size of each grid cell in pixels (back to 64px with caching)
         partitioningGridSize: 1024, // Size of each grid cell in pixels (back to 64px with caching)
         minDistanceForPathfinding: 0, // Only use pathfinding for targets > 1 grid cell away
         maxPathfindingAttempts: 2000, // Maximum iterations for A* algorithm (increased for complex wall systems)
