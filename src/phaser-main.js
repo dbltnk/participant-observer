@@ -2488,8 +2488,8 @@ console.log('Phaser main loaded');
 
             let target = this.villager.hierarchicalAI.actionData.actionTargets[0];
 
-            // For drink actions, if no target is set, find the nearest well
-            if (!target && actionType === 'drink') {
+            // For drink actions, always find the nearest well (ignore any existing target)
+            if (actionType === 'drink') {
                 target = this.findNearestWellWithWater();
                 if (target) {
                     this.villager.hierarchicalAI.actionData.actionTargets = [target];
@@ -2497,7 +2497,7 @@ console.log('Phaser main loaded');
             }
 
             // For warmup actions, if no target is set, find the nearest burning fire
-            if (!target && actionType === 'warmup') {
+            if (actionType === 'warmup') {
                 target = this.findNearestBurningFire();
                 if (target) {
                     this.villager.hierarchicalAI.actionData.actionTargets = [target];
@@ -2505,7 +2505,7 @@ console.log('Phaser main loaded');
             }
 
             // For fireRefill actions, if no target is set, find the villager's own fire
-            if (!target && actionType === 'fireRefill') {
+            if (actionType === 'fireRefill') {
                 target = this.villager.fireplace;
                 if (target && target.wood < GameConfig.fires.maxWood) {
                     this.villager.hierarchicalAI.actionData.actionTargets = [target];
@@ -2513,7 +2513,7 @@ console.log('Phaser main loaded');
             }
 
             // For eat actions, if no target is set, find the nearest burning fire
-            if (!target && actionType === 'eat') {
+            if (actionType === 'eat') {
                 target = this.findNearestBurningFire();
                 if (target) {
                     this.villager.hierarchicalAI.actionData.actionTargets = [target];
