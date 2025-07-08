@@ -5513,7 +5513,8 @@ console.log('Phaser main loaded');
                 // Randomly select which colors are deadly
                 const availableColorIndices = [...Array(colorCount).keys()];
                 for (let i = 0; i < deadlyCount; i++) {
-                    const randomIndex = this.seededRandom.randomInt(0, availableColorIndices.length);
+                    assert(availableColorIndices.length > 0, 'No available color indices left for deadly gate selection');
+                    const randomIndex = this.seededRandom.randomInt(0, availableColorIndices.length - 1);
                     const colorIndex = availableColorIndices.splice(randomIndex, 1)[0];
                     this.gateTracker.deadlyColors.add(gateConfig.colors[colorIndex]);
                 }
