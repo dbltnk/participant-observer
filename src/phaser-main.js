@@ -1184,11 +1184,6 @@ console.log('Phaser main loaded');
          * @returns {boolean} - Whether drinking was successful
          */
         drinkFromWell(well) {
-            console.log(`[Villager] ${this.name} drinkFromWell called with:`, well);
-            console.log(`[Villager] ${this.name} well type: ${well?.type}, expected: ${GameConfig.entityTypes.well}`);
-            console.log(`[Villager] ${this.name} well waterLevel: ${well?.waterLevel}`);
-            console.log(`[Villager] ${this.name} well position: ${well?.position ? `(${Math.round(well.position.x)}, ${Math.round(well.position.y)})` : 'undefined'}`);
-
             assert(well, 'Well entity required for drinkFromWell');
             assert(well.type === GameConfig.entityTypes.well, 'Target must be a well');
 
@@ -4366,6 +4361,10 @@ console.log('Phaser main loaded');
             this.ui.fpsCounter = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.fpsCounterOffset, 'FPS: 60', { fontSize: GameConfig.ui.fontSizes.fps, fontFamily: 'monospace', color: GameConfig.ui.colors.textSecondary, backgroundColor: GameConfig.ui.colors.fpsBackground, padding: GameConfig.ui.dimensions.textPadding.large }).setOrigin(0, 1).setScrollFactor(0).setVisible(false).setDepth(GameConfig.ui.zIndex.debug);
             this.uiContainer.add(this.ui.fpsCounter);
 
+            // Invulnerability indicator - shows when player is invulnerable
+            this.ui.invulIndicator = this.add.text(margin, window.innerHeight - margin - GameConfig.ui.dimensions.fpsCounterOffset - 30, '🛡️ INVULNERABLE', { fontSize: GameConfig.ui.fontSizes.debug, fontFamily: 'monospace', color: '#00ff00', backgroundColor: '#000000', padding: GameConfig.ui.dimensions.textPadding.small }).setOrigin(0, 1).setScrollFactor(0).setDepth(GameConfig.ui.zIndex.debug);
+            this.uiContainer.add(this.ui.invulIndicator);
+
             // Smoke indicator - directional pointer to distant smoke
             this.createSmokeIndicator();
         }
@@ -4689,6 +4688,12 @@ console.log('Phaser main loaded');
             if (window.villagerDebugEnabled && this.ui.fpsCounter) {
                 const fps = Math.round(1000 / this.game.loop.delta);
                 this.ui.fpsCounter.setText(`FPS: ${fps}`);
+            }
+
+            // Update invulnerability indicator
+            if (this.ui.invulIndicator) {
+                const isInvulnerable = new URLSearchParams(window.location.search).get('invul');
+                this.ui.invulIndicator.setVisible(isInvulnerable);
             }
 
         }
@@ -8102,6 +8107,14 @@ console.log('Phaser main loaded');
         // Check for custom death cause first (e.g., gate electrocution)
         if (playerState.deathCause) {
             return playerState.deathCause;
+        }
+
+        // Check invulnerability flag (from config or URL parameter)
+        const invulFromUrl = new URLSearchParams(window.location.search).get('invul');
+
+        if (invulFromUrl) {
+            // Prevent death from needs depletion, but allow other death causes
+            return null;
         }
 
         const n = playerState.needs;
