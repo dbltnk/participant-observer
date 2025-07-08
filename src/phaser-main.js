@@ -1815,6 +1815,12 @@ console.log('Phaser main loaded');
                     console.log(`[HierarchicalVillagerAI] ${this.villager.name} CONTRIBUTE: Executing forageBurnable action (village fuel supply)`);
                 }
                 this.executeActionSequence('forageBurnable', deltaTime, entities, storageBoxes, false);
+            } else if (this.villager.isInventoryFull()) {
+                // If inventory is full, store items
+                if (window.summaryLoggingEnabled) {
+                    console.log(`[HierarchicalVillagerAI] ${this.villager.name} CONTRIBUTE: Inventory full, storing items before next forage`);
+                }
+                this.executeActionSequence('storeItems', deltaTime, entities, storageBoxes, false);
             }
         }
 
@@ -2239,17 +2245,13 @@ console.log('Phaser main loaded');
          * Evaluate if contribute goal is needed (village tasks)
          */
         evaluateContributeGoal(gameTime, entities, storageBoxes) {
-            // Check if we should forage for food or burnable resources
-            // Use the collection manager to evaluate foraging needs
-            const shouldForageFood = this.collectionManager.shouldForageFood(storageBoxes);
-            const shouldForageBurnable = this.collectionManager.shouldForageBurnable(storageBoxes);
-
-            // Debug logging (occasional to avoid spam)
-            if (window.summaryLoggingEnabled && Math.random() < 0.05) { // 5% chance
-                console.log(`[GoalEvaluator] ${this.villager.name} CONTRIBUTE check: food=${shouldForageFood}, burnable=${shouldForageBurnable}`);
-            }
-
-            return shouldForageFood || shouldForageBurnable;
+            // Minimal logic: if inventory, personal storage, or communal storage have space, go forage
+            const invFull = this.villager.inventory.every(item => item !== null);
+            const personal = this.villager.personalStorageBox;
+            const communal = this.villager.communalStorageBox;
+            const personalFull = personal ? personal.items.every(item => item !== null) : true;
+            const communalFull = communal ? communal.items.every(item => item !== null) : true;
+            return !(invFull && personalFull && communalFull);
         }
 
         /**
@@ -3103,9 +3105,12 @@ console.log('Phaser main loaded');
          * Check if should forage for food (adapted from existing shouldForageFood)
          */
         shouldForageFood(storageBoxes) {
-            // Check if we have food in inventory
-            if (this.hasFoodInInventory()) {
-                return false; // Already have food
+            // Check if inventory is full - if so, we should store items instead of foraging
+            if (this.villager.isInventoryFull()) {
+                if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) {
+                    console.log(`[CollectionManager] ${this.villager.name} shouldForageFood=false: inventory full (${this.villager.inventory.filter(item => item !== null).length}/${GameConfig.player.inventorySize} slots)`);
+                }
+                return false; // Inventory full, should store items
             }
 
             // Check if storage boxes are full - if not, we should forage to fill them
@@ -3148,9 +3153,12 @@ console.log('Phaser main loaded');
          * Check if should forage for burnable resources (adapted from existing shouldForageBurnable)
          */
         shouldForageBurnable(storageBoxes) {
-            // Check if we have burnable in inventory
-            if (this.hasWoodInInventory()) {
-                return false; // Already have burnable
+            // Check if inventory is full - if so, we should store items instead of foraging
+            if (this.villager.isInventoryFull()) {
+                if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) {
+                    console.log(`[CollectionManager] ${this.villager.name} shouldForageBurnable=false: inventory full (${this.villager.inventory.filter(item => item !== null).length}/${GameConfig.player.inventorySize} slots)`);
+                }
+                return false; // Inventory full, should store items
             }
 
             // Check if storage boxes are full - if not, we should forage to fill them
@@ -7433,7 +7441,9 @@ console.log('Phaser main loaded');
                     const worldPos = this.gridToWorld({ x: gridX, y: gridY });
 
                     // Check if the center of the grid cell is blocked by walls (using spatial partitioning)
-                    const isBlockedByWalls = this.checkWallCollisionOptimized(worldPos, this.gridSize / 2);
+                    // Add pathfinding wall margin to make NPCs stay further from walls
+                    const pathfindingRadius = this.gridSize / 2 + GameConfig.navigation.pathfindingWallMargin;
+                    const isBlockedByWalls = this.checkWallCollisionOptimized(worldPos, pathfindingRadius);
 
                     // Check if the center of the grid cell is blocked by deadly gates
                     const isBlockedByDeadlyGates = this.checkDeadlyGateCollision(worldPos, this.gridSize / 2);

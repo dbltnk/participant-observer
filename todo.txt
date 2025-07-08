@@ -1,5 +1,10 @@
 bugs
-villagers ignore deadly gates in pathfinding
 villagers stop contributing when they have 1+ food and 1+ burnable in inventory
+slow down NPCs actions so you can see them better
 
+QA
 make sure replication and max cap works
+
+improvements
+wood contribution text neeeds culling
+show NPC target in debug string

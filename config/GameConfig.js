@@ -79,7 +79,7 @@ window.GameConfig = {
         temperature: 8,   // 8 in-game hours to empty (only drains at night when not near fire)
         water: 24,        // 24 in-game hours to empty
         calories: 36,     // 36 in-game hours to empty
-        vitamins: 48      // 48 in-game hours to empty
+        vitamins: 96      // 96 in-game hours to empty
         // Formula: decayRate = 100 / (hoursToEmpty * 60) [per in-game minute]
     },
 
@@ -185,7 +185,6 @@ window.GameConfig = {
 
     // Animal behavior settings
     animals: {
-        moveSpeed: 80, // Fixed animal movement speed in pixels per second
         directionChangeInterval: { min: 2000, max: 5000 }, // 2-5 seconds between direction changes
     },
 
@@ -193,7 +192,7 @@ window.GameConfig = {
     resources: {
         // Density-based spawning system
         density: {
-            resourcesPerTile: 12, // Average number of resources per tile 
+            resourcesPerTile: 6, // Average number of resources per tile 
             variance: 3, // ±variance for random variation (10-20 per tile when resourcesPerTile=15 & variance=5)
         },
 
@@ -246,8 +245,8 @@ window.GameConfig = {
                 // Animal runspeed: 75% are slower (10-20 units slower), 25% are faster (20-30 units faster)
                 runspeed: {
                     slowChance: 0.75, // 75% chance to be slower
-                    slowRange: { min: -30, max: -20 }, // 20-30 units slower than villager speed
-                    fastRange: { min: 30, max: 40 } // 30-40 units faster than villager speed
+                    slowRange: { min: -50, max: -40 }, // 20-30 units slower than villager speed
+                    fastRange: { min: 40, max: 50 } // 30-40 units faster than villager speed
                 }
             }
         },
@@ -604,7 +603,7 @@ window.GameConfig = {
 
         // Collision settings
         collisionEnabled: true, // Whether walls block movement
-        collisionMargin: 0, // Extra collision margin around wall segments
+        collisionMargin: 0, // Extra collision margin around wall segments, so you collide with the "air" around them
 
         // Spawning safety settings
         spawnSafetyMargin: 50, // Minimum distance from walls for resource spawning
@@ -643,20 +642,23 @@ window.GameConfig = {
 
     // Navigation settings - A* pathfinding system
     navigation: {
-        gridSize: 96, // Size of each grid cell in pixels (back to 64px with caching)
+        gridSize: 24, // Size of each grid cell in pixels (back to 64px with caching)
         partitioningGridSize: 1024, // Size of each grid cell in pixels (back to 64px with caching)
         minDistanceForPathfinding: 0, // Only use pathfinding for targets > 1 grid cell away
         maxPathfindingAttempts: 2000, // Maximum iterations for A* algorithm (increased for complex wall systems)
         enableForVillagers: true, // Enable pathfinding for villagers
 
+        // Pathfinding wall margin - Extra space around walls for pathfinding (doesn't affect actual collision)
+        pathfindingWallMargin: 8, // Extra pixels around walls for pathfinding grid
+
         // Debug visualization settings
         debugVisualization: {
-            enabled: true, // Enable path visualization
+            enabled: false, // Enable path visualization
         },
 
         // Path following settings
         waypointReachDistance: 32, // Distance within which a waypoint is considered "reached" (pixels)
-        targetReachDistance: 32, // Distance within which the final target is considered "reached" (pixels)
+        targetReachDistance: 8, // Distance within which the final target is considered "reached" (pixels)
         pathReplanningTolerance: 32, // Distance change that triggers path replanning (pixels)
     },
 
