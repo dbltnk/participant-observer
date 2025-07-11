@@ -815,6 +815,11 @@ console.log('Phaser main loaded');
 
                     // Check if we've reached the waypoint (after movement)
                     const waypointDistance = GameUtils.distance(this.position, nextWaypoint);
+
+                    // Debug: Log waypoint coordinates occasionally
+                    if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) {
+                        console.log(`[Villager] ${this.name} moving to waypoint: grid(${Math.round(nextWaypoint.x)}, ${Math.round(nextWaypoint.y)}) - current pos: (${Math.round(this.position.x)}, ${Math.round(this.position.y)}) - distance: ${Math.round(waypointDistance)}px`);
+                    }
                     if (waypointDistance < GameConfig.navigation.waypointReachDistance) {
                         this.pathIndex++;
                         this.waypointStuckTimer = 0; // Reset stuck timer when waypoint reached
@@ -7353,8 +7358,73 @@ console.log('Phaser main loaded');
         }
     }
 
+    // === BEGIN: Minimal Binary Heap for A* ===
+    class MinHeap {
+        constructor(scoreFn) {
+            assert(scoreFn && typeof scoreFn === 'function', 'Score function required for MinHeap');
+            this.content = [];
+            this.scoreFn = scoreFn;
+        }
+        push(element) {
+            this.content.push(element);
+            this.bubbleUp(this.content.length - 1);
+        }
+        pop() {
+            assert(this.content.length > 0, 'Heap underflow');
+            const result = this.content[0];
+            const end = this.content.pop();
+            if (this.content.length > 0) {
+                this.content[0] = end;
+                this.sinkDown(0);
+            }
+            return result;
+        }
+        size() {
+            return this.content.length;
+        }
+        bubbleUp(n) {
+            const element = this.content[n];
+            while (n > 0) {
+                const parentN = Math.floor((n + 1) / 2) - 1;
+                const parent = this.content[parentN];
+                if (this.scoreFn(element) >= this.scoreFn(parent)) break;
+                this.content[parentN] = element;
+                this.content[n] = parent;
+                n = parentN;
+            }
+        }
+        sinkDown(n) {
+            const element = this.content[n];
+            while (true) {
+                const child2N = (n + 1) * 2;
+                const child1N = child2N - 1;
+                let swap = null;
+                if (child1N < this.content.length) {
+                    const child1 = this.content[child1N];
+                    if (this.scoreFn(child1) < this.scoreFn(element)) swap = child1N;
+                }
+                if (child2N < this.content.length) {
+                    const child2 = this.content[child2N];
+                    if (this.scoreFn(child2) < (swap === null ? this.scoreFn(element) : this.scoreFn(this.content[swap]))) swap = child2N;
+                }
+                if (swap === null) break;
+                this.content[n] = this.content[swap];
+                this.content[swap] = element;
+                n = swap;
+            }
+        }
+    }
+    // === END: Minimal Binary Heap for A* ===
+
     // A* Pathfinding system for villagers and animals
     class Pathfinder {
+        // Precomputed directions for neighbor checking
+        static NEIGHBOR_DIRECTIONS = [
+            { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
+            { x: -1, y: 0 }, { x: 1, y: 0 },
+            { x: -1, y: 1 }, { x: 0, y: 1 }, { x: 1, y: 1 }
+        ];
+
         constructor(scene, worldWidth, worldHeight) {
             assert(scene, 'Scene required for pathfinder');
             assert(worldWidth > 0, 'World width must be positive');
@@ -7709,96 +7779,43 @@ console.log('Phaser main loaded');
         findPath(startPos, targetPos, maxAttempts = null, entity = null) {
             assert(startPos && typeof startPos.x === 'number' && typeof startPos.y === 'number', 'Invalid start position');
             assert(targetPos && typeof targetPos.x === 'number' && typeof targetPos.y === 'number', 'Invalid target position');
+            assert(entity, 'Entity required for path caching');
 
-            if (!maxAttempts) {
-                maxAttempts = GameConfig.navigation.maxPathfindingAttempts;
+            const now = Date.now();
+            const minInterval = GameConfig.navigation?.pathfindingMinIntervalMs ?? 200;
+
+            // Check if we should throttle based on time interval
+            if (entity._lastPathTime && now - entity._lastPathTime < minInterval) {
+                // Only return cached result if it exists and is valid
+                if (entity._lastPathResult && entity._lastPathResult.length > 0) {
+                    return entity._lastPathResult;
+                }
+                // If throttling but no valid cached result, continue with pathfinding
             }
 
-            const startTime = performance.now();
-
-            // Convert to grid coordinates
             const startGrid = this.worldToGrid(startPos);
             const targetGrid = this.worldToGrid(targetPos);
+            const cacheKey = `${startGrid.x},${startGrid.y}->${targetGrid.x},${targetGrid.y}`;
 
-            // Store debug information
-            this.debugData.lastPathfindingResult = {
-                startPos: { x: startPos.x, y: startPos.y },
-                targetPos: { x: targetPos.x, y: targetPos.y },
-                startGrid: { x: startGrid.x, y: startGrid.y },
-                targetGrid: { x: targetGrid.x, y: targetGrid.y },
-                startTime: startTime,
-                success: false,
-                path: null,
-                duration: 0,
-                attempts: 0
-            };
-
-            // If start and target are in same grid cell, no pathfinding needed
-            if (startGrid.x === targetGrid.x && startGrid.y === targetGrid.y) {
-                console.log(`[Pathfinder] Same grid cell, no pathfinding needed: (${startGrid.x},${startGrid.y})`);
-                const simplePath = [targetPos];
-                this.debugData.lastPathfindingResult.success = true;
-                this.debugData.lastPathfindingResult.path = simplePath;
-                this.debugData.lastPathfindingResult.duration = performance.now() - startTime;
-                return simplePath;
+            // Check if we have a cached result for the same path
+            if (entity._lastPathKey === cacheKey && entity._lastPathResult && entity._lastPathResult.length > 0) {
+                return entity._lastPathResult;
             }
 
-            if (window.summaryLoggingEnabled) {
-                console.log(`[Pathfinder] Starting A* from grid(${startGrid.x},${startGrid.y}) to grid(${targetGrid.x},${targetGrid.y})`);
+            const path = this.aStar(startGrid, targetGrid, maxAttempts || 10000, entity);
+
+            // Only cache successful pathfinding results
+            if (path && path.length > 0) {
+                entity._lastPathKey = cacheKey;
+                entity._lastPathResult = path;
+                entity._lastPathTime = now;
+            } else {
+                // Don't cache failed pathfinding attempts
+                entity._lastPathResult = null;
+                entity._lastPathKey = null;
             }
 
-            // Check if target is reachable (not blocked)
-            if (this.isGridCellBlocked(targetGrid.x, targetGrid.y)) {
-                console.warn(`[Pathfinder] Target grid cell (${targetGrid.x},${targetGrid.y}) is blocked, no path possible`);
-                this.debugData.lastPathfindingResult.duration = performance.now() - startTime;
-                return null;
-            }
-
-            // Run A* algorithm
-            let path;
-            try {
-                path = this.aStar(startGrid, targetGrid, maxAttempts, entity);
-            } catch (error) {
-                console.error(`[Pathfinder] Error during A* pathfinding:`, error);
-                this.debugData.lastPathfindingResult.duration = performance.now() - startTime;
-                return null;
-            }
-
-            const endTime = performance.now();
-            const duration = endTime - startTime;
-
-            if (!path || path.length === 0) {
-                if (window.summaryLoggingEnabled) {
-                    console.warn(`[Pathfinder] No path found from ${startPos.x},${startPos.y} to ${targetPos.x},${targetPos.y} (${duration.toFixed(2)}ms)`);
-                }
-                this.debugData.lastPathfindingResult.duration = duration;
-                return null;
-            }
-
-            if (window.summaryLoggingEnabled) {
-                console.log(`[Pathfinder] Path found with ${path.length} waypoints in ${duration.toFixed(2)}ms`);
-            }
-
-            // Convert path back to world coordinates
-            let worldPath;
-            try {
-                worldPath = path.map(gridPos => this.gridToWorld(gridPos));
-
-                // Add original target as final waypoint for precision
-                worldPath.push(targetPos);
-
-                // Store successful pathfinding result
-                this.debugData.lastPathfindingResult.success = true;
-                this.debugData.lastPathfindingResult.path = worldPath;
-                this.debugData.lastPathfindingResult.duration = duration;
-
-            } catch (error) {
-                console.error(`[Pathfinder] Error during path conversion:`, error);
-                this.debugData.lastPathfindingResult.duration = performance.now() - startTime;
-                return null;
-            }
-
-            return worldPath;
+            return path;
         }
 
         // Debug visualization methods
@@ -7848,8 +7865,9 @@ console.log('Phaser main loaded');
             assert(startGrid && targetGrid, 'Start and target grid positions required');
             assert(maxAttempts > 0, 'Max attempts must be positive');
 
-            // Priority queue for open set (using simple array for simplicity)
-            const openSet = [startGrid];
+            // Use MinHeap for open set
+            const openSet = new MinHeap((node) => fScore.get(this.gridKey(node)) || Infinity);
+            openSet.push(startGrid);
             const closedSet = new Set(); // Track visited nodes to prevent infinite loops
             const cameFrom = new Map();
             const gScore = new Map();
@@ -7860,24 +7878,10 @@ console.log('Phaser main loaded');
             fScore.set(this.gridKey(startGrid), this.heuristic(startGrid, targetGrid));
 
             let attempts = 0;
-            let lastLogAttempt = 0;
 
-            while (openSet.length > 0 && attempts < maxAttempts) {
+            while (openSet.size() > 0 && attempts < maxAttempts) {
                 attempts++;
-
-                // Find node with lowest fScore (optimized for small open sets)
-                let current = openSet[0];
-                let currentIndex = 0;
-                let bestFScore = fScore.get(this.gridKey(current)) || Infinity;
-
-                for (let i = 1; i < openSet.length; i++) {
-                    const currentFScore = fScore.get(this.gridKey(openSet[i])) || Infinity;
-                    if (currentFScore < bestFScore) {
-                        current = openSet[i];
-                        currentIndex = i;
-                        bestFScore = currentFScore;
-                    }
-                }
+                const current = openSet.pop();
 
                 // Check if we reached the target
                 if (current.x === targetGrid.x && current.y === targetGrid.y) {
@@ -7894,33 +7898,30 @@ console.log('Phaser main loaded');
                     return path;
                 }
 
-                // Remove current from open set and add to closed set
-                openSet.splice(currentIndex, 1);
                 closedSet.add(this.gridKey(current));
 
                 // Check all neighbors
                 const neighbors = this.getNeighbors(current);
                 for (const neighbor of neighbors) {
                     const neighborKey = this.gridKey(neighbor);
-
-                    // Skip if already visited
-                    if (closedSet.has(neighborKey)) {
-                        continue;
-                    }
-
+                    if (closedSet.has(neighborKey)) continue;
                     const currentGScore = gScore.get(this.gridKey(current));
                     assert(typeof currentGScore === 'number', `G-score must be a number, got: ${typeof currentGScore}`);
                     const tentativeGScore = currentGScore + 1;
-
                     if (tentativeGScore < (gScore.get(neighborKey) || Infinity)) {
                         cameFrom.set(neighborKey, current);
                         gScore.set(neighborKey, tentativeGScore);
                         fScore.set(neighborKey, tentativeGScore + this.heuristic(neighbor, targetGrid));
-
-                        // Add to open set if not already there
-                        if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
-                            openSet.push(neighbor);
+                        // Only add to open set if not already present
+                        let alreadyInHeap = false;
+                        for (let i = 0; i < openSet.content.length; i++) {
+                            const n = openSet.content[i];
+                            if (n.x === neighbor.x && n.y === neighbor.y) {
+                                alreadyInHeap = true;
+                                break;
+                            }
                         }
+                        if (!alreadyInHeap) openSet.push(neighbor);
                     }
                 }
             }
@@ -7935,24 +7936,15 @@ console.log('Phaser main loaded');
         // Get valid neighbors for a grid position (8-directional)
         getNeighbors(gridPos) {
             const neighbors = [];
-            const directions = [
-                { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
-                { x: -1, y: 0 }, { x: 1, y: 0 },
-                { x: -1, y: 1 }, { x: 0, y: 1 }, { x: 1, y: 1 }
-            ];
-
+            const directions = Pathfinder.NEIGHBOR_DIRECTIONS;
             let blockedCount = 0;
             let totalChecked = 0;
-
             for (const dir of directions) {
                 const neighbor = {
                     x: gridPos.x + dir.x,
                     y: gridPos.y + dir.y
                 };
-
                 totalChecked++;
-
-                // Check bounds and obstacles
                 if (neighbor.x >= 0 && neighbor.x < this.gridWidth &&
                     neighbor.y >= 0 && neighbor.y < this.gridHeight &&
                     !this.isGridCellBlocked(neighbor.x, neighbor.y)) {
@@ -7961,12 +7953,9 @@ console.log('Phaser main loaded');
                     blockedCount++;
                 }
             }
-
-            // Log neighbor checking occasionally
-            if (Math.random() < 0.0001) { // Very rare logging
+            if (Math.random() < 0.0001 && GameConfig.logging.summaryLoggingEnabled) {
                 console.log(`[Pathfinder] Neighbor check: grid(${gridPos.x},${gridPos.y}) -> ${neighbors.length} valid, ${blockedCount} blocked out of ${totalChecked} total`);
             }
-
             return neighbors;
         }
 
@@ -8009,7 +7998,20 @@ console.log('Phaser main loaded');
                 return null;
             }
 
-            return path;
+            // Convert grid coordinates back to world coordinates
+            const worldPath = path.map(gridPos => this.gridToWorld(gridPos));
+
+            if (window.summaryLoggingEnabled) {
+                console.log(`[Pathfinder] Path reconstruction complete: ${worldPath.length} waypoints`);
+                if (worldPath.length > 0) {
+                    console.log(`[Pathfinder] First waypoint: grid(${path[0].x}, ${path[0].y}) -> world(${Math.round(worldPath[0].x)}, ${Math.round(worldPath[0].y)})`);
+                    if (worldPath.length > 1) {
+                        console.log(`[Pathfinder] Last waypoint: grid(${path[path.length - 1].x}, ${path[path.length - 1].y}) -> world(${Math.round(worldPath[worldPath.length - 1].x)}, ${Math.round(worldPath[worldPath.length - 1].y)})`);
+                    }
+                }
+            }
+
+            return worldPath;
         }
     }
 
