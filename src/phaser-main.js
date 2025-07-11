@@ -7875,18 +7875,6 @@ console.log('Phaser main loaded');
             while (openSet.length > 0 && attempts < maxAttempts) {
                 attempts++;
 
-                // Safety check: if we've explored too many nodes, something is wrong
-                if (closedSet.size > maxAttempts / 2) {
-                    console.warn(`[Pathfinder] A* safety timeout: explored ${closedSet.size} nodes`);
-                    return null;
-                }
-
-                // Log progress every 1000 attempts
-                if (attempts - lastLogAttempt >= 1000) {
-                    console.log(`[Pathfinder] A* progress: ${attempts}/${maxAttempts} attempts, openSet: ${openSet.length} nodes, closedSet: ${closedSet.size} nodes`);
-                    lastLogAttempt = attempts;
-                }
-
                 // Find node with lowest fScore (optimized for small open sets)
                 let current = openSet[0];
                 let currentIndex = 0;

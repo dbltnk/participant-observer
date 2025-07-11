@@ -645,7 +645,7 @@ window.GameConfig = {
         gridSize: 24, // Size of each grid cell in pixels (back to 64px with caching)
         partitioningGridSize: 1024, // Size of each grid cell in pixels (back to 64px with caching)
         minDistanceForPathfinding: 0, // Only use pathfinding for targets > 1 grid cell away
-        maxPathfindingAttempts: 2000, // Maximum iterations for A* algorithm (increased for complex wall systems)
+        maxPathfindingAttempts: 5000, // Maximum iterations for A* algorithm (increased for complex wall systems)
         enableForVillagers: true, // Enable pathfinding for villagers
 
         // Pathfinding wall margin - Extra space around walls for pathfinding (doesn't affect actual collision)
