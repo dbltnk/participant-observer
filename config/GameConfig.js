@@ -746,15 +746,13 @@ window.GameConfig = {
             title: 'PERSONAL LOG - ENTRY #137',
             timestamp: 'Epoch 2067413432',
             content: [
-                'Emergency pod deployed successfully. Landing site appears to be a habitable zone.',
+                'Emergency pod deployed. Landing site appears habitable.',
+                '⚠️ WARNING: This world is DEADLY. Make no assumptions.',
                 '',
-                'The locals here are... different. They pointed me to an empty bedroll but otherwise',
-                'seem not very talkative. I\'ll have to figure out what to do on my own.',
+                'Locals are silent but pointed me to an empty bedroll. ',
+                '🔍 KEY TO SURVIVAL: Observe the 🧍🏽‍♀️🧍🏿🧍🏻 locals closely. They know this world.',
                 '',
-                'I can see 💨 smoke rising from the horizon - maybe another crash site?',
-                'Need to investigate once I get my bearings.',
-                '',
-                'Priority: Find food, water, and shelter. Then explore.',
+                '☑️ PRIORITIES: Find 🥕🐰 food, 💧 water, and 🔥🛏️ shelter. Then check out the 💨 smoke on the horizon - maybe another crash site?',
                 '',
                 'End log.'
             ]
