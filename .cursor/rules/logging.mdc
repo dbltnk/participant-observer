@@ -12,7 +12,7 @@ Automated browser console and DOM state capture system optimized for LLM agent c
 **Components:**
 - `index.html` - Web application with early console capture
 - `phaser-main.js` - Browser logging logic with call stack capture (integrated into main game file)
-- `server.js` - Node.js HTTP server for log aggregation
+- `logs/logging-server.js` - Node.js HTTP server for log aggregation
 - `logs/` - Output directory for debugging data
 
 **Data Flow:**
@@ -147,4 +147,4 @@ Automated browser console and DOM state capture system optimized for LLM agent c
 - Call stacks enable precise error location
 - Session boundaries maintain context across interactions
 
-**Note:** The user must start the logging server (`node server.js`) before opening the web application. The agent will receive logs via the file system, not direct server communication. 
+**Note:** The user must start the logging server (`node logs/logging-server.js`) before opening the web application. The agent will receive logs via the file system, not direct server communication. 
