@@ -4249,39 +4249,8 @@ console.log('Phaser main loaded');
                             return;
                         }
 
-                        // Second priority: eat food if near a burning fire
-                        if (GameUtils.isFood(item.type)) {
-                            const nearbyFire = this.findNearbyFire();
-                            if (nearbyFire) {
-                                this.useResourceFromInventoryPlayer(i, item);
-                                return;
-                            } else {
-                                this.showTempMessage('Must be near a burning fire to eat!', GameConfig.technical.messageDurations.medium);
-                                return;
-                            }
-                        }
-
-                        // Third priority: add burnable resources to fire if near a burning fire
-                        const fireValue = GameUtils.getFireValue(item.type);
-                        if (fireValue > 0) {
-                            const nearbyFire = this.findNearbyFire();
-                            if (nearbyFire && nearbyFire.wood < nearbyFire.maxWood) {
-                                // Add burnable resource to fire (enforce max limit)
-                                nearbyFire.wood = Math.min(nearbyFire.maxWood, nearbyFire.wood + fireValue);
-                                nearbyFire.isBurning = true;
-                                this.playerState.inventory[i] = null;
-
-                                // Update fire visuals
-                                this.updateFireVisuals(nearbyFire);
-
-                                this.updatePhaserUI();
-                                this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, 1200);
-                                return;
-                            }
-                        }
-
-                        // If none of the above conditions are met, do nothing
-                        console.log('[Inventory] No action taken for item');
+                        // Use the unified resource usage method
+                        this.useResourceFromInventoryPlayer(i, item);
                     }
                 });
             }
@@ -6260,7 +6229,10 @@ console.log('Phaser main loaded');
         }
 
         useResourceFromInventoryPlayer(slot, item) {
-            // Only allow eating if near a burning fire
+            assert(slot >= 0 && slot < this.playerState.inventory.length, `Invalid inventory slot: ${slot}`);
+            assert(item && item.type, `Invalid item: ${JSON.stringify(item)}`);
+
+            // Only allow using resources if near a burning fire
             const nearbyFire = this.findNearbyFire();
             if (nearbyFire) {
                 const fireValue = GameUtils.getFireValue(item.type);
@@ -6271,18 +6243,36 @@ console.log('Phaser main loaded');
                     nearbyFire.wood = Math.min(GameConfig.fires.maxWood, nearbyFire.wood + fireValue);
                     this.playerState.inventory[slot] = null;
                     this.updatePhaserUI();
-                    this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, 1200);
+                    this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, GameConfig.technical.messageDurations.short);
                 } else {
                     // Otherwise, eat it as food
+                    const nutrition = GameUtils.getNutrition(item.type);
+                    assert(nutrition && typeof nutrition.calories === 'number', `Nutrition data missing or invalid for ${item.type}`);
                     GameUtils.applyNutrition(this.playerState, item.type);
                     this.playerState.inventory[slot] = null;
                     this.updatePhaserUI();
-                    this.showTempMessage(`Ate ${item.type}!`, 1200);
+
+                    if (nutrition.calories > 0) {
+                        this.showTempMessage(`Ate ${item.type} - tastes good!`, GameConfig.technical.messageDurations.short);
+                    } else if (nutrition.calories < 0) {
+                        this.showTempMessage(`Tastes horrible! Is ${item.type} poisonous?`, GameConfig.technical.messageDurations.medium);
+                    } else {
+                        this.showTempMessage(`Ate ${item.type}!`, GameConfig.technical.messageDurations.short);
+                    }
                 }
             } else {
-                this.showTempMessage('Must be near a burning fire to eat!', 1500);
+                // Provide specific error messages based on item type
+                const fireValue = GameUtils.getFireValue(item.type);
+                if (fireValue > 0) {
+                    this.showTempMessage('Must be near a burning fire to burn this!', GameConfig.technical.messageDurations.medium);
+                } else if (GameUtils.isFood(item.type)) {
+                    this.showTempMessage('Must be near a burning fire to eat!', GameConfig.technical.messageDurations.medium);
+                } else {
+                    this.showTempMessage('Must be near a burning fire to use this!', GameConfig.technical.messageDurations.medium);
+                }
             }
         }
+
 
         findNearbyFire() {
             // Find burning fires with wood within interaction range

@@ -88,7 +88,7 @@ window.GameConfig = {
 
     // Player settings - Controls player character behavior and needs
     player: {
-        moveSpeed: 125, // Player movement speed in pixels per second
+        moveSpeed: 150, // Player movement speed in pixels per second
         // Formula: newPosition = oldPosition + (moveSpeed * deltaTime / 1000)
         inventorySize: 6, // Number of inventory slots (Minecraft-style hotbar)
 
