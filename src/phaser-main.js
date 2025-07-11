@@ -1003,13 +1003,28 @@ console.log('Phaser main loaded');
             this.nameText.setPosition(this.position.x, this.position.y - 40);
             this.nameText.setText(this.isDead ? `${this.name} (DEAD)` : this.name);
 
-            // Update state text with goal, action, and need (only show if debug enabled)
+            // Update state text with goal, action, and target info (only show if debug enabled)
             this.stateText.setPosition(this.position.x, this.position.y + 30);
             if (window.villagerDebugEnabled) {
                 const currentGoal = this.hierarchicalAI ? this.hierarchicalAI.goalData.currentGoal : 'unknown';
                 const currentAction = this.hierarchicalAI ? this.hierarchicalAI.actionData.currentAction : 'unknown';
-                const currentNeed = this.hierarchicalAI ? this.hierarchicalAI.getCurrentNeedDescription() : 'unknown';
-                this.stateText.setText(`${currentGoal} / ${currentAction} / ${currentNeed}`);
+
+                // Get target info
+                let targetInfo = '❌'; // Default no target
+                let pathStatus = '';
+
+                if (this.hierarchicalAI && this.hierarchicalAI.actionData.actionTargets.length > 0) {
+                    const target = this.hierarchicalAI.actionData.actionTargets[0];
+                    const distance = Math.round(GameUtils.distance(this.position, target.position));
+                    targetInfo = `${target.emoji}(${distance})`;
+
+                    // Check for pathfinding failures (simplified - could be enhanced with actual pathfinding status)
+                    if (this.hierarchicalAI.actionData.actionFailed) {
+                        pathStatus = ' [PATH: STUCK]';
+                    }
+                }
+
+                this.stateText.setText(`${currentGoal} / ${currentAction} / ${targetInfo}${pathStatus}`);
                 this.stateText.setVisible(true);
             } else {
                 this.stateText.setVisible(false);
