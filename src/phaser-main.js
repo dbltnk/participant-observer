@@ -4094,7 +4094,7 @@ console.log('Phaser main loaded');
 
                         if (collectionSuccess) {
                             this.updatePhaserUI();
-                            this.showTempMessage(`Collected ${entity.type}!`, GameConfig.technical.messageDurations.short);
+                            this.showTempMessage(`Collected ${entity.type}!`, GameConfig.ui.tempMessageDuration);
                         } else {
                             this.showTempMessage('Inventory full!', 1500);
                         }
@@ -4109,12 +4109,12 @@ console.log('Phaser main loaded');
 
                         // Check if well has sufficient water (minimum 1.0 unit)
                         if (entity.waterLevel < 1.0) {
-                            this.showTempMessage('Well is empty!', GameConfig.technical.messageDurations.short);
+                            this.showTempMessage('Well is empty!', GameConfig.ui.tempMessageDuration);
                             return;
                         }
 
                         if (this.playerState.needs.water >= GameConfig.needs.fullValue) {
-                            this.showTempMessage('Already fully hydrated!', GameConfig.technical.messageDurations.short);
+                            this.showTempMessage('Already fully hydrated!', GameConfig.ui.tempMessageDuration);
                             return;
                         }
                         assert(GameConfig.player.wellWaterRestore !== undefined, 'GameConfig.player.wellWaterRestore is missing - check GameConfig.js');
@@ -4124,7 +4124,7 @@ console.log('Phaser main loaded');
                         // Update well visuals
                         this.updateWellVisuals(entity);
                         this.updatePhaserUI();
-                        this.showTempMessage('Drank from well!', GameConfig.technical.messageDurations.short);
+                        this.showTempMessage('Drank from well!', GameConfig.ui.tempMessageDuration);
                     });
                 }
                 // --- Fire interaction: click to interact if near ---
@@ -4149,11 +4149,11 @@ console.log('Phaser main loaded');
 
                             this.updatePhaserUI();
                             assert(typeof fireValue === 'number', 'fireValue must be a number when displaying fire stoking popup');
-                            this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, GameConfig.technical.messageDurations.short);
+                            this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, GameConfig.ui.tempMessageDuration);
                         } else if (burnableSlot !== -1) {
-                            this.showTempMessage('Fire is full of wood!', GameConfig.technical.messageDurations.short);
+                            this.showTempMessage('Fire is full of wood!', GameConfig.ui.tempMessageDuration);
                         } else {
-                            this.showTempMessage('Need burnable resources to fuel fire!', GameConfig.technical.messageDurations.short);
+                            this.showTempMessage('Need burnable resources to fuel fire!', GameConfig.ui.tempMessageDuration);
                         }
                     });
                 }
@@ -4164,12 +4164,12 @@ console.log('Phaser main loaded');
                         const dist = GameUtils.distance(this.playerState.position, entity.position);
 
                         if (dist > GameConfig.player.interactionThreshold) {
-                            this.showTempMessage('Too far away from the sleepingbag!', GameConfig.technical.messageDurations.short);
+                            this.showTempMessage('Too far away from the sleepingbag!', GameConfig.ui.tempMessageDuration);
                             return;
                         }
 
                         if (entity.isOccupied) {
-                            this.showTempMessage('Sleeping bag is occupied!', GameConfig.technical.messageDurations.short);
+                            this.showTempMessage('Sleeping bag is occupied!', GameConfig.ui.tempMessageDuration);
                             return;
                         }
 
@@ -4831,9 +4831,65 @@ console.log('Phaser main loaded');
             return GameConfig.entityEmojis[type];
         }
         showTempMessage(msg, duration = GameConfig.ui.tempMessageDuration) {
-            if (this._tempMsg) this._tempMsg.destroy();
-            this._tempMsg = this.add.text(this.player.x, this.player.y - GameConfig.ui.dimensions.tempMessageOffset, msg, { fontSize: GameConfig.ui.fontSizes.overlayMessage, fontFamily: 'monospace', color: GameConfig.ui.colors.textPrimary, backgroundColor: GameConfig.ui.colors.textDark, padding: GameConfig.ui.dimensions.buttonPadding.medium }).setOrigin(0.5).setDepth(GameConfig.ui.zIndex.ui);
-            this.time.delayedCall(duration, () => { if (this._tempMsg) { this._tempMsg.destroy(); this._tempMsg = null; } });
+            // --- Multi-message, no stacking, always spawn at base position ---
+            if (!this._tempMsgs) this._tempMsgs = [];
+            assert(Array.isArray(this._tempMsgs), 'Expected _tempMsgs to be an array');
+
+            // Remove any messages that have been destroyed
+            this._tempMsgs = this._tempMsgs.filter(obj => obj && !obj._destroyed);
+
+            // Always use the base position above the player
+            const baseY = this.player.y - GameConfig.ui.dimensions.tempMessageOffset;
+            const moveUpDistance = GameConfig.ui.dimensions.tempMessageMoveUpDistance;
+            const fadeDuration = GameConfig.ui.dimensions.tempMessageFadeDuration;
+            const fontSize = GameConfig.ui.fontSizes.overlayMessage;
+            const zIndex = GameConfig.ui.zIndex.ui;
+
+            // Create the new message at the base position (invisible for measurement)
+            const textObj = this.add.text(this.player.x, baseY, msg, {
+                fontSize,
+                fontFamily: 'monospace',
+                color: GameConfig.ui.colors.textPrimary,
+                backgroundColor: GameConfig.ui.colors.textDark,
+                padding: GameConfig.ui.dimensions.buttonPadding.medium
+            }).setOrigin(0.5).setDepth(zIndex);
+
+            // Measure height (Phaser text objects have height property)
+            const messageHeight = textObj.height;
+
+            // Track in array
+            this._tempMsgs.push(textObj);
+
+            // Animate: move up and fade out
+            this.tweens.add({
+                targets: textObj,
+                y: baseY - moveUpDistance,
+                alpha: 0,
+                duration: duration,
+                ease: 'Cubic.easeIn',
+                onComplete: () => {
+                    textObj.destroy();
+                    textObj._destroyed = true;
+                }
+            });
+
+            // Optionally, fade out a bit faster at the end (if fadeDuration < duration)
+            if (fadeDuration < duration) {
+                this.time.delayedCall(duration - fadeDuration, () => {
+                    if (textObj && !textObj._destroyed) {
+                        this.tweens.add({
+                            targets: textObj,
+                            alpha: 0,
+                            duration: fadeDuration,
+                            ease: 'Linear',
+                            onComplete: () => {
+                                textObj.destroy();
+                                textObj._destroyed = true;
+                            }
+                        });
+                    }
+                });
+            }
         }
         startFadeIn() {
             // Create fade overlay starting at full opacity
@@ -6263,7 +6319,7 @@ console.log('Phaser main loaded');
                     nearbyFire.wood = Math.min(GameConfig.fires.maxWood, nearbyFire.wood + fireValue);
                     this.playerState.inventory[slot] = null;
                     this.updatePhaserUI();
-                    this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, GameConfig.technical.messageDurations.short);
+                    this.showTempMessage(`Burned ${item.type} for ${Math.round(fireValue)} wood!`, GameConfig.ui.tempMessageDuration);
                 } else {
                     // Otherwise, eat it as food
                     const nutrition = GameUtils.getNutrition(item.type);
@@ -6273,22 +6329,22 @@ console.log('Phaser main loaded');
                     this.updatePhaserUI();
 
                     if (nutrition.calories > 0) {
-                        this.showTempMessage(`Ate ${item.type} - tastes good!`, GameConfig.technical.messageDurations.short);
+                        this.showTempMessage(`Ate ${item.type} - tastes good!`, GameConfig.ui.tempMessageDuration);
                     } else if (nutrition.calories < 0) {
-                        this.showTempMessage(`Tastes horrible! Is ${item.type} poisonous?`, GameConfig.technical.messageDurations.medium);
+                        this.showTempMessage(`Tastes horrible! Is ${item.type} poisonous?`, GameConfig.ui.tempMessageDuration);
                     } else {
-                        this.showTempMessage(`Ate ${item.type}!`, GameConfig.technical.messageDurations.short);
+                        this.showTempMessage(`Ate ${item.type}!`, GameConfig.ui.tempMessageDuration);
                     }
                 }
             } else {
                 // Provide specific error messages based on item type
                 const fireValue = GameUtils.getFireValue(item.type);
                 if (fireValue > 0) {
-                    this.showTempMessage('Must be near a burning fire to burn this!', GameConfig.technical.messageDurations.medium);
+                    this.showTempMessage('Must be near a burning fire to burn this!', GameConfig.ui.tempMessageDuration);
                 } else if (GameUtils.isFood(item.type)) {
-                    this.showTempMessage('Must be near a burning fire to eat!', GameConfig.technical.messageDurations.medium);
+                    this.showTempMessage('Must be near a burning fire to eat!', GameConfig.ui.tempMessageDuration);
                 } else {
-                    this.showTempMessage('Must be near a burning fire to use this!', GameConfig.technical.messageDurations.medium);
+                    this.showTempMessage('Must be near a burning fire to use this!', GameConfig.ui.tempMessageDuration);
                 }
             }
         }

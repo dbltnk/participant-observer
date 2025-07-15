@@ -9,3 +9,27 @@ make sure replication and max cap works
 improvements
 slow down NPCs actions so you can see them better
 show NPC target in debug string
+
+- some emojis broken on Mac/Safari
+- no feedback on stealing -> bad
+- too much lag (sometimes)!
+- get stuck in tight passages
+- feedback when it gets night and you get cold!
+- feedback on when you get too hungry/thirsty (like NPCs)
+- cannot drop items
+- add some deadly aninals that kill you (lions etc) at a certain sight range, reduce your health
+- explain that force field is door
+- does not notice that you get a different world every time -> EXPLAIN!
+- thinks that color and/or size defines what makes a forcefield deadly (make all the same?)
+- REMIND that others know things -> death message? other times?
+- make NPCs feel smart by "inner monologue"?
+- NPCs can go through deadly force fields -> BUG!
+- feels lonely and disconnected, game allows no interaction with NPCs, alienating, they feel hostile
+- wanted to know where things go, colors are interesting, can I find my way back home, push your luck in going further, was fun to follow an NPC back home (he's useful now, building a relation)
+- find ways that NPCs can help you
+- find ways you can help NPCs
+- weird that NPCs do not interact with other
+- after you die bring back the intro screen, NEVER skip it!
+- find a connection with the people -> Pippo's Wunschziel, turn into actor into observer, community member
+- survive is a pretense, but you want to become a part of the community!
+- different things are safe at some time of day! (bugs and snaker are sleeping, bring the moskito repellant)

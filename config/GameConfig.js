@@ -419,7 +419,7 @@ window.GameConfig = {
         overlayDimensions: { width: 400, height: 200 }, // Default overlay size
 
         // Message display
-        tempMessageDuration: 2000, // Duration for temporary messages in milliseconds
+        tempMessageDuration: 3000, // Duration for temporary messages in milliseconds
 
         // Colors - Centralized color definitions
         colors: {
@@ -515,6 +515,10 @@ window.GameConfig = {
             debugButtonOffset: 120,
             logSpamButtonOffset: 90,
             tempMessageOffset: 40,
+            // --- Add for temp message stacking/animation ---
+            tempMessageMoveUpDistance: 100, // How far each message moves up during its lifetime
+            tempMessageFadeDuration: 5000, // Fade-out duration in ms (should be less than or equal to message duration)
+            tempMessageStackSpacing: 50,
             sleepingOffset: 60,
             storageSlotOffset: 80,
             storageInstructionsOffset: 60,
@@ -678,13 +682,6 @@ window.GameConfig = {
             animalWanderRange: { min: 50, max: 150 }, // Range for animal wandering
             resourcePlacementAttempts: 100, // Max attempts to place resources
         },
-
-        // Message durations
-        messageDurations: {
-            short: 1200, // Short message duration
-            medium: 1500, // Medium message duration
-        },
-
         // UI constants
         ui: {
             iconWidth: 25, // Width reserved for icons
