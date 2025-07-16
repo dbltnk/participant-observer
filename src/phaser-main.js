@@ -3540,7 +3540,7 @@ console.log('Phaser main loaded');
                 restartBtn.setBackgroundColor(GameConfig.intro.buttonColor);
             });
 
-            // Button click handler: skip intro and go directly to main scene with new seed
+            // Button click handler: generate new random seed, update URL, and start IntroScene
             restartBtn.on('pointerdown', () => {
                 if (this._isTransitioning) return; // Prevent double-clicks
                 this._isTransitioning = true;
@@ -3550,13 +3550,13 @@ console.log('Phaser main loaded');
                 // Generate new random seed
                 const newSeed = Math.floor(Math.random() * 999) + 1;
 
-                // Update URL with new seed and skip intro
+                // Update URL with new seed
                 const url = new URL(window.location.href);
                 url.searchParams.set('seed', newSeed.toString());
                 window.history.replaceState({}, '', url.pathname + url.search);
 
-                // Start main scene directly (skips intro)
-                this.scene.start('MainScene');
+                // Start intro scene (do not skip intro)
+                this.scene.start('IntroScene');
             });
 
             // Assert button is present

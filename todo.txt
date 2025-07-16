@@ -33,3 +33,4 @@ show NPC target in debug string
 - find a connection with the people -> Pippo's Wunschziel, turn into actor into observer, community member
 - survive is a pretense, but you want to become a part of the community!
 - different things are safe at some time of day! (bugs and snaker are sleeping, bring the moskito repellant)
+- deadly animals should exist and run away when they sense two NPCs/player in the same area
