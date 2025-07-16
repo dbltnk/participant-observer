@@ -14,6 +14,8 @@ console.log('Phaser main loaded');
     const GameUtils = {
         // Distance calculation between two positions
         distance(pos1, pos2) {
+            assert(pos1 && typeof pos1.x === 'number' && typeof pos1.y === 'number', `distance: pos1 is invalid: ${JSON.stringify(pos1)}`);
+            assert(pos2 && typeof pos2.x === 'number' && typeof pos2.y === 'number', `distance: pos2 is invalid: ${JSON.stringify(pos2)}`);
             const dx = pos1.x - pos2.x;
             const dy = pos1.y - pos2.y;
             return Math.sqrt(dx * dx + dy * dy);
@@ -176,6 +178,9 @@ console.log('Phaser main loaded');
             const emptySlot = GameUtils.findEmptySlot(inventory);
             if (emptySlot === -1) {
                 console.warn(`[${collectorName}] inventory is full, cannot collect resource`);
+                if (typeof this === 'object' && this !== null && this.name) {
+                    queueVillagerEmote(this, 'inventory_full');
+                }
                 return false;
             }
 
@@ -199,11 +204,125 @@ console.log('Phaser main loaded');
                 console.log(`[${collectorName}] collected ${entity.type} from (${Math.round(entity.position.x)}, ${Math.round(entity.position.y)})`);
             }
             return true;
+        },
+
+        /**
+         * Count resources of a given type in a specific grid cell
+         * @param {Array} entities - Array of entities to search
+         * @param {string} resourceType - Resource type to count
+         * @param {Object} gridCell - {x, y} grid cell coordinates
+         * @returns {number} - Number of matching resources in the cell
+         */
+        countResourcesInGridCell(entities, resourceType, gridCell) {
+            let count = 0;
+            const cellSize = GameConfig.world.tileSize;
+            if (!entities || !Array.isArray(entities)) {
+                console.warn(`[GameUtils] countResourcesInGridCell: entities is not an array, got:`, entities);
+                return 0;
+            }
+            for (const entity of entities) {
+                if (entity.type === resourceType && !entity.collected) {
+                    const entityCell = {
+                        x: Math.floor(entity.position.x / cellSize),
+                        y: Math.floor(entity.position.y / cellSize)
+                    };
+                    if (entityCell.x === gridCell.x && entityCell.y === gridCell.y) {
+                        count++;
+                    }
+                }
+            }
+            return count;
         }
     };
 
     function assert(condition, message) {
         if (!condition) throw new Error('ASSERTION FAILED: ' + message);
+    }
+
+    // === Villager Emote Utility (Refactored) ===
+    function queueVillagerEmote(villager, trigger, opts = {}) {
+        assert(villager, 'queueVillagerEmote: villager is required');
+        assert(trigger, 'queueVillagerEmote: trigger is required');
+        // Only allow emotes if this villager is allowed
+        if (villager.canShowEmotes === false) return;
+        const now = Date.now();
+        const cooldown = window.GameConfig.villager.emoteCooldownMs;
+        if (!villager._emoteCooldowns) villager._emoteCooldowns = {};
+        if (!villager._lastEmote) villager._lastEmote = { trigger: null, time: 0 };
+
+        // Per-emote cooldown check
+        const lastTime = villager._emoteCooldowns[trigger];
+        const lastTrigger = villager._lastEmote.trigger;
+        const lastMsgTime = villager._lastEmote.time;
+        // Only show if:
+        // - This emote's cooldown has expired
+        // - It's different from the last shown, or enough time has passed for this emote
+        if (now - lastTime < cooldown) {
+            // If this is the same as the last emote, and still on cooldown, skip
+            if (trigger === lastTrigger) return;
+            // If different, but this emote is still on cooldown, skip
+            return;
+        }
+        // Update per-emote cooldown
+        villager._emoteCooldowns[trigger] = now;
+        // Update last emote info
+        villager._lastEmote = { trigger, time: now };
+        // Lookup message
+        const emotes = window.GameConfig?.villagerEmoteTriggers;
+        let msg = emotes[trigger];
+        assert(typeof msg === 'string', `No emote string found for trigger: ${trigger}`);
+        // Optionally append emoji or name
+        if (opts.emoji) msg += opts.emoji;
+        if (opts.name) msg += opts.name;
+        villager._pendingChatMessage = msg;
+        villager._pendingChatDuration = window.GameConfig.ui.tempMessageDuration;
+        if (window.summaryLoggingEnabled) {
+            console.log(`[Emote] ${villager.name || 'Villager'} emote triggered: '${trigger}' at ${now}`);
+        }
+    }
+
+    // === DRY Chat Bubble Utility ===
+    function showChatBubble(scene, x, y, msg, duration = GameConfig.ui.tempMessageDuration) {
+        assert(scene && scene.add && scene.tweens, 'Scene with add/tweens required for chat bubble');
+        const moveUpDistance = GameConfig.ui.dimensions.tempMessageMoveUpDistance;
+        const fadeDuration = GameConfig.ui.tempMessageFadeDuration;
+        const fontSize = GameConfig.ui.fontSizes.overlayMessage;
+        const zIndex = GameConfig.ui.zIndex.ui;
+        const textObj = scene.add.text(x, y, msg, {
+            fontSize,
+            fontFamily: 'monospace',
+            color: GameConfig.ui.colors.textPrimary,
+            backgroundColor: GameConfig.ui.colors.textDark,
+            padding: GameConfig.ui.dimensions.buttonPadding.medium
+        }).setOrigin(0.5).setDepth(zIndex);
+        scene.tweens.add({
+            targets: textObj,
+            y: y - moveUpDistance,
+            alpha: 0,
+            duration: duration,
+            ease: 'Cubic.easeIn',
+            onComplete: () => {
+                textObj.destroy();
+                textObj._destroyed = true;
+            }
+        });
+        if (fadeDuration < duration) {
+            scene.time.delayedCall(duration - fadeDuration, () => {
+                if (textObj && !textObj._destroyed) {
+                    scene.tweens.add({
+                        targets: textObj,
+                        alpha: 0,
+                        duration: fadeDuration,
+                        ease: 'Linear',
+                        onComplete: () => {
+                            textObj.destroy();
+                            textObj._destroyed = true;
+                        }
+                    });
+                }
+            });
+        }
+        return textObj;
     }
 
     // === BEGIN: Logging System ===
@@ -546,6 +665,9 @@ console.log('Phaser main loaded');
             this.gameEntities = null;
 
             console.log(`[Villager] Created villager ${name} at camp ${villagerId}`);
+
+            this._pendingChatMessage = null;
+            this._pendingChatDuration = null;
         }
 
         // === ESSENTIAL METHODS ONLY ===
@@ -741,6 +863,81 @@ console.log('Phaser main loaded');
                     console.log(`[Villager] ${this.name} LOW NEEDS WARNING: ${lowNeeds.join(', ')} | Goal: ${currentGoal}, Action: ${currentAction}, Hour: ${t.hour.toFixed(1)}`);
                     this.lastCriticalLog = now;
                 }
+            }
+
+            // Trigger emotes for near gates
+            if (this.scene && this.scene.gates) {
+                for (const gate of this.scene.gates) {
+                    const dist = GameUtils.distance(this.position, { x: gate.x, y: gate.y });
+                    if (gate.isDeadly) {
+                        if (dist <= GameConfig.villagerEmoteProximity.deadly_gate) {
+                            queueVillagerEmote(this, 'near_deadly_gate');
+                        }
+                    } else {
+                        if (dist <= GameConfig.villagerEmoteProximity.safe_gate) {
+                            queueVillagerEmote(this, 'near_safe_gate');
+                        }
+                    }
+                }
+            }
+
+            // === Proximity emotes for poisonous plants, fast animals, golden rule resources ===
+            if (!this._lastProximityEmoteCheck) this._lastProximityEmoteCheck = 0;
+            const nowMs = performance.now();
+            if (nowMs - this._lastProximityEmoteCheck >= 100) {
+                this._lastProximityEmoteCheck = nowMs;
+                if (this.gameEntities) {
+                    // --- Poisonous Plant Proximity ---
+                    const poisonRadius = GameConfig.villagerEmoteProximity.poisonous_plant;
+                    assert(typeof poisonRadius === 'number', 'poisonous_plant proximity must be set in GameConfig');
+                    const nearbyPoisonous = this.gameEntities.filter(e => e.isPoisonous && !e.collected && GameUtils.distance(this.position, e.position) <= poisonRadius);
+                    for (const entity of nearbyPoisonous) {
+                        queueVillagerEmote(this, 'near_poisonous_plant');
+                    }
+
+                    // --- Fast Animal Proximity ---
+                    const fastAnimalRadius = GameConfig.villagerEmoteProximity.fast_animal;
+                    assert(typeof fastAnimalRadius === 'number', 'fast_animal proximity must be set in GameConfig');
+                    const villagerSpeed = GameConfig.villager.moveSpeed;
+                    for (const entity of this.gameEntities) {
+                        if (entity.collected) continue;
+                        const resourceData = GameConfig.resources.resourceData[entity.type];
+                        if (resourceData && resourceData.category === 'animal') {
+                            const animalSpeed = GameUtils.getRunspeed(entity.type);
+                            if (animalSpeed > villagerSpeed) {
+                                const dist = GameUtils.distance(this.position, entity.position);
+                                if (dist <= fastAnimalRadius) {
+                                    queueVillagerEmote(this, 'near_fast_animal');
+                                }
+                            }
+                        }
+                    }
+
+                    // --- Golden Rule Resource Proximity ---
+                    const goldenRuleRadius = GameConfig.villagerEmoteProximity.golden_rule_resource;
+                    assert(typeof goldenRuleRadius === 'number', 'golden_rule_resource proximity must be set in GameConfig');
+                    const minRequired = GameConfig.villager.foraging.minResourcesPerGridCell;
+                    const cellSize = GameConfig.world.tileSize;
+                    for (const entity of this.gameEntities) {
+                        if (entity.collected) continue;
+                        const gridCell = {
+                            x: Math.floor(entity.position.x / cellSize),
+                            y: Math.floor(entity.position.y / cellSize)
+                        };
+                        const countInCell = GameUtils.countResourcesInGridCell(this.scene.entities, entity.type, gridCell);
+                        if (countInCell < minRequired) {
+                            const dist = GameUtils.distance(this.position, entity.position);
+                            if (dist <= goldenRuleRadius) {
+                                queueVillagerEmote(this, 'golden_rule_resource');
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Trigger emotes for warming up by fire
+            if (isNearFire) {
+                queueVillagerEmote(this, 'warming_up');
             }
         }
 
@@ -1172,6 +1369,19 @@ console.log('Phaser main loaded');
                     this.inventoryText.setVisible(false);
                 }
             }
+
+            // Show pending chat bubble if any
+            if (this._pendingChatMessage && this.phaserText && this.phaserText.scene) {
+                showChatBubble(
+                    this.phaserText.scene,
+                    this.position.x,
+                    this.position.y - 60,
+                    this._pendingChatMessage,
+                    this._pendingChatDuration || GameConfig.ui.tempMessageDuration
+                );
+                this._pendingChatMessage = null;
+                this._pendingChatDuration = null;
+            }
         }
 
         checkDeath() {
@@ -1241,6 +1451,7 @@ console.log('Phaser main loaded');
             well.waterLevel = Math.max(0, well.waterLevel - 1);
 
             console.log(`[Villager] ${this.name} drank from well at (${Math.round(well.position.x)}, ${Math.round(well.position.y)}) - water level now: ${well.waterLevel}`);
+            queueVillagerEmote(this, 'drinking');
             return true;
         }
 
@@ -1275,6 +1486,13 @@ console.log('Phaser main loaded');
 
                             if (window.summaryLoggingEnabled) {
                                 console.log(`[Villager] ${this.name} retrieved ${item.type} from storage`);
+                            }
+                            queueVillagerEmote(this, 'retrieving_from_storage');
+
+                            // Trigger player theft emote if applicable
+                            if (storageBox.isPersonal && collectorName === 'Player' && storageBox.villagerId !== undefined && Array.isArray(window.phaserGame.scene.scenes[0].villagers)) {
+                                const villager = window.phaserGame.scene.scenes[0].villagers[storageBox.villagerId];
+                                if (villager) queueVillagerEmote(villager, 'player_takes_theirs');
                             }
                             return true;
                         }
@@ -1319,6 +1537,7 @@ console.log('Phaser main loaded');
                 if (window.summaryLoggingEnabled) {
                     console.log(`[Villager] ${this.name} stored ${storedCount} items in storage`);
                 }
+                queueVillagerEmote(this, 'storing_items');
                 return true;
             }
 
@@ -1384,6 +1603,7 @@ console.log('Phaser main loaded');
                         if (window.summaryLoggingEnabled) {
                             console.log(`[Villager] ${this.name} ate ${item.type} near fire at (${Math.round(nearbyFire.position.x)}, ${Math.round(nearbyFire.position.y)})`);
                         }
+                        queueVillagerEmote(this, 'eating');
                         return true; // Successfully ate food
                     }
                 }
@@ -1680,6 +1900,11 @@ console.log('Phaser main loaded');
             // Enter new goal
             this.enterGoal(newGoal);
 
+            // === EMOTE: High-level goal ===
+            if (window.GameConfig?.villagerEmoteTriggers?.[newGoal]) {
+                queueVillagerEmote(this.villager, newGoal);
+            }
+
             // Update goal data
             this.goalData.currentGoal = newGoal;
             this.goalData.goalStartTime = Date.now();
@@ -1711,6 +1936,11 @@ console.log('Phaser main loaded');
             this.actionData.actionStartTime = Date.now();
             this.actionData.actionProgress = 0;
             this.actionData.actionFailed = false;
+
+            // === Emote trigger ===
+            const target = this.actionData.actionTargets && this.actionData.actionTargets[0];
+            const emoji = target && target.emoji ? target.emoji : '';
+            queueVillagerEmote(this.villager, newAction, { emoji });
         }
 
         /**
@@ -1773,21 +2003,25 @@ console.log('Phaser main loaded');
                 if (window.summaryLoggingEnabled) {
                     console.log(`[HierarchicalVillagerAI] ${this.villager.name} SURVIVE: Executing drink action (emergency water need)`);
                 }
+                queueVillagerEmote(this.villager, 'emergency_water');
                 this.executeActionSequence('drink', deltaTime, entities, storageBoxes, true);
             } else if (this.villager.needs.calories < GameConfig.villager.emergencyThresholds.calories) {
                 if (window.summaryLoggingEnabled) {
                     console.log(`[HierarchicalVillagerAI] ${this.villager.name} SURVIVE: Executing eat action (emergency calories need)`);
                 }
+                queueVillagerEmote(this.villager, 'emergency_calories');
                 this.executeActionSequence('eat', deltaTime, entities, storageBoxes, true);
             } else if (this.villager.needs.temperature < GameConfig.villager.emergencyThresholds.temperature) {
                 if (window.summaryLoggingEnabled) {
                     console.log(`[HierarchicalVillagerAI] ${this.villager.name} SURVIVE: Executing warmup action (emergency temperature need)`);
                 }
+                queueVillagerEmote(this.villager, 'emergency_temperature');
                 this.executeActionSequence('warmup', deltaTime, entities, storageBoxes, true);
             } else if (this.collectionManager.shouldRefillFire(true, entities)) {
                 if (window.summaryLoggingEnabled) {
                     console.log(`[HierarchicalVillagerAI] ${this.villager.name} SURVIVE: Executing fireRefill action (emergency fire need)`);
                 }
+                queueVillagerEmote(this.villager, 'emergency_fire');
                 this.executeActionSequence('fireRefill', deltaTime, entities, storageBoxes, true);
             }
         }
@@ -1934,6 +2168,11 @@ console.log('Phaser main loaded');
                 this.actionData.canStealFromOthers = false;
             }
 
+            // EMOTE: Major action
+            if (window.GameConfig?.villagerEmoteTriggers?.[actionType]) {
+                queueVillagerEmote(this.villager, actionType);
+            }
+
             // Execute action based on current action state
             switch (currentAction) {
                 case ACTION_STATES.WAIT:
@@ -1954,7 +2193,7 @@ console.log('Phaser main loaded');
                         this.transitionAction(ACTION_STATES.USE_FACILITY);
                         this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
                     } else if (actionType === 'eat' && this.collectionManager.hasFoodInInventory()) {
-                        // Special case: If we want to eat and already have food in inventory, go directly to facility
+                        // Special case: If we want to eat and already have food in inventory, go directly to fire
                         if (window.summaryLoggingEnabled) {
                             console.log(`[HierarchicalVillagerAI] ${this.villager.name} EAT_DIRECT: Already have food in inventory, going directly to fire`);
                         }
@@ -1963,7 +2202,7 @@ console.log('Phaser main loaded');
                         this.transitionAction(ACTION_STATES.USE_FACILITY);
                         this.actionExecutor.executeUseFacility(actionType, deltaTime, entities, storageBoxes);
                     } else if (actionType === 'fireRefill' && this.collectionManager.hasWoodInInventory()) {
-                        // Special case: If we want to refill fire and already have wood in inventory, go directly to facility
+                        // Special case: If we want to refill fire and already have wood in inventory, go directly to fire
                         if (window.summaryLoggingEnabled) {
                             console.log(`[HierarchicalVillagerAI] ${this.villager.name} FIREREFILL_DIRECT: Already have wood in inventory, going directly to fire`);
                         }
@@ -2767,26 +3006,35 @@ console.log('Phaser main loaded');
                 return null;
             }
 
-            console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: searching through ${this.villager.gameEntities.length} entities`);
+            if (window.summaryLoggingEnabled) {
+                console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: searching through ${this.villager.gameEntities.length} entities`);
+            }
 
             // Log all well entities for debugging
             const wellEntities = this.villager.gameEntities.filter(entity =>
                 entity.type === GameConfig.entityTypes.well
             );
-            console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: found ${wellEntities.length} well entities`);
-
-            wellEntities.forEach((well, index) => {
-                console.log(`[ActionExecutor] ${this.villager.name} Well ${index}: type=${well.type}, waterLevel=${well.waterLevel}, position=(${Math.round(well.position.x)}, ${Math.round(well.position.y)})`);
-            });
+            if (window.summaryLoggingEnabled) {
+                console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: found ${wellEntities.length} well entities`);
+                wellEntities.forEach((well, index) => {
+                    console.log(`[ActionExecutor] ${this.villager.name} Well ${index}: type=${well.type}, waterLevel=${well.waterLevel}, position=(${Math.round(well.position.x)}, ${Math.round(well.position.y)})`);
+                });
+            }
 
             const nearestWell = GameUtils.findNearestEntity(this.villager.gameEntities, this.villager.position, entity =>
                 entity.type === GameConfig.entityTypes.well && entity.waterLevel >= 1
             );
 
-            if (nearestWell) {
-                console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: found nearest well at (${Math.round(nearestWell.position.x)}, ${Math.round(nearestWell.position.y)}) with waterLevel=${nearestWell.waterLevel}, type=${nearestWell.type}`);
+            if (window.summaryLoggingEnabled) {
+                if (nearestWell) {
+                    console.log(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: found nearest well at (${Math.round(nearestWell.position.x)}, ${Math.round(nearestWell.position.y)}) with waterLevel=${nearestWell.waterLevel}, type=${nearestWell.type}`);
+                } else {
+                    console.warn(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: no well with water found`);
+                }
             } else {
-                console.warn(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: no well with water found`);
+                if (!nearestWell) {
+                    console.warn(`[ActionExecutor] ${this.villager.name} findNearestWellWithWater: no well with water found`);
+                }
             }
 
             return nearestWell;
@@ -2882,6 +3130,12 @@ console.log('Phaser main loaded');
                 }
             }
 
+            if (nearestSource) {
+                queueVillagerEmote(this.villager, 'found_resource');
+            } else {
+                queueVillagerEmote(this.villager, 'no_target');
+            }
+
             return {
                 source: nearestSource,
                 distance: nearestDistance,
@@ -2955,12 +3209,13 @@ console.log('Phaser main loaded');
             // Golden rule: only collect if there are enough resources in the area
             const minRequired = GameConfig.villager.foraging.minResourcesPerGridCell;
             const gridCell = this.getGridCellForPosition(entity.position);
-            const countInCell = this.countResourcesInGridCell(entities, entity.type, gridCell);
+            const countInCell = GameUtils.countResourcesInGridCell(entities, entity.type, gridCell);
 
             if (countInCell < minRequired) {
                 if (window.summaryLoggingEnabled) {
                     console.log(`[ActionExecutor] ${this.villager.name} GOLDEN_RULE: Skipping ${entity.type} - only ${countInCell} in grid cell (need ${minRequired}+)`);
                 }
+                // Proximity emote for golden rule resource
                 return false;
             }
 
@@ -2981,6 +3236,7 @@ console.log('Phaser main loaded');
                 if (window.summaryLoggingEnabled) {
                     console.log(`[ActionExecutor] ${this.villager.name} GOLDEN_RULE: Skipping poisonous food ${entity.type}`);
                 }
+                // Proximity emote for poisonous plant
                 return false;
             }
 
@@ -2993,6 +3249,7 @@ console.log('Phaser main loaded');
                     if (window.summaryLoggingEnabled) {
                         console.log(`[ActionExecutor] ${this.villager.name} GOLDEN_RULE: Skipping faster animal ${entity.type} (speed: ${animalSpeed} vs villager: ${villagerSpeed})`);
                     }
+                    // Proximity emote for fast animal
                     return false;
                 }
             }
@@ -3006,32 +3263,6 @@ console.log('Phaser main loaded');
                 x: Math.floor(position.x / cellSize),
                 y: Math.floor(position.y / cellSize)
             };
-        }
-
-        countResourcesInGridCell(entities, resourceType, gridCell) {
-            let count = 0;
-            const cellSize = GameConfig.world.tileSize;
-
-            // Safety check: ensure entities is iterable
-            if (!entities || !Array.isArray(entities)) {
-                console.warn(`[ActionExecutor] ${this.villager.name} countResourcesInGridCell: entities is not an array, got:`, entities);
-                return 0;
-            }
-
-            for (const entity of entities) {
-                if (entity.type === resourceType && !entity.collected) {
-                    const entityCell = {
-                        x: Math.floor(entity.position.x / cellSize),
-                        y: Math.floor(entity.position.y / cellSize)
-                    };
-
-                    if (entityCell.x === gridCell.x && entityCell.y === gridCell.y) {
-                        count++;
-                    }
-                }
-            }
-
-            return count;
         }
     }
 
@@ -4710,6 +4941,32 @@ console.log('Phaser main loaded');
             // Get storage boxes for villager interactions
             const storageBoxes = this.entities.filter(e => e.type === 'storage_box');
 
+            // --- EMOTE VISIBILITY CONTROL ---
+            // Only update the closest villagers for emotes every emoteProximityUpdateIntervalMs
+            if (!this._lastEmoteProximityUpdate) this._lastEmoteProximityUpdate = 0;
+            const now = performance.now();
+            const interval = GameConfig.villager.emoteProximityUpdateIntervalMs || 1000;
+            if (!this._emoteProximityCache) this._emoteProximityCache = [];
+            if (now - this._lastEmoteProximityUpdate > interval) {
+                const maxEmoteVillagers = GameConfig.villager.maxVillagersShowingEmotes || 1;
+                const playerPos = this.playerState.position;
+                // Only consider living villagers
+                const livingVillagers = this.villagers.filter(v => !v.isDead);
+                // Sort by distance to player
+                livingVillagers.sort((a, b) => {
+                    const da = GameUtils.distance(a.position, playerPos);
+                    const db = GameUtils.distance(b.position, playerPos);
+                    return da - db;
+                });
+                // Set canShowEmotes flag
+                for (let i = 0; i < livingVillagers.length; i++) {
+                    livingVillagers[i].canShowEmotes = i < maxEmoteVillagers;
+                }
+                this._emoteProximityCache = livingVillagers.slice(0, maxEmoteVillagers).map(v => v.name);
+                this._lastEmoteProximityUpdate = now;
+            }
+            // (On skipped frames, do not re-sort or re-assign canShowEmotes)
+
             // Debug: Log entity count occasionally (behind log spam gate)
             if (window.summaryLoggingEnabled && Math.random() < GameConfig.logging.loggingChance) { // 1% chance per frame when spam enabled
                 const resourceEntities = this.entities.filter(e => [...GameUtils.ALL_FOOD_TYPES, ...GameUtils.ALL_BURNABLE_TYPES].includes(e.type));
@@ -4782,7 +5039,8 @@ console.log('Phaser main loaded');
             // Also check distance from each camp to prevent resources spawning inside camps
             if (this.camps && this.camps.length > 0) {
                 for (let i = 0; i < this.camps.length; i++) {
-                    const campDistance = GameUtils.distance(pos, this.camps[i]);
+                    const camp = this.camps[i];
+                    const campDistance = GameUtils.distance(pos, camp.position);
                     if (campDistance < 200) { // Minimum 200 pixels from any camp
                         return true;
                     }
@@ -4791,6 +5049,7 @@ console.log('Phaser main loaded');
 
             return false;
         }
+
         isTooCloseToExistingWell(pos) {
             if (!this.wells) return false;
             for (const well of this.wells) {
@@ -4840,6 +5099,7 @@ console.log('Phaser main loaded');
             console.warn(`[Safe Position] Could not find safe position in grid cell (${gridCell.x}, ${gridCell.y}) after ${maxAttempts} attempts`);
             return null;
         }
+
         getResourceEmoji(type) {
             // Get emoji from GameConfig.resources.resourceData
             if (GameConfig.resources.resourceData[type]) {
@@ -4847,6 +5107,7 @@ console.log('Phaser main loaded');
             }
             return GameConfig.entityEmojis[type];
         }
+
         showTempMessage(msg, duration = GameConfig.ui.tempMessageDuration) {
             // --- Multi-message, no stacking, always spawn at base position ---
             if (!this._tempMsgs) this._tempMsgs = [];
@@ -4908,6 +5169,7 @@ console.log('Phaser main loaded');
                 });
             }
         }
+
         startFadeIn() {
             // Create fade overlay starting at full opacity
             this._fadeOverlay = this.add.rectangle(
@@ -5946,7 +6208,7 @@ console.log('Phaser main loaded');
                 }
             }
 
-            // Update resource count debug display
+            // Update resource count display
             this.updateResourceCountDisplay();
         }
 
@@ -8188,6 +8450,7 @@ console.log('Phaser main loaded');
         assert(playerState.needs.water >= GameConfig.needs.minValue && playerState.needs.water <= GameConfig.needs.maxValue, 'Water out of bounds');
         assert(playerState.needs.calories >= GameConfig.needs.minValue && playerState.needs.calories <= GameConfig.needs.maxValue, 'Calories out of bounds');
     }
+
     function checkGameOver(playerState) {
         // Check for custom death cause first (e.g., gate electrocution)
         if (playerState.deathCause) {

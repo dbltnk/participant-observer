@@ -116,6 +116,9 @@ window.GameConfig = {
 
     // Villager settings - Controls AI villager behavior and capabilities
     villager: {
+
+        emoteCooldownMs: 5000, // Minimum ms between villager emotes
+
         moveSpeed: 100, // Villager movement speed in pixels per second (same as player)
         // Formula: newPosition = oldPosition + (moveSpeed * deltaTime / 1000)
 
@@ -181,6 +184,10 @@ window.GameConfig = {
             'Maple', 'Nettle', 'Oak', 'Poppy', 'Quince', 'Rowan', 'Sage', 'Thistle',
             'Umber', 'Violet', 'Wisteria', 'Yew', 'Zinnia', 'Alder', 'Bramble', 'Clover'
         ],
+        // Maximum number of villagers allowed to show emotes at once (closest to player)
+        maxVillagersShowingEmotes: 1,
+        // How often (ms) to update which villagers are allowed to show emotes
+        emoteProximityUpdateIntervalMs: 1000,
     },
 
     // Animal behavior settings
@@ -851,6 +858,63 @@ window.GameConfig = {
         tileSize: 1500, // Use same tile size as world grid
         updateInterval: 100, // Update line of sight every 100ms for performance
     },
+};
+
+// === Villager Inner Monologue/Emote Triggers ===
+window.GameConfig.villagerEmoteTriggers = {
+    // High-level goals
+    survive: "I'm in trouble! Need to survive.",
+    rest: "Time to sleep.",
+    maintain: "Keeping myself healthy.",
+    contribute: "Helping the village.",
+
+    // Emergencies
+    emergency_water: "I'm desperate for water!",
+    emergency_calories: "I'm starving!",
+    emergency_temperature: "I'm freezing!",
+    emergency_fire: "The fire is almost out!",
+
+    // Major actions
+    drink: "Looking for water.",
+    eat: "I need food.",
+    warmup: "I need to get warm.",
+    fireRefill: "Better add wood to the fire.",
+    forageFood: "Foraging for food.",
+    forageBurnable: "Looking for firewood.",
+    storeItems: "Storing my items.",
+    sleep: "Going to sleep.",
+    move_to_resource: "Heading to: ",
+    collect_resource: "Collecting: ",
+    use_facility: "Using: ",
+    wait: "Chilling ...",
+    find_resources: "Looking for resources.",
+    inventory_full: "My inventory is full.",
+    warming_up: "",
+    drinking: "Drinking from the well.",
+    retrieving_from_storage: "Retrieving something from storage.",
+    storing_items: "Putting things away.",
+    eating: "Eating by the fire.",
+    found_resource: "",
+    no_target: "",
+    store_items: "Putting things away.",
+
+    // Proximity-based triggers
+    player_takes_theirs: "Don't steal my stuff!",
+    near_deadly_gate: "That forcefield looks dangerous...",
+    near_safe_gate: "This forcefield looks safe.",
+    golden_rule_resource: "I shouldn't take this.",
+    near_poisonous_plant: "That plant looks poisonous!",
+    near_fast_animal: "That animal is way too fast for me."
+};
+
+// === Villager Emote Proximity Distances ===
+window.GameConfig.villagerEmoteProximity = {
+    deadly_gate: 300,
+    poisonous_plant: 75,
+    fast_animal: 75,
+    golden_rule_resource: 75,
+    player_takes_theirs: 500,
+    safe_gate: 25,
 };
 
 console.log('[GameConfig.js] Loaded at', new Date().toISOString(), 'cache-bust:', Math.random()); 

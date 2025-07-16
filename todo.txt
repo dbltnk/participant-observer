@@ -48,3 +48,4 @@ Matt Notes
 - make NPCs explore the world on wait, so the player learns about more gates safely!
 - can I bring a homie?
 - only four colors make it easy to know what is, maybe use syombols deadly vs safe
+- NPCs try to hunt animals that are too fast?
