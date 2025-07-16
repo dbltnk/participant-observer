@@ -32,3 +32,19 @@ show NPC target in debug string
 - find ways that NPCs can help you
 -- deadly animals should exist and run away when they sense two NPCs/player in the same area
 - find ways you can help NPCs
+
+Matt Notes
+- reads emojis as rabbits etc
+- tab for mission objectives
+- put NPC names on their storage
+- "for two wood" is weird
+- do not always show emoji in vilakger emote
+- highlight objects when in visible range
+- temperature weird that is at max, make 50%, move to bottom
+- feedback on 2hen you did soon!
+- make vitamins more obvious?
+- where is my camp?
+- CAUSE OF DEATH to the top of end screen
+- make NPCs explore the world on wait, so the player learns about more gates safely!
+- can I bring a homie?
+- only four colors make it easy to know what is, maybe use syombols deadly vs safe
