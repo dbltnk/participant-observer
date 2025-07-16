@@ -607,8 +607,6 @@ console.log('Phaser main loaded');
             // Update visual representation
             this.updateVisuals();
 
-
-
             return false; // Villager is alive
         }
 
@@ -944,6 +942,21 @@ console.log('Phaser main loaded');
                 // Log movement occasionally (1% chance per frame, behind spam gate)
                 if (Math.random() < GameConfig.logging.loggingChance && window.summaryLoggingEnabled) {
                     console.log(`[Villager] ${this.name} MOVEMENT: Moving towards (${Math.round(target.x)}, ${Math.round(target.y)}), Distance: ${Math.round(distance)}px, Speed: ${this.moveSpeed}px/s, Delta: ${deltaTime}ms, MoveDistance: ${Math.round(moveDistance)}px`);
+                }
+
+                // Check for deadly gate collision (like player)
+                if (this.scene && this.scene.gates) {
+                    for (const gate of this.scene.gates) {
+                        if (gate.isDeadly) {
+                            const dxg = Math.abs(newX - gate.x);
+                            const dyg = Math.abs(newY - gate.y);
+                            const halfWidth = gate.width / 2 + 15; // 15px radius for villager
+                            const halfHeight = gate.height / 2 + 15;
+                            if (dxg <= halfWidth && dyg <= halfHeight) {
+                                console.error(`[NPC MOVEMENT] ${this.name} moved through deadly gate at (${Math.round(gate.x)},${Math.round(gate.y)})! Position: (${Math.round(newX)},${Math.round(newY)})`);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -7877,6 +7890,23 @@ console.log('Phaser main loaded');
 
             // Only cache successful pathfinding results
             if (path && path.length > 0) {
+                // Log if any waypoint is inside a deadly gate
+                if (this.scene && this.scene.gates) {
+                    for (const waypoint of path) {
+                        for (const gate of this.scene.gates) {
+                            if (gate.isDeadly) {
+                                const dx = Math.abs(waypoint.x - gate.x);
+                                const dy = Math.abs(waypoint.y - gate.y);
+                                const halfWidth = gate.width / 2;
+                                const halfHeight = gate.height / 2;
+                                if (dx <= halfWidth && dy <= halfHeight) {
+                                    console.error(`[NPC PATHFINDING] ${entity?.name || 'Unknown'} pathfinds through deadly gate at (${Math.round(gate.x)},${Math.round(gate.y)})! Path:`, path);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
                 entity._lastPathKey = cacheKey;
                 entity._lastPathResult = path;
                 entity._lastPathTime = now;
