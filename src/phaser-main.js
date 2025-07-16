@@ -5784,7 +5784,7 @@ console.log('Phaser main loaded');
 
                 if (dx <= halfWidth && dy <= halfHeight) {
                     // Player hit a deadly gate - trigger death
-                    this.playerState.deathCause = "Patient died from electrocution by force field.";
+                    this.playerState.deathCause = "Electrocution by force field.";
                     return; // Exit early since player is dead
                 }
             }
@@ -8169,11 +8169,11 @@ console.log('Phaser main loaded');
         }
 
         const n = playerState.needs;
-        if (n.temperature <= 0) return 'Patient died from hypothermia.';
-        if (n.water <= 0) return 'Patient died from dehydration.';
-        if (n.calories <= 0) return 'Patient died from starvation.';
+        if (n.temperature <= 0) return 'Hypothermia.';
+        if (n.water <= 0) return 'Dehydration.';
+        if (n.calories <= 0) return 'Starvation.';
         for (let i = 0; i < n.vitamins.length; i++) {
-            if (n.vitamins[i] <= 0) return `Patient died from vitamin ${String.fromCharCode(65 + i)} deficiency.`;
+            if (n.vitamins[i] <= 0) return `Vitamin ${String.fromCharCode(65 + i)} deficiency.`;
         }
         return null;
     }
