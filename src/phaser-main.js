@@ -3980,6 +3980,9 @@ console.log('Phaser main loaded');
                         if (this.isTooCloseToVillage(pos)) continue;
 
                         const emoji = this.getResourceEmoji(resourceType);
+                        // Get nutrition and determine if poisonous
+                        const nutrition = GameUtils.getNutrition(resourceType);
+                        const isPoisonous = nutrition.calories < 0;
                         this.entities.push({
                             position: pos,
                             type: resourceType,
@@ -3987,7 +3990,8 @@ console.log('Phaser main loaded');
                             collected: false,
                             isChild: false, // Initial resources are adults
                             tileX: tileX, // Track which tile this belongs to
-                            tileY: tileY
+                            tileY: tileY,
+                            isPoisonous // <-- Set poisonous flag for NPC logic
                         });
 
                         totalResourcesGenerated++;

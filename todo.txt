@@ -24,11 +24,11 @@ show NPC target in debug string
 - NPCs can go through deadly force fields -> BUG!
 - feels lonely and disconnected, game allows no interaction with NPCs, alienating, they feel hostile
 - wanted to know where things go, colors are interesting, can I find my way back home, push your luck in going further, was fun to follow an NPC back home (he's useful now, building a relation)
-- find ways that NPCs can help you
-- find ways you can help NPCs
 - weird that NPCs do not interact with other
-- after you die bring back the intro screen, NEVER skip it!
 - find a connection with the people -> Pippo's Wunschziel, turn into actor into observer, community member
 - survive is a pretense, but you want to become a part of the community!
 - different things are safe at some time of day! (bugs and snaker are sleeping, bring the moskito repellant)
-- deadly animals should exist and run away when they sense two NPCs/player in the same area
+
+- find ways that NPCs can help you
+-- deadly animals should exist and run away when they sense two NPCs/player in the same area
+- find ways you can help NPCs
