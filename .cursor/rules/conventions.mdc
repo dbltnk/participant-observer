@@ -9,9 +9,9 @@ alwaysApply: true
 
 ## 🚨 Rule #0: Re-State The Rules
 
-**Before starting to work, always briefly restate the 3 rules.**
+**Before starting to work, always briefly restate the rules below.**
 
-## 🚨 Rule #1: NO Silent Failures
+## 🚨 Rule #1: NO Silent Failures, Liberally Use Assertions
 
 **Never write code that silently fails or uses mystery fallback values:**
 
@@ -72,4 +72,4 @@ The game generates debug logs that show:
 
 ---
 
-**That's it. Three rules. Follow them religiously.**
+**That's it. Always follow these rules.**

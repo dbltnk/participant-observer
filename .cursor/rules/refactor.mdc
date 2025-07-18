@@ -1,0 +1,88 @@
+---
+description: Read this guidance when asked to refactor the code
+alwaysApply: false
+---
+# Refactoring Rules
+
+**⚠️ These are MANDATORY requirements for all refactoring work.**
+
+## 🚨 Rule #0: Re-State The Rules
+
+**Before starting to refactor, always briefly restate the rules below.**
+
+## 🗑️ Rule #1: Continuously Delete Code, But Keep Useful Debug Logs
+
+**Delete code whenever possible WITHOUT changing functionality. We NEVER break existing functionality.**
+**Never remove debug logs that help us understand what's happening or catch bugs. If in doubt, keep the log.**
+
+**Why:** Less code = fewer bugs, easier maintenance, faster development.  
+**But:** Good debug logs are worth their weight in gold for tracking down issues fast.
+
+
+## 🚨 Rule #2: NO Legacy Code or Backwards Compatibility
+
+**Never keep old code "just in case" or for backwards compatibility:**
+
+```javascript
+// ❌ NEVER DO THIS - Legacy code hell
+function processTrack(track) {
+    // Old way - kept for backwards compatibility
+    if (track.legacyFormat) {
+        return processLegacyTrack(track);
+    }
+    // New way
+    return processModernTrack(track);
+}
+
+// ✅ DO THIS - Single, clean implementation
+function processTrack(track) {
+    return processModernTrack(track);
+}
+```
+
+**Why:** Legacy code creates maintenance burden, confusion, and bugs. If you need backwards compatibility, handle it at the API boundary, not in business logic.
+
+## 🔍 Rule #3: Hunt Down Orphaned Code
+
+**Identify and delete any code that serves no purpose:**
+
+```javascript
+// ❌ ORPHANED - Function never called
+function calculateOldMixLevel(track) {
+    return track.volume * 1.5; // Old algorithm, no longer used
+}
+
+// ❌ ORPHANED - Dead code path
+function updateTrack(track) {
+    if (track.isLegacy) {
+        // This branch never executes - track.isLegacy is always false
+        return updateLegacyTrack(track);
+    }
+    return updateModernTrack(track);
+}
+
+// ✅ CLEAN - Only live code
+function updateTrack(track) {
+    assert(track, "Track object is required");
+    return updateModernTrack(track);
+}
+```
+
+**Search for:**
+- Unused functions, variables, imports
+- Dead code branches (never-executed conditions)
+- Commented-out code blocks
+- Deprecated features that are no longer referenced
+
+## 🔄 Rule #4: Eliminate Major Duplications (15+ Lines)
+
+**Extract common functionality when you have 15+ lines of duplicated code:**
+
+**Only refactor when:**
+- You have 15+ lines of nearly identical code in total
+- The duplication represents a clear pattern that can be parameterized
+- The extracted function will be used in at least 2 places
+
+---
+
+**That's it. Always follow these rules when refactoring.**
